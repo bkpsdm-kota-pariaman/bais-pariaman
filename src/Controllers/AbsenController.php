@@ -183,8 +183,10 @@ class AbsenController {
             }
         }
 
-        // Override status verifikasi jika terlambat, luar lokasi, atau tidak hadir (izin/sakit/dll)
-        if (strtolower($statusKehadiran) !== 'hadir' || $isTerlambat || $isLuarRadius) {
+        $isGpsError = ($lat === null || $lng === null || (float)$lat == 0 || (float)$lng == 0 || stripos((string)$lokasi, 'GPS') !== false);
+
+        // Override status verifikasi jika terlambat, luar lokasi, GPS error, atau tidak hadir (izin/sakit/dll)
+        if (strtolower($statusKehadiran) !== 'hadir' || $isTerlambat || $isLuarRadius || $isGpsError) {
             if ($statusVerifikasi !== 'Terverifikasi Oleh Admin') {
                 $statusVerifikasi = 'Menunggu Verifikasi Admin';
             }
@@ -535,6 +537,50 @@ class AbsenController {
                     }
                     $statusVerifikasi = $payload['status_verifikasi'] ?? 'Terverifikasi Sistem';
                     $statusKehadiran = $payload['status_kehadiran'] ?? 'Hadir';
+
+                    $itemLat = $payload['lat'] ?? null;
+                    $itemLng = $payload['lng'] ?? null;
+                    $itemLokasi = $payload['lokasi'] ?? '';
+                    $isItemGpsError = ($itemLat === null || $itemLng === null || (float)$itemLat == 0 || (float)$itemLng == 0 || stripos((string)$itemLokasi, 'GPS') !== false);
+
+                    $isItemTerlambat = false;
+                    $isItemLuarRadius = false;
+
+                    // Cek jadwal dari DB untuk memverifikasi ulang waktu & lokasi
+                    $stmtJadwalBulk = $db->prepare("SELECT tanggal, jam_selesai, koordinat, radius_meter FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode LIMIT 1");
+                    $stmtJadwalBulk->execute([':kode' => $kodeAkses]);
+                    $jadwalBulk = $stmtJadwalBulk->fetch(PDO::FETCH_ASSOC);
+
+                    if ($jadwalBulk) {
+                        $nowObj = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
+                        $endTimeObj = new DateTime($jadwalBulk['tanggal'] . ' ' . $jadwalBulk['jam_selesai'], new DateTimeZone('Asia/Jakarta'));
+                        if ($nowObj > $endTimeObj) {
+                            $isItemTerlambat = true;
+                        }
+
+                        if (!empty($jadwalBulk['koordinat']) && $jadwalBulk['koordinat'] !== '-') {
+                            $tParts = explode(',', str_replace("'", '', $jadwalBulk['koordinat']));
+                            if (count($tParts) >= 2) {
+                                $tLat = (float) trim($tParts[0]);
+                                $tLng = (float) trim($tParts[1]);
+                                $pLat = (float) ($itemLat ?? 0);
+                                $pLng = (float) ($itemLng ?? 0);
+                                $radius = (float) ($jadwalBulk['radius_meter'] ?? 0);
+                                if ($radius > 0 && !$isItemGpsError) {
+                                    $jarak = $this->haversineDistance($pLat, $pLng, $tLat, $tLng);
+                                    if ($jarak > $radius) {
+                                        $isItemLuarRadius = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (strtolower($statusKehadiran) !== 'hadir' || $isItemGpsError || $isItemTerlambat || $isItemLuarRadius) {
+                        if ($statusVerifikasi !== 'Terverifikasi Oleh Admin') {
+                            $statusVerifikasi = 'Menunggu Verifikasi Admin';
+                        }
+                    }
 
                     // Eksekusi query yang sudah di-prepare
                     $isSuccess = $stmt->execute([

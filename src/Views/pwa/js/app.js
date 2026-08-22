@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.134'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.141'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -1018,10 +1018,12 @@ async function adminCepatMulaiPindai() {
 
     // 1. Validasi Waktu Awal
     if (jadwal.is_strict_time == 1) {
-        const nowTime = getCurrentServerTime().getTime();
-        const eventEndStr = `${jadwal.tanggal}T${jadwal.jam_selesai}:00+07:00`;
-        const endTime = new Date(eventEndStr).getTime();
-        if (nowTime > endTime) {
+        const isTerlambatAdmin = typeof jadwal.is_terlambat !== 'undefined'
+            ? Boolean(jadwal.is_terlambat)
+            : (jadwal.server_time
+                ? new Date(jadwal.server_time).getTime() > new Date(`${jadwal.tanggal}T${jadwal.jam_selesai}:00+07:00`).getTime()
+                : Date.now() > new Date(`${jadwal.tanggal}T${jadwal.jam_selesai}:00+07:00`).getTime());
+        if (isTerlambatAdmin) {
             Swal.fire('Waktu Habis', 'Kegiatan ini sudah berakhir. Absensi Cepat tidak diizinkan karena aturan Waktu Ketat (Strict Time) aktif.', 'error');
             return;
         }
@@ -1577,34 +1579,7 @@ function prosesKodeManualInput() {
 // ==========================================
 // 7. FORM ABSEN (GPS & KAMERA)
 // ==========================================
-/**
- * Mengatur visibilitas kotak keterangan (untuk user normal) dan opsi admin
- * berdasarkan status absensi (terlambat/luar lokasi) dan alur aplikasi (normal/admin).
- * Fungsi ini dipanggil setelah pengecekan lokasi selesai.
- */
-function updateConditionalFormElements() {
-    const boxKeteranganUser = document.getElementById('boxKeterangan');
-    // --- ALUR USER NORMAL ---
-    // Cek apakah user perlu memberikan keterangan.
-    const pKeterangan = document.getElementById('labelKeterangan');
-    const alasan = [];
-    if (isTerlambat) {
-        alasan.push('terlambat');
-    }
-    if (isLuarRadius) {
-        alasan.push('berada di luar lokasi');
-    }
-
-    if (alasan.length > 0) {
-        // Jika ada alasan, tampilkan kotak keterangan.
-        const alasanText = alasan.join(' dan ');
-        pKeterangan.innerHTML = `Karena Anda terdeteksi <strong>${alasanText}</strong>, mohon isi alasan Anda pada kolom di bawah ini.`;
-        boxKeteranganUser.classList.remove('hidden-view');
-    } else {
-        // Jika tidak, sembunyikan.
-        boxKeteranganUser.classList.add('hidden-view');
-    }
-}
+// updateConditionalFormElements moved to bottom of file
 
 /**
  * Mengambil koordinat lokasi GPS secara presisi menggunakan watchPosition
@@ -1800,7 +1775,7 @@ async function kirimAbsensi() {
         if (alasanIzinEl && alasanIzinEl.value) statusKehadiran = alasanIzinEl.value;
         const ketIzinEl = document.getElementById('keteranganIzin');
         if (ketIzinEl && ketIzinEl.value.trim()) keterangan = ketIzinEl.value.trim();
-    } else if (isTerlambat || isLuarRadius || window.isGpsError || window.isKameraError) {
+    } else if (isTerlambat || isLuarRadius || isGpsError || isKameraError) {
         statusVerifikasi = "Menunggu Verifikasi Admin";
         if (alasanKondisi) {
             statusKehadiran = alasanKondisi;
@@ -1809,8 +1784,8 @@ async function kirimAbsensi() {
         let prefix = [];
         if (isTerlambat) prefix.push("Terlambat");
         if (isLuarRadius) prefix.push("Luar Lokasi");
-        if (window.isGpsError) prefix.push("GPS Error");
-        if (window.isKameraError) prefix.push("Kamera Error");
+        if (isGpsError) prefix.push("GPS Error");
+        if (isKameraError) prefix.push("Kamera Error");
         if (prefix.length > 0) {
             keterangan = prefix.join(" & ") + " - " + keterangan;
         }
@@ -1857,7 +1832,7 @@ async function kirimAbsensi() {
             return await originResponse.json();
         };
 
-        if (useQueue && !(isTerlambat || isLuarRadius || window._isTidakHadir || window.isGpsError || window.isKameraError)) {
+        if (useQueue && !(isTerlambat || isLuarRadius || window._isTidakHadir || isGpsError || isKameraError)) {
             try {
                 // 1. Coba kirim ke Worker/Queue
                 console.log("Mengirim absensi via: Cloudflare Queue");
@@ -1891,7 +1866,13 @@ async function kirimAbsensi() {
                 const waktuServer = res.data?.waktu || getCurrentServerTime().toISOString();
                 simpanRiwayatLokal(currentJadwal.judul, currentJadwal.kategori, waktuServer, currentJadwal.kode_akses, userForHistory.nip);
             }
-            Swal.fire('BERHASIL!', res.message || 'Data Absensi telah diterima.', 'success');
+            let successMsg = res.message || 'Data Absensi telah diterima.';
+            if (window._isTidakHadir || isTerlambat || isGpsError) {
+                if (!successMsg.includes('BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda')) {
+                    successMsg += ' BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.';
+                }
+            }
+            Swal.fire('BERHASIL!', successMsg, 'success');
             batalAbsen();
         } else {
             // Error ini akan ditangkap oleh blok catch di bawah
@@ -2107,7 +2088,7 @@ function lanjutTanpaLokasiValid() {
 
 async function getAlamatFromKoordinat(lat, lng) {
     try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&cb=${Date.now()}`);
         if (!response.ok) {
             return `${lat},${lng}`; // Fallback ke koordinat jika API error
         }
@@ -2243,51 +2224,21 @@ function ulangFoto() {
 }
 
 function validasiTombolKirim() {
+    if (window._isTidakHadir) {
+        checkIzinForm();
+        return;
+    }
+
     const b64 = document.getElementById('fotoBase64').value;
     const latValue = document.getElementById('lat').value;
     const btnKirim = document.getElementById('btnKirim');
 
-    let isFormValid = false;
+    const ket = document.getElementById('keterangan').value.trim();
+    const wajibKeterangan = isLuarRadius || isTerlambat || isGpsError || isKameraError;
+    const isKoordinatOk = latValue !== null && latValue !== '';
+    const isKeteranganOk = !wajibKeterangan || ket !== '';
 
-    if (window._isTidakHadir) {
-        const ket = document.getElementById('keterangan').value.trim();
-        const alasanKondisiEl = document.getElementById('alasanKondisi');
-        const isAlasanOk = (alasanKondisiEl && alasanKondisiEl.value !== "");
-        const isKeteranganOk = true; // Keterangan tambahan opsional
-
-        const warningIzinAtasan = document.getElementById('warningIzinAtasan');
-        if (warningIzinAtasan) {
-            if (alasanKondisiEl && (alasanKondisiEl.value === 'Sakit' || alasanKondisiEl.value === 'Lainnya')) {
-                warningIzinAtasan.classList.remove('hidden');
-            } else {
-                warningIzinAtasan.classList.add('hidden');
-            }
-        }
-
-        const buktiHadirInput = document.getElementById('buktiHadir');
-        const file = buktiHadirInput && buktiHadirInput.files.length > 0 ? buktiHadirInput.files[0] : null;
-        const isBuktiOk = validateProofFile(file).isValid;
-
-        isFormValid = isAlasanOk && isKeteranganOk && isBuktiOk;
-    } else {
-        const ket = document.getElementById('keterangan').value.trim();
-        const wajibKeterangan = isLuarRadius || isTerlambat || isGpsError || isKameraError;
-        const isKoordinatOk = latValue !== null && latValue !== '';
-        const isKeteranganOk = !wajibKeterangan || ket !== '';
-
-        let isBuktiOk = true;
-        let isAlasanOk = true;
-        if (wajibKeterangan) {
-            const alasanKondisiEl = document.getElementById('alasanKondisi');
-            if (alasanKondisiEl && alasanKondisiEl.value === "") isAlasanOk = false;
-
-            const buktiHadirInput = document.getElementById('buktiHadir');
-            const file = buktiHadirInput && buktiHadirInput.files.length > 0 ? buktiHadirInput.files[0] : null;
-            isBuktiOk = validateProofFile(file).isValid;
-        }
-
-        isFormValid = b64 && isKoordinatOk && isKeteranganOk && isBuktiOk && isAlasanOk;
-    }
+    const isFormValid = b64 && isKoordinatOk && isKeteranganOk;
 
     if (isFormValid) {
         btnKirim.disabled = false;
@@ -2344,10 +2295,18 @@ async function setupAbsenForm(jadwalData) {
     showLoading(false); // Pastikan loading disembunyikan
     currentJadwal = jadwalData;
 
-    const nowTime = Date.now();
-    const eventEndStr = `${currentJadwal.tanggal}T${currentJadwal.jam_selesai}:00+07:00`;
-    const endTime = new Date(eventEndStr).getTime();
-    isTerlambat = nowTime > endTime;
+    if (typeof currentJadwal.is_terlambat !== 'undefined') {
+        isTerlambat = Boolean(currentJadwal.is_terlambat);
+    } else if (currentJadwal.server_time) {
+        const serverTimeMs = new Date(currentJadwal.server_time).getTime();
+        const eventEndStr = `${currentJadwal.tanggal}T${currentJadwal.jam_selesai}:00+07:00`;
+        const endTime = new Date(eventEndStr).getTime();
+        isTerlambat = serverTimeMs > endTime;
+    } else {
+        const eventEndStr = `${currentJadwal.tanggal}T${currentJadwal.jam_selesai}:00+07:00`;
+        const endTime = new Date(eventEndStr).getTime();
+        isTerlambat = Date.now() > endTime;
+    }
 
     // Isi detail jadwal ke dalam elemen-elemen di form
     document.getElementById('formJudul').innerText = currentJadwal.judul;
@@ -2559,28 +2518,18 @@ function updateConditionalFormElements() {
     const inputAlasan = document.getElementById('inputAlasanKondisi');
     const inputBukti = document.getElementById('inputBuktiKondisi');
 
+    // Sembunyikan selalu opsi alasan kondisi dan bukti pendukung untuk alur Hadir
+    if (inputAlasan) inputAlasan.classList.add('hidden');
+    if (inputBukti) inputBukti.classList.add('hidden');
+
     if (isTerlambat || isLuarRadius || isKameraError || isGpsError) {
         boxKeterangan.classList.remove('hidden-view');
-        if (keteranganLabel) keteranganLabel.innerText = "Keterangan Tambahan (Opsional)";
+        if (keteranganLabel) keteranganLabel.innerText = "Keterangan (Wajib Diisi)";
         if (warningMsg) warningMsg.classList.remove('hidden');
-        if (inputAlasan) inputAlasan.classList.remove('hidden');
-        if (inputBukti) inputBukti.classList.remove('hidden');
-
-        // Auto-select alasanKondisi if it's camera or gps error
-        const dropdown = document.getElementById('alasanKondisi');
-        if (dropdown) {
-            if (isGpsError && (!dropdown.value || dropdown.value === 'Lainnya')) {
-                dropdown.value = "GPS tidak akurat/tidak terbaca";
-            } else if (isKameraError && (!dropdown.value || dropdown.value === 'Lainnya')) {
-                dropdown.value = "Kamera Aplikasi Error";
-            }
-        }
     } else {
         boxKeterangan.classList.add('hidden-view');
-        if (keteranganLabel) keteranganLabel.innerText = "Keterangan (Wajib Diisi)";
+        if (keteranganLabel) keteranganLabel.innerText = "Keterangan (Opsional)";
         if (warningMsg) warningMsg.classList.add('hidden');
-        if (inputAlasan) inputAlasan.classList.add('hidden');
-        if (inputBukti) inputBukti.classList.add('hidden');
     }
 }
 

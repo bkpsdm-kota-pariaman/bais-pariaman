@@ -97,7 +97,10 @@ class JadwalController {
         $stmtTargetOpd->execute();
         $targetOpd = $stmtTargetOpd->fetchAll(PDO::FETCH_COLUMN, 0);
 
-        // 6. Gabungkan data jadwal dengan list target OPD
+        // 6. Hitung keterlambatan di sisi server berdasarkan waktu server (Asia/Jakarta)
+        $endTime = new DateTime($jadwal['tanggal'] . ' ' . $jadwal['jam_selesai'], new DateTimeZone('Asia/Jakarta'));
+        $jadwal['is_terlambat'] = ($now > $endTime);
+        $jadwal['server_time'] = $now->format('Y-m-d H:i:s');
         $jadwal['target_opd'] = $targetOpd;
 
         Response::json(true, 200, "Jadwal berhasil ditemukan", $jadwal);

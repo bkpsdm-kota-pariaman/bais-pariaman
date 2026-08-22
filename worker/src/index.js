@@ -25,6 +25,9 @@ const corsHeaders = {
 	'Access-Control-Allow-Headers': 'Authorization, Content-Type',
 };
 
+const ALLOWED_ISSUERS = ['bais-pariaman-apps', 'bais-balad-apps', 'bais-pariaman-apps-admin', 'bais-pariaman-apps-jadwal'];
+const DEFAULT_ISSUER = 'bais-pariaman-apps';
+
 // Helper untuk mengubah data URI (base64) menjadi Blob, agar bisa dikirim sebagai file.
 function dataURItoBlob(dataURI) {
 	const byteString = atob(dataURI.split(',')[1]);
@@ -149,8 +152,12 @@ export default {
 				}
 			}
 
-			// Jika pegawai terlambat, di luar lokasi, atau tidak hadir (izin dll)
-			if (status !== "hadir" || isTerlambat || isLuarRadius) {
+			const pLat = parseFloat(payload.lat);
+			const pLng = parseFloat(payload.lng);
+			const isGpsError = (isNaN(pLat) || isNaN(pLng) || pLat === 0 || pLng === 0 || (payload.lokasi && payload.lokasi.toLowerCase().includes('gps')));
+
+			// Jika pegawai terlambat, di luar lokasi, GPS error, atau tidak hadir (izin dll)
+			if (status !== "hadir" || isTerlambat || isLuarRadius || isGpsError) {
 				if (payload.status_verifikasi !== "Terverifikasi Oleh Admin") {
 					payload.status_verifikasi = "Menunggu Verifikasi Admin";
 				}
@@ -205,7 +212,7 @@ export default {
 							},
 						};
 
-						const jwtToken = await new SignJWT(payload).setProtectedHeader({ alg: 'HS256' }).setIssuedAt(issuedAt).setExpirationTime(expirationTime).setIssuer('bais-balad-apps').sign(secret);
+						const jwtToken = await new SignJWT(payload).setProtectedHeader({ alg: 'HS256' }).setIssuedAt(issuedAt).setExpirationTime(expirationTime).setIssuer(DEFAULT_ISSUER).sign(secret);
 
 						const responseData = { token: jwtToken, user: { nama: cachedPegawai.nama_pegawai, jabatan: cachedPegawai.jabatan, opd: cachedPegawai.perangkat_daerah } };
 
@@ -271,8 +278,17 @@ export default {
 					return jsonResponse(false, 403, `Absensi untuk kegiatan ini belum dibuka. Silakan coba lagi pada atau setelah pukul ${cachedJadwal.jam_mulai} WIB.`, null, { 'Cache-Control': 'no-store' });
 				}
 
+				const endTime = new Date(`${cachedJadwal.tanggal}T${cachedJadwal.jam_selesai}+07:00`);
+				const isTerlambat = now > endTime;
+
+				const responseData = {
+					...cachedJadwal,
+					is_terlambat: isTerlambat,
+					server_time: now.toISOString()
+				};
+
 				// Jadwal valid, kembalikan data.
-				return jsonResponse(true, 200, 'Jadwal ditemukan di cache.', cachedJadwal, { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
+				return jsonResponse(true, 200, 'Jadwal ditemukan di cache.', responseData, { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
 			}
 			// --- CACHE MISS ---
 			else {
@@ -389,7 +405,7 @@ export default {
 			const secret = new TextEncoder().encode(env.JWT_SECRET);
 			let decodedToken;
 			try {
-				const { payload } = await jwtVerify(token, secret, { issuer: 'bais-balad-apps' });
+				const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
 				decodedToken = payload;
 			} catch (err) {
 				return jsonResponse(false, 401, 'Token tidak valid atau telah kedaluwarsa.');
@@ -420,7 +436,7 @@ export default {
 						.setProtectedHeader({ alg: 'HS256' })
 						.setIssuedAt(issuedAt)
 						.setExpirationTime(expirationTime)
-						.setIssuer('bais-balad-apps')
+						.setIssuer(DEFAULT_ISSUER)
 						.sign(secret);
 
 					const responseData = {
@@ -470,7 +486,7 @@ export default {
 			const secret = new TextEncoder().encode(env.JWT_SECRET);
 			let decodedToken;
 			try {
-				const { payload } = await jwtVerify(token, secret, { issuer: 'bais-balad-apps' });
+				const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
 				decodedToken = payload;
 			} catch (err) {
 				console.error(`[Profil Refresh Token] Gagal validasi token: ${err.message}`);
@@ -503,7 +519,7 @@ export default {
 						.setProtectedHeader({ alg: 'HS256' })
 						.setIssuedAt(issuedAt)
 						.setExpirationTime(expirationTime)
-						.setIssuer('bais-balad-apps')
+						.setIssuer(DEFAULT_ISSUER)
 						.sign(secret);
 
 					const responseData = {
@@ -567,7 +583,7 @@ export default {
 			let decodedToken;
 
 			try {
-				const { payload } = await jwtVerify(token, secret, { issuer: 'bais-balad-apps' });
+				const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
 				decodedToken = payload;
 			} catch (err) {
 				return jsonResponse(false, 401, 'Token tidak valid atau telah kedaluwarsa.');
@@ -771,7 +787,7 @@ export default {
 
 			try {
 				// Verifikasi token admin
-				const { payload } = await jwtVerify(adminToken, secret, { issuer: 'bais-balad-apps' });
+				const { payload } = await jwtVerify(adminToken, secret, { issuer: ALLOWED_ISSUERS });
 				decodedPayload = payload;
 			} catch (err) {
 				return jsonResponse(false, 401, 'Token admin tidak valid atau telah kedaluwarsa.');
@@ -835,7 +851,7 @@ export default {
 			const secret = new TextEncoder().encode(env.JWT_SECRET);
 
 			try {
-				await jwtVerify(token, secret, { issuer: 'bais-balad-apps' });
+				await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
 			} catch (err) {
 				return jsonResponse(false, 401, 'Token tidak valid atau telah kedaluwarsa.');
 			}
