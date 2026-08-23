@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.159'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.161'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -178,24 +178,18 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register(`./sw.min.js?v=${APP_VERSION}`).then(reg => {
         console.log('Service Worker terdaftar.', reg);
 
+        // Paksa pengecekan update dari server setiap kali aplikasi dibuka
+        reg.update().catch(err => console.log('Gagal update SW:', err));
+
         // **FIX PENTING: Mencegah update loop.**
-        // Jika halaman ini dimuat sebagai hasil dari proses update (ditandai oleh sessionStorage),
-        // jangan langsung cek `reg.waiting`. Ini mencegah race condition di mana `reg.waiting`
-        // mungkin masih ada sesaat setelah reload, yang akan memicu prompt update kedua.
         if (isReloadingForUpdate) {
             return;
         }
 
         // **FIX 1: Cek apakah service worker baru sudah menunggu.**
-        // Ini menangani kasus jika pengguna mengabaikan prompt update sebelumnya.
         if (reg.waiting) {
-            // Hanya tampilkan prompt jika dalam mode PWA.
-            if (isStandalone) {
-                console.log("Pembaruan ditemukan, service worker baru sedang menunggu.");
-                showUpdatePrompt(reg.waiting);
-            } else {
-                console.log("Pembaruan ditemukan, tetapi tidak dalam mode PWA. Prompt tidak ditampilkan.");
-            }
+            console.log("Pembaruan ditemukan, service worker baru sedang menunggu.");
+            showUpdatePrompt(reg.waiting);
             return;
         }
 
@@ -204,15 +198,15 @@ if ('serviceWorker' in navigator) {
             const newWorker = reg.installing;
             console.log("Service worker baru ditemukan, status:", newWorker.state);
 
-            // Tampilkan notifikasi toast "mengunduh" hanya jika dalam mode PWA.
-            if (isStandalone && navigator.serviceWorker.controller && !isReloadingForUpdate) {
+            // Tampilkan notifikasi toast "mengunduh"
+            if (navigator.serviceWorker.controller && !isReloadingForUpdate) {
                 window.updateToast = Swal.fire({
                     toast: true,
                     position: 'bottom-end',
                     icon: 'info',
                     title: 'Pembaruan baru sedang diunduh...',
                     showConfirmButton: false,
-                    timer: 8000, // Waktu tunggu lebih lama
+                    timer: 8000,
                     timerProgressBar: true
                 });
             }
@@ -222,13 +216,8 @@ if ('serviceWorker' in navigator) {
                 if (newWorker.state === 'installed') {
                     // Jika ada controller aktif, berarti ini adalah pembaruan, bukan instalasi pertama.
                     if (navigator.serviceWorker.controller) {
-                        // Hanya tampilkan prompt jika dalam mode PWA.
-                        if (isStandalone) {
-                            console.log("Service worker baru telah di-install, menampilkan prompt.");
-                            showUpdatePrompt(newWorker);
-                        } else {
-                            console.log("Service worker baru telah di-install, tetapi tidak dalam mode PWA. Prompt tidak ditampilkan.");
-                        }
+                        console.log("Service worker baru telah di-install, menampilkan prompt.");
+                        showUpdatePrompt(newWorker);
                     }
                 }
             };
