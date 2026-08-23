@@ -374,8 +374,8 @@ async function fetchWithAuth(url, options = {}) {
             throw new Error('Respons dari server tidak valid (Bukan JSON).');
         }
 
-        if (result.code === 401) { // Token expired or invalid
-            Swal.fire('Sesi Berakhir', 'Sesi Anda telah berakhir. Silakan login kembali.', 'warning');
+        if (result && (result.code === 401 || (result.code === 403 && result.message && result.message.toLowerCase().includes('login')))) { // Token expired or invalid
+            Swal.fire('Sesi Berakhir', 'Waktu login Anda sudah habis. Silahkan login ulang.', 'warning');
             forceLogout();
             throw new Error('Unauthorized');
         }
@@ -765,7 +765,7 @@ async function downloadQrCode() {
         currentY += detailFontSize + textSpacing;
 
         // Gambar QR Code
-        ctx.drawImage(qrImage, padding, currentY, qrSize, qrSize);
+        ctx.drawImage(qrSource, padding, currentY, qrSize, qrSize);
         currentY += qrSize + textSpacing;
 
         // Gambar Kode Akses
@@ -986,7 +986,7 @@ function initMap(mode) {
         map.invalidateSize();
         const marker = isAddMode ? markerAdd : markerEdit;
         const circle = isAddMode ? circleAdd : circleEdit;
-        
+
         let coords = pariamanCoords;
         if (latLngInput && latLngInput.value) {
             const parts = latLngInput.value.split(',').map(Number);
@@ -994,7 +994,7 @@ function initMap(mode) {
                 coords = parts;
             }
         }
-        
+
         if (marker && circle) {
             marker.setLatLng(coords);
             circle.setLatLng(coords);
@@ -2272,17 +2272,20 @@ async function exportRekapToExcel() {
                 opd_list: selectedOpds,
                 status_kehadiran: statusKehadiran,
                 status_verifikasi: statusVerifikasi,
-                search: searchInput
+                search: searchInput,
+                limit: 999999
             })
         });
 
-        if (!result.status || result.data.length === 0) {
+        const rawData = (result.data && result.data.data) ? result.data.data : (Array.isArray(result.data) ? result.data : []);
+
+        if (!result.status || rawData.length === 0) {
             Swal.fire('Informasi', 'Tidak ada data untuk diunduh berdasarkan filter yang dipilih.', 'info');
             return;
         }
 
         // 4. Siapkan data untuk di-export ke Excel
-        const dataForExcel = result.data.map((p, index) => ({
+        const dataForExcel = rawData.map((p, index) => ({
             'No': index + 1,
             'Nama Pegawai': p.nama_pegawai,
             'NIP': p.nip,
@@ -3009,8 +3012,12 @@ async function hapusDataAbsensiKeseluruhan(nip, nama, kodeAkses) {
 }
 
 function bukaModalVerifikasiKeseluruhan(pegawai) {
-    // Inject sementara currentRekapData agar bukaModalVerifikasi() bisa bekerja dengan baik
-    currentRekapData = { jadwal: { kode_akses: pegawai.kode_akses } };
+    // Inject sementara kode_akses jadwal jika currentRekapData belum ada
+    if (!currentRekapData || !currentRekapData.jadwal) {
+        currentRekapData = { jadwal: { kode_akses: pegawai.kode_akses }, filtered_pegawai: [] };
+    } else {
+        currentRekapData.jadwal = currentRekapData.jadwal || { kode_akses: pegawai.kode_akses };
+    }
     bukaModalVerifikasi(pegawai);
 }
 
@@ -3319,9 +3326,7 @@ function exportOpdToExcel() {
     exportRawDataToExcel(currentOpdData, 'Data_OPD');
 }
 
-function exportRekapToExcel() {
-    exportRawDataToExcel(currentRekapData ? currentRekapData.filtered_pegawai : [], 'Rekap_Kehadiran_Kegiatan');
-}
+// exportRekapToExcel didefinisikan secara lengkap di fungsi utama rekap
 
 function exportRekapKeseluruhanToExcel() {
     exportRawDataToExcel(currentRekapKeseluruhanData, 'Rekap_Keseluruhan');
