@@ -303,6 +303,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const qrText = qrContainer.dataset.qrText;
 
         if (qrText && qrContainer) {
+            if (qrContainer.querySelector('img') || qrContainer.querySelector('canvas')) {
+                return; // Already rendered by fetch callback
+            }
             // Gunakan timeout kecil untuk memastikan DOM modal telah sepenuhnya di-render oleh browser.
             // Ini adalah workaround untuk race condition di mana elemen container belum memiliki dimensi yang dapat diukur.
             setTimeout(() => {
@@ -670,8 +673,21 @@ async function cetakQrCode(kodeAkses, judul, tanggal, jamMulai, jamSelesai) {
     try {
         const result = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal/generate-token/${kodeAkses}`);
         if (result.status && result.data.token) {
-            // Simpan token di data attribute, event 'shown.bs.modal' akan membuat QR code.
             qrContainer.dataset.qrText = result.data.token;
+            qrContainer.innerHTML = '';
+            try {
+                if (qrCodeInstance) qrCodeInstance.clear();
+                qrCodeInstance = new QRCode(qrContainer, {
+                    text: result.data.token,
+                    width: 256,
+                    height: 256,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch (qrErr) {
+                console.error('Error rendering QR instance directly:', qrErr);
+            }
         } else {
             qrContainer.innerHTML = `<div class="alert alert-danger">Gagal membuat QR Code: ${result.message}</div>`;
         }
@@ -1198,6 +1214,12 @@ async function lihatRekap(kodeAkses) {
     currentRekapData = { jadwal: null, filtered_pegawai: [] }; // Reset data cache
     resetRekapFilters();
     document.getElementById('rekapFilterView').value = 'table';
+    
+    // Reset checkbox massal & tombol hapus massal
+    const selectAll = document.getElementById('rekapPilihSemua');
+    if (selectAll) selectAll.checked = false;
+    const btnHapus = document.getElementById('btnHapusTerpilih');
+    if (btnHapus) btnHapus.classList.add('d-none');
 
     // Reset tampilan tabel dan foto ke default (tabel)
     const tableView = document.getElementById('rekapTableView');
@@ -1878,6 +1900,7 @@ async function bukaModalVerifikasi(pegawai) {
     document.getElementById('verifJabatan').value = pegawai.jabatan || '';
 
     document.getElementById('verifStatusLama').textContent = pegawai.status_verifikasi || 'ALPA';
+    document.getElementById('verifKeteranganPegawai').value = pegawai.keterangan || '-';
     document.getElementById('verifKeterangan').value = pegawai.keterangan_verifikasi || '';
 
     const verifLinkFoto = document.getElementById('verifLinkFoto');

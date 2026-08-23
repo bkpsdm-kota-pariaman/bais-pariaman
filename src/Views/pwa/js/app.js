@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.156'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.159'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -550,9 +550,10 @@ async function renderProfil() {
         document.getElementById('dashJabatan').innerText = user.jabatan || "-";
         document.getElementById('dashJenisAsn').innerText = user.jenis_asn || "-";
 
-        // Tampilkan menu admin jika user memiliki role 'admin'
+        // Tampilkan menu admin jika user memiliki role 'admin' atau 'super admin'
         const adminScanButton = document.getElementById('btnAdminAbsenkanLain');
-        if (user.role && user.role.includes('admin')) {
+        const roles = Array.isArray(user.role) ? user.role : (typeof user.role === 'string' ? user.role.split(',') : []);
+        if (roles.some(r => r.trim().toLowerCase() === 'admin' || r.trim().toLowerCase() === 'super admin')) {
             adminScanButton.classList.remove('hidden-view');
         } else {
             adminScanButton.classList.add('hidden-view');
@@ -599,22 +600,23 @@ async function renderRiwayatLokal() {
     const userHistory = allHistory.filter(h => h.nip === currentUserNip && h.waktu);
 
     if (userHistory.length === 0) {
-        return container.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">Belum ada riwayat absensi untuk Anda di perangkat ini.</div>';
+        container.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">Belum ada riwayat absensi lokal.</div>';
+        return;
     }
 
-    let html = '';
-    userHistory.forEach(h => {
-        html += `
-        <div class="bg-gray-50 border border-gray-100 rounded-xl p-3 mb-2 flex justify-between items-center">
-            <div>
-                <strong class="block text-gray-800 text-sm">${escapeHtml(h.judul)}</strong>
-                <span class="text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded mt-1 inline-block">${h.sesi}</span>
-                <div class="text-xs text-gray-500 mt-1">${formatTanggalWaktuIndonesia(h.waktu)}</div>
+    container.innerHTML = userHistory.map(h => {
+        return `
+            <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 flex justify-between items-center text-xs shadow-sm">
+                <div>
+                    <h6 class="font-bold text-gray-800 truncate w-48 mb-0.5">${escapeHtml(h.judul)}</h6>
+                    <span class="text-gray-500 font-medium">${formatTanggalWaktuIndonesia(h.waktu)}</span>
+                </div>
+                <span class="bg-green-50 text-green-700 font-bold px-2 py-1 rounded-md border border-green-200">
+                    ${h.sesi || 'Hadir'}
+                </span>
             </div>
-            <i class="bi bi-check-circle-fill text-green-500 text-xl"></i>
-        </div>`;
-    });
-    container.innerHTML = html;
+        `;
+    }).join('');
 }
 
 async function hapusRiwayatLokal() {
@@ -1347,14 +1349,25 @@ async function _startScanner(deviceId) {
         cameraToStart,
         config,
         (decodedText, decodedResult) => {
-            // Semua hasil pindaian, baik normal maupun cepat, dilewatkan ke handler baru.
+            if (location.hash !== '#scanner') {
+                if (html5QrCode && html5QrCode.isScanning) {
+                    html5QrCode.stop().catch(e => {});
+                }
+                return;
+            }
             handleScanSuccess(decodedText);
         },
-        () => { } // onScanFailure, sengaja dibiarkan kosong untuk mendukung continuous scan.
-    ).catch(err => {
+        () => { }
+    ).then(() => {
+        if (location.hash !== '#scanner') {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().catch(e => {});
+            }
+        }
+    }).catch(err => {
         console.error("Gagal memulai pemindai QR:", err);
         Swal.fire("Kesalahan Kamera", "Gagal memulai kamera. Pastikan izin telah diberikan.", "error");
-        if (location.hash === '#scanner') history.back(); // Kembali jika gagal start.
+        if (location.hash === '#scanner') history.back();
     });
 }
 
@@ -2423,6 +2436,7 @@ async function setupAbsenForm(jadwalData) {
 }
 
 window.bukaPilihMetode = function () {
+    cleanupAbsenForm();
     switchView('view-pilih-metode');
     history.pushState({ view: 'pilih-metode' }, "Pilih Metode Absensi", '#metode');
 }

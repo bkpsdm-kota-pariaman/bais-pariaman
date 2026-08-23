@@ -744,10 +744,12 @@ class AdminRekapController {
             return;
         }
 
-        // Ambil nama pegawai sebelum delete untuk log
-        $stmtTarget = $db->prepare("SELECT nama_pegawai FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
+        // Ambil nama pegawai dan nama file foto sebelum delete untuk log & cleanup file
+        $stmtTarget = $db->prepare("SELECT nama_pegawai, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
         $stmtTarget->execute([':ka' => $kodeAkses, ':nip' => $nip]);
-        $namaTarget = $stmtTarget->fetchColumn() ?: '-';
+        $targetData = $stmtTarget->fetch(PDO::FETCH_ASSOC);
+        $namaTarget = $targetData['nama_pegawai'] ?? '-';
+        $fotoTarget = $targetData['nama_file_foto'] ?? null;
 
         $sql = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip";
         $stmt = $db->prepare($sql);
@@ -757,6 +759,16 @@ class AdminRekapController {
         ]);
 
         if ($stmt->rowCount() > 0) {
+            // Hapus file foto fisik jika ada dan bukan link URL atau file default
+            if ($fotoTarget && $fotoTarget !== '-' && $fotoTarget !== 'MANUAL_INPUT.jpg') {
+                if (!preg_match('/^https?:\/\//i', $fotoTarget)) {
+                    $filePath = __DIR__ . '/../../uploads/foto_absensi/' . $fotoTarget;
+                    if (file_exists($filePath)) {
+                        @unlink($filePath);
+                    }
+                }
+            }
+
             LogAbsensi::log(
                 $db,
                 $kodeAkses,
@@ -1109,10 +1121,21 @@ class AdminRekapController {
         $placeholders = implode(',', array_fill(0, count($sanitizedNips), '?'));
         $params = array_merge([$kodeAkses], $sanitizedNips);
 
-        // Ambil nama pegawai yang akan dihapus untuk audit log
-        $stmtTargets = $db->prepare("SELECT nip, nama_pegawai FROM app_absensi_data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)");
+        // Ambil nama pegawai dan foto yang akan dihapus untuk audit log & cleanup file
+        $stmtTargets = $db->prepare("SELECT nip, nama_pegawai, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)");
         $stmtTargets->execute($params);
-        $targets = $stmtTargets->fetchAll(PDO::FETCH_KEY_PAIR);
+        $targetsData = $stmtTargets->fetchAll(PDO::FETCH_ASSOC);
+
+        $targets = [];
+        $fotosToClean = [];
+        foreach ($targetsData as $row) {
+            $targets[$row['nip']] = $row['nama_pegawai'];
+            if (!empty($row['nama_file_foto']) && $row['nama_file_foto'] !== '-' && $row['nama_file_foto'] !== 'MANUAL_INPUT.jpg') {
+                if (!preg_match('/^https?:\/\//i', $row['nama_file_foto'])) {
+                    $fotosToClean[] = $row['nama_file_foto'];
+                }
+            }
+        }
 
         $sql = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)";
         $stmt = $db->prepare($sql);
@@ -1121,6 +1144,14 @@ class AdminRekapController {
         $deletedCount = $stmt->rowCount();
 
         if ($deletedCount > 0) {
+            // Hapus file fisik lokal yang terkait
+            foreach ($fotosToClean as $fotoFile) {
+                $filePath = __DIR__ . '/../../uploads/foto_absensi/' . $fotoFile;
+                if (file_exists($filePath)) {
+                    @unlink($filePath);
+                }
+            }
+
             foreach ($sanitizedNips as $nipDel) {
                 LogAbsensi::log(
                     $db,

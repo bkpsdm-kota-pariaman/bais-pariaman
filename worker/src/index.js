@@ -531,7 +531,7 @@ export default {
 						}
 					};
 
-					return jsonResponse(true, 200, 'Profil berhasil disinkronkan dari cache.', responseData);
+					return jsonResponse(true, 200, 'Profil berhasil disinkronkan.', responseData);
 				}
 
 				// 3. Jika data tidak ada di cache (Cache MISS), panggil server PHP
