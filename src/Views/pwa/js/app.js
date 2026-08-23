@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.141'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.152'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -900,7 +900,8 @@ async function generateUserQrToken() {
     } catch (finalError) {
         // Jika keduanya gagal
         console.error("Gagal membuat QR Code dari worker dan server utama.", finalError);
-        Swal.fire("Gagal Membuat QR", "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.", "error");
+        const errorMsg = finalError.message || "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
+        Swal.fire("Gagal Membuat QR", errorMsg, "error");
     } finally {
         showLoading(false);
     }
@@ -1713,37 +1714,91 @@ async function cekLokasiOtomatis() {
     }
 }
 function cleanupAbsenForm() {
-    // Matikan stream kamera selfie jika sedang aktif
+    // 1. Matikan stream kamera selfie jika sedang aktif
     if (videoStream) {
         videoStream.getTracks().forEach(track => track.stop());
         videoStream = null;
     }
 
-    // (Tindakan defensif) Hentikan juga QR scanner jika ternyata masih aktif
+    // 2. (Tindakan defensif) Hentikan juga QR scanner jika ternyata masih aktif
     if (html5QrCode && html5QrCode.isScanning) {
         console.warn("Scanner QR dihentikan secara defensif dari cleanupAbsenForm.");
         html5QrCode.stop().catch(err => console.warn("Gagal menghentikan QR scanner dari cleanupAbsenForm.", err));
         html5QrCode = null;
     }
 
-    // Reset tampilan kamera ke kondisi awal
+    // 3. Reset tampilan kamera ke kondisi awal
     ulangFoto();
 
-    // Reset state global yang berhubungan dengan form absensi
+    // 4. Reset state global yang berhubungan dengan form absensi
     currentJadwal = null;
     isLuarRadius = false;
     isTerlambat = false;
     isAbsenCepatMode = false;
     isProcessingScan = false;
+    isKameraError = false;
+    isGpsError = false;
     window._isTidakHadir = false;
     window._isHadirStarted = false;
+    window._isSubmittingAbsen = false;
 
-    // Reset nilai input form
-    document.getElementById('keterangan').value = '';
+    // 5. Reset semua nilai input form (text, textarea, select, file, hidden)
+    const resetInput = (id, val = '') => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.value = val;
+            if (el.tagName === 'SELECT') {
+                el.selectedIndex = 0;
+            }
+        }
+    };
+
+    resetInput('keterangan');
+    resetInput('keteranganIzin');
+    resetInput('alasanIzin');
+    resetInput('alasanKondisi');
+    resetInput('buktiIzin');
+    resetInput('buktiHadir');
+    resetInput('lat');
+    resetInput('lng');
+    resetInput('alamat');
+    resetInput('fotoBase64');
 
     // Reset radio button
     const radioInputs = document.querySelectorAll('input[name="tipeKehadiran"]');
     radioInputs.forEach(radio => radio.checked = false);
+
+    // 6. Reset visibilitas & tampilan container UI form
+    const addCls = (id, cls) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add(cls);
+    };
+    const remCls = (id, cls) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove(cls);
+    };
+
+    addCls('flowHadir', 'hidden-view');
+    addCls('flowIzin', 'hidden-view');
+    addCls('form-absen-lanjutan', 'hidden-view');
+    addCls('boxLokasiGagal', 'hidden-view');
+    addCls('statusGeoLoading', 'hidden-view');
+    addCls('statusGeo', 'hidden-view');
+    addCls('boxKeterangan', 'hidden-view');
+    addCls('warningMsg', 'hidden');
+    addCls('warningTidakHadir', 'hidden-view');
+    addCls('warningTidakHadir', 'hidden');
+    addCls('inputAlasanKondisi', 'hidden');
+    addCls('inputBuktiKondisi', 'hidden');
+    addCls('warningIzinAtasan', 'hidden');
+    remCls('opsiKehadiranAwal', 'hidden-view');
+
+    // 7. Reset tombol kirim
+    const btnKirim = document.getElementById('btnKirim');
+    if (btnKirim) {
+        btnKirim.disabled = true;
+        btnKirim.className = "w-full bg-gray-300 text-gray-500 font-extrabold py-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2";
+    }
 }
 async function kirimAbsensi() {
     if (window._isSubmittingAbsen) return;
@@ -1844,9 +1899,15 @@ async function kirimAbsensi() {
                 response = await fetchWithAuth(`${WORKER_URL}/api/absen/submit`, { method: "POST", body: workerBody, token: token });
                 if (!response.ok) throw new Error(`Worker merespon dengan status ${response.status}`);
                 res = await response.json();
-                if (!res.status) throw new Error(res.message || 'Worker mengembalikan status false');
+                if (!res.status) {
+                    throw new Error(res.message || 'Worker mengembalikan status false');
+                }
             } catch (workerError) {
-                // 2. Jika Worker gagal, fallback ke server utama
+                // Jika worker memberikan respon validasi resmi (status: false dengan message), langsung teruskan error
+                if (res && res.status === false && res.message) {
+                    throw new Error(res.message);
+                }
+                // 2. Jika Worker gagal karena network atau 500, fallback ke server utama
                 console.warn("Gagal mengirim ke Worker, fallback ke server utama.", workerError.message);
                 res = await sendToOriginServer();
                 if (!res.status) throw new Error(res.message || "Fallback ke server utama juga gagal.");
@@ -1866,13 +1927,7 @@ async function kirimAbsensi() {
                 const waktuServer = res.data?.waktu || getCurrentServerTime().toISOString();
                 simpanRiwayatLokal(currentJadwal.judul, currentJadwal.kategori, waktuServer, currentJadwal.kode_akses, userForHistory.nip);
             }
-            let successMsg = res.message || 'Data Absensi telah diterima.';
-            if (window._isTidakHadir || isTerlambat || isGpsError) {
-                if (!successMsg.includes('BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda')) {
-                    successMsg += ' BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.';
-                }
-            }
-            Swal.fire('BERHASIL!', successMsg, 'success');
+            Swal.fire('BERHASIL!', res.message || 'Data Absensi telah diterima.', 'success');
             batalAbsen();
         } else {
             // Error ini akan ditangkap oleh blok catch di bawah
@@ -1880,7 +1935,8 @@ async function kirimAbsensi() {
         }
     } catch (finalError) {
         console.error("Error saat kirim absensi:", finalError);
-        Swal.fire("Gagal Mengirim", "Tidak dapat mengirim data absensi. Periksa koneksi internet Anda dan coba lagi.", "error");
+        const errMsg = finalError.message || "Tidak dapat mengirim data absensi. Periksa koneksi internet Anda dan coba lagi.";
+        Swal.fire("Gagal Mengirim", errMsg, "error");
     } finally {
         window._isSubmittingAbsen = false;
         showLoading(false);
@@ -1927,7 +1983,7 @@ async function adminCepatKirimAbsensi(userToken) {
                 kode_akses: kode,
                 kategori: jadwal.kategori,
                 lat: lat, lng: lng, lokasi: 'Absensi Cepat oleh Admin',
-                keterangan: keteranganAdmin,
+                keterangan_verifikasi: keteranganAdmin,
                 status_kehadiran: statusKehadiran,
                 status_verifikasi: statusVerifikasi,
             });
@@ -1946,7 +2002,7 @@ async function adminCepatKirimAbsensi(userToken) {
             fallbackBody.append('lat', lat);
             fallbackBody.append('lng', lng);
             fallbackBody.append('lokasi', 'Absensi Cepat oleh Admin');
-            fallbackBody.append('keterangan', keteranganAdmin);
+            fallbackBody.append('keterangan_verifikasi', keteranganAdmin);
             fallbackBody.append('status_kehadiran', statusKehadiran);
             fallbackBody.append('status_verifikasi', statusVerifikasi);
 
@@ -2292,6 +2348,9 @@ function dataURItoBlob(dataURI) {
  * @param {object} jadwalData - Objek data jadwal yang sudah divalidasi.
  */
 async function setupAbsenForm(jadwalData) {
+    // Riset penuh seluruh state & input form sebelum memuat jadwal baru
+    cleanupAbsenForm();
+
     showLoading(false); // Pastikan loading disembunyikan
     currentJadwal = jadwalData;
 
@@ -2388,7 +2447,7 @@ window.prosesKodeManualDariPilihMetode = function (event) {
 window.pilihOpsiKehadiran = function (opsi) {
     document.getElementById('opsiKehadiranAwal').classList.add('hidden-view');
     if (opsi === 'hadir') {
-        if (currentJadwal.is_strict_time == 1 && isTerlambat) {
+        if (currentJadwal && currentJadwal.is_strict_time == 1 && isTerlambat) {
             Swal.fire({
                 title: 'Waktu Berakhir',
                 text: 'Aturan Waktu Berlaku aktif. Absensi Hadir tidak dapat dilakukan karena batas waktu telah lewat.',
@@ -2396,11 +2455,42 @@ window.pilihOpsiKehadiran = function (opsi) {
             }).then(() => batalAbsen());
             return;
         }
+
+        // Reset data dari opsi Tidak Hadir jika sempat diisi sebelumnya
+        const setVal = (id, val = '') => {
+            const el = document.getElementById(id);
+            if (el) { el.value = val; if (el.tagName === 'SELECT') el.selectedIndex = 0; }
+        };
+        setVal('alasanIzin');
+        setVal('keteranganIzin');
+        setVal('buktiIzin');
+
+        window._isTidakHadir = false;
         document.getElementById('flowHadir').classList.remove('hidden-view');
         document.getElementById('flowIzin').classList.add('hidden-view');
         document.getElementById('warningTidakHadir').classList.add('hidden-view');
         startHadirFlow();
     } else {
+        // Matikan kamera selfie jika sempat berjalan
+        if (videoStream) {
+            videoStream.getTracks().forEach(t => t.stop());
+            videoStream = null;
+        }
+        ulangFoto();
+
+        // Reset data dari opsi Hadir jika sempat diisi sebelumnya
+        const setVal = (id, val = '') => {
+            const el = document.getElementById(id);
+            if (el) { el.value = val; if (el.tagName === 'SELECT') el.selectedIndex = 0; }
+        };
+        setVal('keterangan');
+        setVal('alasanKondisi');
+        setVal('buktiHadir');
+        setVal('lat');
+        setVal('lng');
+        setVal('alamat');
+        setVal('fotoBase64');
+
         document.getElementById('flowHadir').classList.add('hidden-view');
         document.getElementById('form-absen-lanjutan').classList.add('hidden-view');
         document.getElementById('flowIzin').classList.remove('hidden-view');

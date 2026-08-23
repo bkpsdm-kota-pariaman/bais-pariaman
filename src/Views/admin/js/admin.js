@@ -1691,9 +1691,15 @@ function renderRekapTable(filteredPegawai) {
                 fotoLink = `<a href="${urlFoto}" target="_blank" class="d-block small text-decoration-none mt-1">${icon}</a>`;
             }
 
-            const keteranganText = p.keterangan ? `<div class="small text-muted mt-1 fst-italic" title="Keterangan">"${p.keterangan}"</div>` : '';
+            let keteranganHtml = '';
+            if (p.keterangan && p.keterangan !== '-') {
+                keteranganHtml += `<div class="mt-1"><span class="badge bg-info text-dark" style="font-size:10px;">Pegawai:</span> <span class="small text-dark fst-italic">"${p.keterangan}"</span></div>`;
+            }
+            if (p.keterangan_verifikasi && p.keterangan_verifikasi !== '-') {
+                keteranganHtml += `<div class="mt-1"><span class="badge bg-warning text-dark" style="font-size:10px;">Admin:</span> <span class="small text-dark fst-italic">"${p.keterangan_verifikasi}"</span></div>`;
+            }
 
-            const statusKeteranganInfo = `${verifikasiBadge}${fotoLink}${keteranganText}`;
+            const statusKeteranganInfo = `${verifikasiBadge}${fotoLink}${keteranganHtml}`;
 
             const pegawaiData = JSON.stringify(p).replace(/"/g, '&quot;');
 
@@ -1796,7 +1802,8 @@ function renderFotoKehadiranGrid(filteredPegawai) {
                             ${verifStatusBadge}
                         </div>
                         <p class="card-text small mb-1" title="Lokasi Absen"><i class="bi bi-geo-alt-fill"></i> ${p.lokasi_absen || 'Lokasi tidak tercatat'}</p>
-                        ${p.keterangan && p.keterangan !== '-' ? `<p class="card-text small fst-italic text-warning mb-2" title="Keterangan"><i class="bi bi-info-circle"></i> "${p.keterangan}"</p>` : ''}
+                        ${p.keterangan && p.keterangan !== '-' ? `<p class="card-text small fst-italic text-info mb-1" title="Keterangan Pegawai"><span class="badge bg-info text-dark me-1" style="font-size:10px;">Pegawai</span> "${p.keterangan}"</p>` : ''}
+                        ${p.keterangan_verifikasi && p.keterangan_verifikasi !== '-' ? `<p class="card-text small fst-italic text-warning mb-1" title="Keterangan Admin"><span class="badge bg-warning text-dark me-1" style="font-size:10px;">Admin</span> "${p.keterangan_verifikasi}"</p>` : ''}
                         
                         <div class="mt-auto pt-2 border-top">
                             <button class="btn btn-sm btn-outline-danger w-100" onclick='bukaModalVerifikasi(${pegawaiData})'>
@@ -1871,7 +1878,7 @@ async function bukaModalVerifikasi(pegawai) {
     document.getElementById('verifJabatan').value = pegawai.jabatan || '';
 
     document.getElementById('verifStatusLama').textContent = pegawai.status_verifikasi || 'ALPA';
-    document.getElementById('verifKeterangan').value = pegawai.keterangan || '';
+    document.getElementById('verifKeterangan').value = pegawai.keterangan_verifikasi || '';
 
     const verifLinkFoto = document.getElementById('verifLinkFoto');
     const verifTanpaFoto = document.getElementById('verifTanpaFoto');
@@ -2285,7 +2292,8 @@ async function exportRekapToExcel() {
             'Waktu Absen': p.waktu_absen || '-',
             'Lokasi Absen': p.lokasi_absen || '-',
             'Status Verifikasi': p.status_verifikasi,
-            'Keterangan Admin': p.keterangan || '-'
+            'Keterangan Pegawai': p.keterangan || '-',
+            'Keterangan Admin': p.keterangan_verifikasi || '-'
         }));
 
         // 5. Buat worksheet dan workbook
@@ -2943,8 +2951,14 @@ function renderRekapKeseluruhanTable(data) {
             fotoLink = `<a href="${urlFoto}" target="_blank" class="d-block small text-decoration-none mt-1">${icon}</a>`;
         }
 
-        const keteranganText = p.keterangan ? `<div class="small text-muted mt-1 fst-italic" title="Keterangan">"${p.keterangan}"</div>` : '';
-        const statusKeteranganInfo = `${verifikasiBadge}${fotoLink}${keteranganText}`;
+        let keteranganHtml = '';
+        if (p.keterangan && p.keterangan !== '-') {
+            keteranganHtml += `<div class="mt-1"><span class="badge bg-info text-dark" style="font-size:10px;">Pegawai:</span> <span class="small text-dark fst-italic">"${p.keterangan}"</span></div>`;
+        }
+        if (p.keterangan_verifikasi && p.keterangan_verifikasi !== '-') {
+            keteranganHtml += `<div class="mt-1"><span class="badge bg-warning text-dark" style="font-size:10px;">Admin:</span> <span class="small text-dark fst-italic">"${p.keterangan_verifikasi}"</span></div>`;
+        }
+        const statusKeteranganInfo = `${verifikasiBadge}${fotoLink}${keteranganHtml}`;
 
         return `<tr>
             <td class="text-center align-middle">${(paginasiState.page - 1) * paginasiState.limit + i + 1}</td>
@@ -3024,7 +3038,8 @@ function exportRekapKeseluruhanToExcel() {
             'Waktu Absen': absensiInfo,
             'Status Kehadiran': p.status_kehadiran || '-',
             'Status Verifikasi': p.status_verifikasi || 'ALPA',
-            'Keterangan': p.keterangan || '-',
+            'Keterangan Pegawai': p.keterangan || '-',
+            'Keterangan Admin': p.keterangan_verifikasi || '-',
             'Lokasi Absen': p.lokasi_absen || '-',
             'Link Foto': (p.nama_file_foto && p.nama_file_foto !== 'MANUAL_INPUT.jpg') ?
                 (p.nama_file_foto.startsWith('http') ? p.nama_file_foto : `${ORIGIN_SERVER_URL}/uploads/foto_absensi/${p.nama_file_foto}`) : '-'

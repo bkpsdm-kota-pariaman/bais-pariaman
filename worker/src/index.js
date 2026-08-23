@@ -399,7 +399,7 @@ export default {
 			// 1. Validasi token JWT dari PWA
 			const authHeader = request.headers.get('Authorization');
 			if (!authHeader || !authHeader.startsWith('Bearer ')) {
-				return jsonResponse(false, 401, 'Header otorisasi tidak ada atau format salah.');
+				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 			const token = authHeader.substring(7);
 			const secret = new TextEncoder().encode(env.JWT_SECRET);
@@ -408,7 +408,7 @@ export default {
 				const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
 				decodedToken = payload;
 			} catch (err) {
-				return jsonResponse(false, 401, 'Token tidak valid atau telah kedaluwarsa.');
+				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 
 			try {
@@ -480,7 +480,7 @@ export default {
 			// 1. Validasi token JWT dari PWA
 			const authHeader = request.headers.get('Authorization');
 			if (!authHeader || !authHeader.startsWith('Bearer ')) {
-				return jsonResponse(false, 401, 'Header otorisasi tidak ada atau format salah.');
+				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 			const token = authHeader.substring(7);
 			const secret = new TextEncoder().encode(env.JWT_SECRET);
@@ -490,7 +490,7 @@ export default {
 				decodedToken = payload;
 			} catch (err) {
 				console.error(`[Profil Refresh Token] Gagal validasi token: ${err.message}`);
-				return jsonResponse(false, 401, 'Token tidak valid atau telah kedaluwarsa.');
+				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 
 			try {
@@ -575,7 +575,7 @@ export default {
 			// Validasi token dari PWA
 			const authHeader = request.headers.get('Authorization');
 			if (!authHeader || !authHeader.startsWith('Bearer ')) {
-				return jsonResponse(false, 401, 'Header otorisasi tidak ada atau format salah.');
+				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 
 			const token = authHeader.substring(7);
@@ -586,7 +586,7 @@ export default {
 				const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
 				decodedToken = payload;
 			} catch (err) {
-				return jsonResponse(false, 401, 'Token tidak valid atau telah kedaluwarsa.');
+				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 
 			try {
@@ -778,7 +778,7 @@ export default {
 
 			const authHeader = request.headers.get('Authorization');
 			if (!authHeader || !authHeader.startsWith('Bearer ')) {
-				return jsonResponse(false, 401, 'Header otorisasi admin tidak ada atau format salah.');
+				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 
 			const adminToken = authHeader.substring(7);
@@ -790,14 +790,14 @@ export default {
 				const { payload } = await jwtVerify(adminToken, secret, { issuer: ALLOWED_ISSUERS });
 				decodedPayload = payload;
 			} catch (err) {
-				return jsonResponse(false, 401, 'Token admin tidak valid atau telah kedaluwarsa.');
+				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 
 			// Otorisasi: Pastikan pengguna yang melakukan request memiliki peran 'admin' atau 'super admin'
 			const userRoles = Array.isArray(decodedPayload?.data?.role) ? decodedPayload.data.role : (decodedPayload?.data?.role ? [decodedPayload.data.role] : []);
 			const hasAdminRole = userRoles.some(r => ['admin', 'super admin'].includes(String(r).trim().toLowerCase()));
 			if (!hasAdminRole) {
-				return jsonResponse(false, 403, 'Akses ditolak. Hanya admin atau super admin yang dapat menggunakan fitur ini.');
+				return jsonResponse(false, 403, 'Hak akses ditolak.');
 			}
 
 			try {
@@ -806,7 +806,7 @@ export default {
 				const userToken = payload.user_token;
 
 				if (!userToken) {
-					return jsonResponse(false, 400, 'Token pegawai yang diabsenkan tidak ada dalam request body.');
+					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 				}
 
 				// Validasi aturan ketat (waktu dan lokasi)
@@ -818,8 +818,15 @@ export default {
 				// Hapus user_token dari payload utama agar tidak terkirim ke PHP jika ada fallback
 				delete payload.user_token;
 
-				// Buat payload untuk antrian, gunakan token user dari body
-				const queuePayload = { ...payload, jwt_token: userToken, submittedAt: new Date().toISOString() };
+				// Buat payload untuk antrian, gunakan token user dari body dan set keterangan_verifikasi
+				const keteranganAdmin = payload.keterangan_verifikasi || payload.keterangan || 'Absensi Cepat oleh Admin';
+				const queuePayload = {
+					...payload,
+					keterangan_verifikasi: keteranganAdmin,
+					jwt_token: userToken,
+					submittedAt: new Date().toISOString()
+				};
+				delete queuePayload.keterangan; // Jangan timpa kolom keterangan pegawai
 				await env.MY_QUEUE.send(queuePayload);
 
 				return jsonResponse(true, 202, 'Absensi Cepat telah diterima dan akan segera diproses.');
@@ -844,7 +851,7 @@ export default {
 
 			const authHeader = request.headers.get('Authorization');
 			if (!authHeader || !authHeader.startsWith('Bearer ')) {
-				return jsonResponse(false, 401, 'Header otorisasi tidak ada atau format salah.');
+				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 
 			const token = authHeader.substring(7);
@@ -853,7 +860,7 @@ export default {
 			try {
 				await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
 			} catch (err) {
-				return jsonResponse(false, 401, 'Token tidak valid atau telah kedaluwarsa.');
+				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 
 			try {
@@ -868,7 +875,11 @@ export default {
 				const queuePayload = { ...payload, jwt_token: token, submittedAt: new Date().toISOString() };
 				await env.MY_QUEUE.send(queuePayload);
 
-				return jsonResponse(true, 202, 'Absensi Anda telah diterima dan akan segera diproses.', { waktu: new Date().toISOString() });
+				const pesanSukses = (payload.status_verifikasi === 'Menunggu Verifikasi Admin')
+					? 'Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.'
+					: 'Absensi Anda telah diterima dan akan segera diproses.';
+
+				return jsonResponse(true, 202, pesanSukses, { waktu: new Date().toISOString() });
 			} catch (error) {
 				console.error('Error di fetch handler (producer) worker:', error);
 				return jsonResponse(false, 500, 'Server worker error: Gagal memproses permintaan Anda.');

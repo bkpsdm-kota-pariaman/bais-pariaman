@@ -145,7 +145,7 @@ class AdminRekapController {
         $sql = "
             SELECT
                 nip, nama_pegawai, opd AS perangkat_daerah, jabatan,
-                waktu AS waktu_absen, status_verifikasi, keterangan,
+                waktu AS waktu_absen, status_verifikasi, keterangan, keterangan_verifikasi,
                 nama_file_foto, lokasi AS lokasi_absen, status_kehadiran
             FROM
                 app_absensi_data_absensi
@@ -239,7 +239,7 @@ class AdminRekapController {
         $sql = "
             SELECT
                 a.nip, a.nama_pegawai, a.opd AS perangkat_daerah, a.jabatan,
-                a.waktu AS waktu_absen, a.status_verifikasi, a.keterangan,
+                a.waktu AS waktu_absen, a.status_verifikasi, a.keterangan, a.keterangan_verifikasi,
                 a.nama_file_foto, a.lokasi AS lokasi_absen, a.status_kehadiran,
                 j.kode_akses, j.judul AS judul_kegiatan, j.tanggal, j.jam_mulai, j.jam_selesai
             FROM
@@ -528,7 +528,7 @@ class AdminRekapController {
             }
 
             $sql = "INSERT INTO app_absensi_data_absensi 
-                    (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan, status_verifikasi, status_kehadiran)
+                    (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan_verifikasi, status_verifikasi, status_kehadiran)
                     VALUES 
                     (:ka, :nip, :nama, :opd, :jabatan, :waktu, 'Diubah oleh Admin (Manual)', :foto, :ket, :sv, :sk)";
             
@@ -581,7 +581,7 @@ class AdminRekapController {
         $sql = "UPDATE app_absensi_data_absensi 
                 SET 
                     status_verifikasi = :sv, 
-                    keterangan = :ket,
+                    keterangan_verifikasi = :ket,
                     opd = :opd,
                     jabatan = :jabatan,
                     waktu = :waktu_new,
@@ -686,14 +686,14 @@ class AdminRekapController {
             if (!$peg) continue;
 
             $sql = "INSERT INTO app_absensi_data_absensi 
-                    (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan, status_verifikasi, status_kehadiran)
+                    (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan_verifikasi, status_verifikasi, status_kehadiran)
                     VALUES 
                     (:ka, :nip, :nama, :opd, :jabatan, :waktu, 'Diubah oleh Admin (Masal)', :foto, :ket, :sv, :sk)
                     ON DUPLICATE KEY UPDATE 
                     waktu = IF(waktu IS NULL OR waktu = '0000-00-00 00:00:00', VALUES(waktu), waktu),
                     status_verifikasi = VALUES(status_verifikasi),
                     status_kehadiran = VALUES(status_kehadiran),
-                    keterangan = VALUES(keterangan),
+                    keterangan_verifikasi = VALUES(keterangan_verifikasi),
                     nama_file_foto = VALUES(nama_file_foto)";
             
             $stmt = $db->prepare($sql);
@@ -875,7 +875,7 @@ class AdminRekapController {
 
         // 5. Insert data baru ke tabel absensi
         $sql = "INSERT INTO app_absensi_data_absensi 
-                    (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran, keterangan, waktu, nama_file_foto, lokasi) 
+                    (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran, keterangan_verifikasi, waktu, nama_file_foto, lokasi) 
                 VALUES 
                     (:ka, :nip, :nama, :opd, :jabatan, :kategori, :sv, :sk, :ket, :waktu, 'MANUAL_INPUT.jpg', 'MANUAL_INPUT_ADMIN')";
         
@@ -990,14 +990,14 @@ class AdminRekapController {
             
             // Query Upsert
             $sql = "INSERT INTO app_absensi_data_absensi 
-                    (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran, keterangan, waktu, nama_file_foto, lokasi) 
+                    (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran, keterangan_verifikasi, waktu, nama_file_foto, lokasi) 
                     VALUES 
                     (:ka, :nip, :nama, :opd, :jabatan, :kategori, :sv, :sk, :ket, :waktu, :foto, 'Diubah oleh Admin (Masal)')
                     ON DUPLICATE KEY UPDATE 
                     waktu = IF(:waktu2 IS NULL OR waktu = '0000-00-00 00:00:00' OR status_kehadiran = 'Alpa', VALUES(waktu), waktu),
                     status_verifikasi = VALUES(status_verifikasi),
                     status_kehadiran = VALUES(status_kehadiran),
-                    keterangan = VALUES(keterangan),
+                    keterangan_verifikasi = VALUES(keterangan_verifikasi),
                     nama_file_foto = IF(VALUES(nama_file_foto) IS NOT NULL, VALUES(nama_file_foto), nama_file_foto)";
             $stmtInsertUpdate = $db->prepare($sql);
 
@@ -1175,14 +1175,14 @@ class AdminRekapController {
                 if (empty($waktu)) $waktu = null;
 
                 $sql = "INSERT INTO app_absensi_data_absensi 
-                        (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan, status_verifikasi, status_kehadiran)
+                        (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan_verifikasi, status_verifikasi, status_kehadiran)
                         VALUES 
                         (:ka, :nip, :nama, :opd, :jabatan, :waktu, :lokasi, :foto, :ket, :sv, :sk)
                         ON DUPLICATE KEY UPDATE 
                         waktu = VALUES(waktu),
                         lokasi = VALUES(lokasi),
                         nama_file_foto = VALUES(nama_file_foto),
-                        keterangan = VALUES(keterangan),
+                        keterangan_verifikasi = VALUES(keterangan_verifikasi),
                         status_verifikasi = VALUES(status_verifikasi),
                         status_kehadiran = VALUES(status_kehadiran)";
 

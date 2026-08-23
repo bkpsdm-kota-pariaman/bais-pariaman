@@ -49,7 +49,7 @@ class AdminAuthController {
         $roles = $rolesStr !== '' ? array_map('trim', explode(',', $rolesStr)) : ['asn'];
 
         if (!in_array('admin', $roles) && !in_array('super admin', $roles)) {
-            Response::json(false, 403, "Akses ditolak. Anda bukan admin.", null);
+            Response::json(false, 403, "Hak akses ditolak.", null);
         }
 
         // 4. Jika Valid, Terbitkan Token JWT untuk Admin

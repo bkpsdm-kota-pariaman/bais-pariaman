@@ -15,7 +15,7 @@ class LogAbsensiController {
         $adminData = AdminAuthHelper::validate();
         $roles = isset($adminData['role']) ? (array) $adminData['role'] : [];
         if (!in_array('super admin', $roles)) {
-            Response::json(false, 403, "Akses ditolak. Fitur ini hanya untuk Super Admin.");
+            Response::json(false, 403, "Hak akses ditolak.");
             return;
         }
 

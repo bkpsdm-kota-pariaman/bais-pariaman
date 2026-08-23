@@ -33,7 +33,7 @@ class AuthHelper {
         
         // 2. Validasi Ketersediaan Token
         if (!$authHeader || !preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            Response::json(false, 401, "Akses ditolak. Token JWT tidak ditemukan atau format salah.", null);
+            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.", null);
         }
         
         $jwtToken = $matches[1];
@@ -45,7 +45,7 @@ class AuthHelper {
             $decoded = JWT::decode($jwtToken, new \Firebase\JWT\Key($secretKey, 'HS256'));
             return (array) $decoded->data;
         } catch (Exception $e) {
-            Response::json(false, 401, "Token tidak valid atau sudah kedaluwarsa. Silakan login ulang.", null);
+            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.", null);
             exit;
         }
     }

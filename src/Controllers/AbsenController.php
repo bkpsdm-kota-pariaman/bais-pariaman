@@ -36,7 +36,7 @@ class AbsenController {
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? null;
         $token = $authHeader ? str_replace('Bearer ', '', $authHeader) : null;
         if (!$token) {
-            Response::json(false, 401, "Token otorisasi tidak ditemukan.");
+            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
             return;
         }
 
@@ -48,12 +48,12 @@ class AbsenController {
             $decoded = JWT::decode($token, new \Firebase\JWT\Key($secretKey, 'HS256'));
             // Validasi masa berlaku (exp) secara manual
             if (isset($decoded->exp) && $decoded->exp < time()) {
-                 Response::json(false, 401, "Token telah kedaluwarsa.");
+                 Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
                  return;
             }
             $pegawaiData = (array) $decoded->data;
         } catch (\Exception $e) {
-            Response::json(false, 401, "Token tidak valid atau kedaluwarsa: " . $e->getMessage());
+            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
             return;
         }
 
@@ -202,7 +202,7 @@ class AbsenController {
         $jabatan = $pegawaiData['jabatan'] ?? null;
 
         if (!$nip || !$nama) {
-            Response::json(false, 400, "Data NIP atau Nama tidak ditemukan di dalam token otorisasi.");
+            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
             return;
         }
 
@@ -274,7 +274,7 @@ class AbsenController {
                 ]
             );
             $pesanSukses = ($statusVerifikasi === 'Menunggu Verifikasi Admin') 
-                ? "Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi bukti absen Anda." 
+                ? "Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda." 
                 : "Absen sudah terkirim.";
             Response::json(true, 200, $pesanSukses, ['waktu' => $waktu]);
         } else {
@@ -297,14 +297,14 @@ class AbsenController {
         $roles = isset($adminData['role']) ? (array) $adminData['role'] : [];
         $roles = array_map('strtolower', array_map('trim', $roles));
         if (!in_array('admin', $roles) && !in_array('super admin', $roles)) {
-            Response::json(false, 403, "Akses ditolak. Hanya admin atau super admin yang dapat menggunakan fitur ini.");
+            Response::json(false, 403, "Hak akses ditolak.");
             return;
         }
 
         // 2. Ambil token pegawai dari body request (bukan dari header)
         $userToken = $_POST['user_token'] ?? null;
         if (!$userToken) {
-            Response::json(false, 401, "Token pegawai yang diabsenkan tidak ditemukan.");
+            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
             return;
         }
 
@@ -315,12 +315,12 @@ class AbsenController {
         try {
             $decoded = JWT::decode($userToken, new \Firebase\JWT\Key($secretKey, 'HS256'));
             if (isset($decoded->exp) && $decoded->exp < time()) {
-                 Response::json(false, 401, "Token pegawai yang di-scan telah kedaluwarsa.");
+                 Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
                  return;
             }
             $pegawaiData = (array) $decoded->data;
         } catch (\Exception $e) {
-            Response::json(false, 401, "Token pegawai yang di-scan tidak valid: " . $e->getMessage());
+            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
             return;
         }
 
@@ -329,7 +329,7 @@ class AbsenController {
         $lat = $_POST['lat'] ?? null;
         $lng = $_POST['lng'] ?? null;
         $lokasi = $_POST['lokasi'] ?? null;
-        $keterangan = $_POST['keterangan'] ?? null;
+        $keteranganVerifikasi = $_POST['keterangan_verifikasi'] ?? $_POST['keterangan'] ?? 'Absensi Cepat oleh Admin';
         $statusKehadiran = $_POST['status_kehadiran'] ?? 'Hadir';
         $statusVerifikasi = $_POST['status_verifikasi'] ?? 'Terverifikasi Oleh Admin';
 
@@ -361,16 +361,16 @@ class AbsenController {
         $jabatan = $pegawaiData['jabatan'] ?? null;
 
         if (!$nip || !$nama) {
-            Response::json(false, 400, "Data NIP atau Nama tidak ditemukan di dalam token pegawai.");
+            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
             return;
         }
 
         $sql = "INSERT INTO app_absensi_data_absensi 
-                    (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, waktu, lokasi, lat, lng, nama_file_foto, keterangan, status_verifikasi, status_kehadiran) 
+                    (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, waktu, lokasi, lat, lng, nama_file_foto, keterangan_verifikasi, status_verifikasi, status_kehadiran) 
                 VALUES 
-                    (:kode_akses, :nip, :nama_pegawai, :opd, :jabatan, :kategori, :waktu, :lokasi, :lat, :lng, :nama_file_foto, :keterangan, :status_verifikasi, :status_kehadiran)
+                    (:kode_akses, :nip, :nama_pegawai, :opd, :jabatan, :kategori, :waktu, :lokasi, :lat, :lng, :nama_file_foto, :keterangan_verifikasi, :status_verifikasi, :status_kehadiran)
                 ON DUPLICATE KEY UPDATE
-                    waktu = VALUES(waktu), lokasi = VALUES(lokasi), lat = VALUES(lat), lng = VALUES(lng), nama_file_foto = VALUES(nama_file_foto), kategori = VALUES(kategori), keterangan = VALUES(keterangan), status_verifikasi = VALUES(status_verifikasi), status_kehadiran = VALUES(status_kehadiran), nama_pegawai = VALUES(nama_pegawai), opd = VALUES(opd), jabatan = VALUES(jabatan)";
+                    waktu = VALUES(waktu), lokasi = VALUES(lokasi), lat = VALUES(lat), lng = VALUES(lng), nama_file_foto = VALUES(nama_file_foto), kategori = VALUES(kategori), keterangan_verifikasi = VALUES(keterangan_verifikasi), status_verifikasi = VALUES(status_verifikasi), status_kehadiran = VALUES(status_kehadiran), nama_pegawai = VALUES(nama_pegawai), opd = VALUES(opd), jabatan = VALUES(jabatan)";
 
         $stmt = $db->prepare($sql);
         $isSuccess = $stmt->execute([
@@ -385,7 +385,7 @@ class AbsenController {
             ':lat' => $lat,
             ':lng' => $lng,
             ':nama_file_foto' => $newFileName,
-            ':keterangan' => $keterangan,
+            ':keterangan_verifikasi' => $keteranganVerifikasi,
             ':status_verifikasi' => $statusVerifikasi,
             ':status_kehadiran' => $statusKehadiran
         ]);
@@ -460,18 +460,18 @@ class AbsenController {
 
         try {
             // Siapkan statement di luar loop untuk efisiensi.
-            // Logika ON DUPLICATE KEY UPDATE sudah benar untuk menangani data yang di-pre-seed.
             $sql = "INSERT INTO app_absensi_data_absensi 
-                        (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, waktu, lokasi, lat, lng, nama_file_foto, keterangan, status_verifikasi, status_kehadiran) 
+                        (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, waktu, lokasi, lat, lng, nama_file_foto, keterangan, keterangan_verifikasi, status_verifikasi, status_kehadiran) 
                     VALUES 
-                        (:kode_akses, :nip, :nama_pegawai, :opd, :jabatan, :kategori, :waktu, :lokasi, :lat, :lng, :nama_file_foto, :keterangan, :status_verifikasi, :status_kehadiran)
+                        (:kode_akses, :nip, :nama_pegawai, :opd, :jabatan, :kategori, :waktu, :lokasi, :lat, :lng, :nama_file_foto, :keterangan, :keterangan_verifikasi, :status_verifikasi, :status_kehadiran)
                     ON DUPLICATE KEY UPDATE
                         waktu = IF(status_kehadiran = 'Alpa', VALUES(waktu), waktu),
                         lokasi = IF(status_kehadiran = 'Alpa', VALUES(lokasi), lokasi),
                         lat = IF(status_kehadiran = 'Alpa', VALUES(lat), lat),
                         lng = IF(status_kehadiran = 'Alpa', VALUES(lng), lng),
                         nama_file_foto = IF(status_kehadiran = 'Alpa', VALUES(nama_file_foto), nama_file_foto),
-                        keterangan = IF(status_kehadiran = 'Alpa', VALUES(keterangan), keterangan),
+                        keterangan = IF(VALUES(keterangan) IS NOT NULL AND VALUES(keterangan) != '', VALUES(keterangan), keterangan),
+                        keterangan_verifikasi = IF(VALUES(keterangan_verifikasi) IS NOT NULL AND VALUES(keterangan_verifikasi) != '', VALUES(keterangan_verifikasi), keterangan_verifikasi),
                         status_verifikasi = IF(status_kehadiran = 'Alpa', VALUES(status_verifikasi), status_verifikasi),
                         status_kehadiran = IF(status_kehadiran = 'Alpa', VALUES(status_kehadiran), status_kehadiran),
                         nama_pegawai = VALUES(nama_pegawai),
@@ -483,12 +483,8 @@ class AbsenController {
             foreach ($absensiBatch as $item) {
                 $uploadPath = null; // Reset untuk setiap item
                 try {
-                    // PERBAIKAN: Mulai transaksi untuk setiap item.
-                    // Ini memastikan setiap data yang berhasil akan di-commit secara eksplisit, mengatasi masalah jika autocommit nonaktif.
                     $db->beginTransaction();
 
-                    // PERBAIKAN: Hasilkan timestamp baru untuk setiap item di dalam loop.
-                    // Ini memastikan setiap catatan absensi mendapatkan waktu yang akurat saat diproses.
                     $waktu = (new DateTime('now', new DateTimeZone('Asia/Jakarta')))->format('Y-m-d H:i:s');
 
                     $payload = $item['body'] ?? null;
@@ -582,6 +578,14 @@ class AbsenController {
                         }
                     }
 
+                    // Pisahkan keterangan pegawai dan keterangan verifikasi admin
+                    $keteranganPegawai = $payload['keterangan'] ?? null;
+                    $keteranganVerifikasi = $payload['keterangan_verifikasi'] ?? null;
+                    if (!$keteranganVerifikasi && $statusVerifikasi === 'Terverifikasi Oleh Admin' && !$keteranganPegawai) {
+                        $keteranganVerifikasi = $payload['keterangan'] ?? null;
+                        $keteranganPegawai = null;
+                    }
+
                     // Eksekusi query yang sudah di-prepare
                     $isSuccess = $stmt->execute([
                         ':kode_akses' => $kodeAkses,
@@ -595,7 +599,8 @@ class AbsenController {
                         ':lat' => $payload['lat'] ?? null, // PERBAIKAN: Tangani jika lat tidak ada
                         ':lng' => $payload['lng'] ?? null, // PERBAIKAN: Tangani jika lng tidak ada
                         ':nama_file_foto' => $newFileName,
-                        ':keterangan' => $payload['keterangan'] ?? '-',
+                        ':keterangan' => $keteranganPegawai,
+                        ':keterangan_verifikasi' => $keteranganVerifikasi,
                         ':status_verifikasi' => $statusVerifikasi,
                         ':status_kehadiran' => $statusKehadiran
                     ]);
