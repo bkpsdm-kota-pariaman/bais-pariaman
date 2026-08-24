@@ -305,17 +305,30 @@ class AdminJadwalController {
         try {
             $db->beginTransaction();
 
-            // Hapus daftar target OPD (Tabel app_absensi_kegiatan_target_opd tidak lagi digunakan)
+            // Ambil semua foto absensi terkait jadwal untuk dibersihkan dari server
+            $stmtPhotos = $db->prepare("SELECT nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nama_file_foto IS NOT NULL AND nama_file_foto != '' AND nama_file_foto != '-' AND nama_file_foto != 'MANUAL_INPUT.jpg'");
+            $stmtPhotos->execute([':ka' => $kodeAkses]);
+            $photos = $stmtPhotos->fetchAll(PDO::FETCH_COLUMN, 0);
 
             // Hapus dari tabel jadwal utama
             $stmtJadwal = $db->prepare("DELETE FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :ka");
             $stmtJadwal->execute([':ka' => $kodeAkses]);
 
-            // Hapus juga data absensi terkait? (Opsional, untuk sekarang tidak)
+            // Hapus data absensi terkait
             $stmtAbsen = $db->prepare("DELETE FROM app_absensi_data_absensi WHERE kode_akses = :ka");
             $stmtAbsen->execute([':ka' => $kodeAkses]);
 
             $db->commit();
+
+            // Hapus file fisik foto jika transaksi database sukses
+            foreach ($photos as $photoFile) {
+                if (!preg_match('/^https?:\/\//i', $photoFile)) {
+                    $filePath = __DIR__ . '/../../uploads/foto_absensi/' . $photoFile;
+                    if (file_exists($filePath)) {
+                        @unlink($filePath);
+                    }
+                }
+            }
 
             // Lakukan sinkronisasi blocking untuk memastikan cache dihapus.
             $syncSuccess = $this->syncJadwalToKv('DELETE', null, $kodeAkses, true);
