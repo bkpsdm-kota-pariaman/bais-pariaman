@@ -2752,7 +2752,13 @@ async function submitPegawai(event) {
     try {
         const result = await fetchWithAuth(url, { method: method, body: JSON.stringify(payload) });
         if (result.status) {
-            modalPegawai.hide();
+            if (modalPegawai) {
+                modalPegawai.hide();
+            } else {
+                const modalEl = document.getElementById('modalPegawai');
+                const instance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                instance.hide();
+            }
             Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: result.message });
             loadPegawai();
         } else {
