@@ -506,15 +506,10 @@ class AdminRekapController {
                 return;
             }
         } else {
-            // Jika tidak ada upload, pastikan data lama sudah punya foto
-            $hasExistingPhoto = $currentAbsenData && !empty($currentAbsenData['nama_file_foto']) && $currentAbsenData['nama_file_foto'] !== 'MANUAL_INPUT.jpg' && $currentAbsenData['nama_file_foto'] !== '-';
-            
-            if (!$hasExistingPhoto) {
-                Response::json(false, 400, "Bukti dukung (Foto/PDF) wajib dilampirkan.");
-                return;
-            }
-            // Gunakan foto lama
-            $newFileName = $currentAbsenData['nama_file_foto'];
+            // Jika tidak ada upload baru oleh admin, gunakan foto lama atau default jika belum ada
+            $newFileName = ($currentAbsenData && !empty($currentAbsenData['nama_file_foto']) && $currentAbsenData['nama_file_foto'] !== '-')
+                ? $currentAbsenData['nama_file_foto']
+                : 'MANUAL_INPUT.jpg';
         }
 
         if (!$currentAbsenData) {
@@ -646,36 +641,34 @@ class AdminRekapController {
             return;
         }
 
-        if (empty($buktiDukung) || $buktiDukung['error'] !== UPLOAD_ERR_OK) {
-            Response::json(false, 400, "Bukti dukung (Foto/PDF) wajib dilampirkan.");
-            return;
-        }
+        $newFileName = 'MANUAL_INPUT.jpg';
+        if (!empty($buktiDukung) && $buktiDukung['error'] === UPLOAD_ERR_OK) {
+            if ($buktiDukung['size'] > 1048576) {
+                Response::json(false, 400, "Ukuran file bukti dukung maksimal 1 MB.");
+                return;
+            }
 
-        if ($buktiDukung['size'] > 1048576) {
-            Response::json(false, 400, "Ukuran file bukti dukung maksimal 1 MB.");
-            return;
-        }
+            $allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
+            $ext = strtolower(pathinfo($buktiDukung['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowedExts)) {
+                Response::json(false, 400, "Tipe file tidak diizinkan. Hanya JPG, PNG, dan PDF yang diperbolehkan.");
+                return;
+            }
 
-        $allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
-        $ext = strtolower(pathinfo($buktiDukung['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, $allowedExts)) {
-            Response::json(false, 400, "Tipe file tidak diizinkan. Hanya JPG, PNG, dan PDF yang diperbolehkan.");
-            return;
-        }
+            // Simpan file
+            $uploadDir = '../uploads/foto_absensi/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            
+            $randomString = bin2hex(random_bytes(4));
+            $newFileName = 'bulk_' . $kodeAkses . '_' . time() . '_' . $randomString . '.' . $ext;
+            $uploadPath = $uploadDir . $newFileName;
 
-        // Simpan file
-        $uploadDir = '../uploads/foto_absensi/';
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-        
-        $randomString = bin2hex(random_bytes(4));
-        $newFileName = 'bulk_' . $kodeAkses . '_' . time() . '_' . $randomString . '.' . $ext;
-        $uploadPath = $uploadDir . $newFileName;
-
-        if (!move_uploaded_file($buktiDukung['tmp_name'], $uploadPath)) {
-            Response::json(false, 500, "Gagal menyimpan file bukti dukung.");
-            return;
+            if (!move_uploaded_file($buktiDukung['tmp_name'], $uploadPath)) {
+                Response::json(false, 500, "Gagal menyimpan file bukti dukung.");
+                return;
+            }
         }
 
         $successCount = 0;
