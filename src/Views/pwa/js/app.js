@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.172'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.175'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -261,6 +261,7 @@ window.addEventListener('popstate', function (event) {
 // ==========================================
 
 let currentPermState = { gps: false, camera: false };
+let permRetryCount = 0;
 
 /**
  * Memeriksa apakah perangkat adalah smartphone (bukan laptop/desktop).
@@ -305,108 +306,100 @@ async function checkHardwarePermissions() {
  */
 function renderPermissionCheckView(perms) {
     const gpsBadge = document.getElementById('badge-perm-gps');
-    const gpsAction = document.getElementById('action-perm-gps');
     const camBadge = document.getElementById('badge-perm-camera');
-    const camAction = document.getElementById('action-perm-camera');
+    const failureDesc = document.getElementById('perm-failure-desc');
+    const boxHelp = document.getElementById('box-perm-help');
 
     if (!gpsBadge || !camBadge) return;
 
     if (perms.gps) {
         gpsBadge.innerHTML = `<span class="bg-green-100 text-green-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-green-200"><i class="bi bi-check-circle-fill text-green-600"></i> OK</span>`;
-        gpsAction.innerHTML = ``;
     } else {
-        gpsBadge.innerHTML = `<span class="bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-red-200"><i class="bi bi-x-circle-fill text-red-600"></i> Belum Izin</span>`;
-        gpsAction.innerHTML = `<button type="button" onclick="requestGpsPermission()" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2 rounded-lg text-xs transition active:scale-95 shadow-sm"><i class="bi bi-geo-alt-fill mr-1"></i> CEK LOKASI</button>`;
+        gpsBadge.innerHTML = `<span class="bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-red-200"><i class="bi bi-x-circle-fill text-red-600"></i> Ditolak</span>`;
     }
 
     if (perms.camera) {
         camBadge.innerHTML = `<span class="bg-green-100 text-green-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-green-200"><i class="bi bi-check-circle-fill text-green-600"></i> OK</span>`;
-        camAction.innerHTML = ``;
     } else {
-        camBadge.innerHTML = `<span class="bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-red-200"><i class="bi bi-x-circle-fill text-red-600"></i> Belum Izin</span>`;
-        camAction.innerHTML = `<button type="button" onclick="requestCameraPermission()" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2 rounded-lg text-xs transition active:scale-95 shadow-sm"><i class="bi bi-camera-fill mr-1"></i> CEK KAMERA</button>`;
+        camBadge.innerHTML = `<span class="bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-red-200"><i class="bi bi-x-circle-fill text-red-600"></i> Ditolak</span>`;
     }
-}
 
-/**
- * Meminta hak akses lokasi (GPS).
- */
-function requestGpsPermission() {
-    showLoading(true, "Meminta akses lokasi...");
-    if ('geolocation' in navigator) {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                showLoading(false);
-                currentPermState.gps = true;
-                renderPermissionCheckView(currentPermState);
-                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Izin Lokasi Berhasil!', showConfirmButton: false, timer: 2000 });
-                if (currentPermState.gps && currentPermState.camera) {
-                    setTimeout(() => checkAuthStatus(), 800);
-                }
-            },
-            (err) => {
-                showLoading(false);
-                currentPermState.gps = false;
-                renderPermissionCheckView(currentPermState);
-                Swal.fire({
-                    title: 'Izin Lokasi Gagal',
-                    text: 'Sistem tidak dapat mengakses lokasi Anda. Silakan aktifkan izin lokasi di pengaturan browser.',
-                    icon: 'error',
-                    confirmButtonColor: '#b91c1c'
-                });
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    } else {
-        showLoading(false);
-        Swal.fire('Error', 'Browser tidak mendukung Geolocation.', 'error');
-    }
-}
-
-/**
- * Meminta hak akses kamera.
- */
-async function requestCameraPermission() {
-    showLoading(true, "Meminta akses kamera...");
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        stream.getTracks().forEach(track => track.stop());
-        showLoading(false);
-        currentPermState.camera = true;
-        renderPermissionCheckView(currentPermState);
-        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Izin Kamera Berhasil!', showConfirmButton: false, timer: 2000 });
-        if (currentPermState.gps && currentPermState.camera) {
-            setTimeout(() => checkAuthStatus(), 800);
+    if (failureDesc) {
+        if (!perms.gps && !perms.camera) {
+            failureDesc.innerText = "Hak akses Lokasi (GPS) dan Kamera belum diizinkan. Silakan tekan tombol Coba Lagi di bawah.";
+        } else if (!perms.gps) {
+            failureDesc.innerText = "Hak akses Lokasi (GPS) belum diizinkan. Silakan tekan tombol Coba Lagi di bawah.";
+        } else if (!perms.camera) {
+            failureDesc.innerText = "Hak akses Kamera belum diizinkan. Silakan tekan tombol Coba Lagi di bawah.";
+        } else {
+            failureDesc.innerText = "Seluruh hak akses perangkat telah diizinkan. Mengalihkan ke halaman login...";
         }
-    } catch (err) {
-        showLoading(false);
-        currentPermState.camera = false;
-        renderPermissionCheckView(currentPermState);
-        Swal.fire({
-            title: 'Izin Kamera Gagal',
-            text: 'Sistem tidak dapat mengakses kamera. Silakan aktifkan izin kamera di pengaturan browser.',
-            icon: 'error',
-            confirmButtonColor: '#b91c1c'
-        });
+    }
+
+    if (boxHelp) {
+        if (permRetryCount >= 2) {
+            boxHelp.classList.remove('hidden-view');
+        } else {
+            boxHelp.classList.add('hidden-view');
+        }
     }
 }
 
 /**
- * Menangani klik tombol LANJUTKAN di view pengecekan hak akses.
+ * Menangani klik tombol COBA LAGI IZINKAN AKSES.
+ * Meminta izin GPS dan Kamera secara berurutan.
+ * Jika 2x gagal, menampilkan bantuan ganti browser & absensi cadangan.
+ * Jika berhasil, langsung berpindah ke login.
  */
-function handleLanjutkanFromPermissionView() {
-    if (!currentPermState.gps || !currentPermState.camera) {
-        Swal.fire({
-            title: 'Perhatian Hak Akses',
-            text: 'Aplikasi tidak dapat berfungsi dengan baik jika hak akses Kamera dan Lokasi tidak diizinkan.',
-            icon: 'warning',
-            confirmButtonColor: '#b91c1c',
-            confirmButtonText: 'Saya Mengerti & Lanjutkan'
-        }).then(() => {
-            checkAuthStatus();
+async function cobaLagiHakAkses() {
+    permRetryCount++;
+    showLoading(true, "Meminta hak akses lokasi & kamera...");
+
+    // 1. Minta izin GPS
+    if (!currentPermState.gps && 'geolocation' in navigator) {
+        await new Promise((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+                () => { currentPermState.gps = true; resolve(); },
+                () => { currentPermState.gps = false; resolve(); },
+                { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+            );
         });
+    }
+
+    // 2. Minta izin Kamera
+    if (!currentPermState.camera && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            stream.getTracks().forEach(t => t.stop());
+            currentPermState.camera = true;
+        } catch (e) {
+            currentPermState.camera = false;
+        }
+    }
+
+    showLoading(false);
+    renderPermissionCheckView(currentPermState);
+
+    // 3. Jika semua hak akses OK -> Langsung skip ke Login!
+    if (currentPermState.gps && currentPermState.camera) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: 'Hak Akses Berhasil Diizinkan!',
+            showConfirmButton: false,
+            timer: 1500
+        });
+        setTimeout(() => checkAuthStatus(), 500);
     } else {
-        checkAuthStatus();
+        if (permRetryCount >= 2) {
+            Swal.fire({
+                title: 'Izin Masih Ditolak',
+                html: 'Telah mencoba 2x namun izin masih belum aktif.<br>Silakan ikuti tips ganti browser atau gunakan <b>Absensi Cadangan</b> di bawah.',
+                icon: 'warning',
+                confirmButtonColor: '#b91c1c'
+            });
+        }
     }
 }
 

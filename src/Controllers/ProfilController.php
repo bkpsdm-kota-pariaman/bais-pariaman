@@ -159,19 +159,22 @@ class ProfilController {
         $nip = $pegawaiData['nip'];
         $db = Database::getConnection();
 
-        // --- LOGIKA BARU: Batasi update profil sekali sebulan ---
+        // --- LOGIKA BARU: Batasi update profil sekali sebulan (kecuali role admin / super admin) ---
         $stmtCheck = $db->prepare("SELECT updated_at, nik, nama_pegawai, jenis_asn FROM app_absensi_data_pegawai WHERE nip = :nip");
         $stmtCheck->execute([':nip' => $nip]);
         $pegawaiDbData = $stmtCheck->fetch(PDO::FETCH_ASSOC);
         $lastUpdateString = $pegawaiDbData['updated_at'] ?? null;
 
-        if ($lastUpdateString) {
+        $userRoles = isset($pegawaiData['role']) ? (array) $pegawaiData['role'] : ['asn'];
+        $userRoles = array_map('strtolower', array_map('trim', $userRoles));
+        $isAdminOrSuperAdmin = in_array('admin', $userRoles) || in_array('super admin', $userRoles);
+
+        if (!$isAdminOrSuperAdmin && !empty($lastUpdateString) && $lastUpdateString !== '0000-00-00 00:00:00' && strtolower((string)$lastUpdateString) !== 'null') {
             try {
                 $now = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
                 $lastUpdate = new DateTime($lastUpdateString, new DateTimeZone('Asia/Jakarta'));
                 
-                // Tambahkan 1 bulan ke waktu update terakhir
-                $nextAllowedUpdate = $lastUpdate->modify('+1 month');
+                $nextAllowedUpdate = (clone $lastUpdate)->modify('+1 month');
 
                 if ($now < $nextAllowedUpdate) {
                     Response::json(false, 429, "Anda hanya dapat mengubah profil sekali dalam sebulan. Perubahan berikutnya dapat dilakukan setelah " . $nextAllowedUpdate->format('d F Y') . ". Hubungi BKPSDM Kota Pariaman jika perlu perubahan mendesak.");

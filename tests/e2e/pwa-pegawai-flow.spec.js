@@ -33,10 +33,10 @@ test.describe('PWA / Browser Pegawai Flow (Non-PWA Mode)', () => {
       const badgeCamText = await page.locator('#badge-perm-camera').innerText().catch(() => 'N/A');
       console.log(`  📱 [STATUS AKSES PERANGKAT] GPS: ${badgeGpsText.replace(/\n/g, ' ')} | Kamera: ${badgeCamText.replace(/\n/g, ' ')}`);
 
-      const btnLanjutkan = page.locator('#view-permission-check button:has-text("LANJUTKAN")');
-      if (await btnLanjutkan.isVisible().catch(() => false)) {
-        logAction.click('LANJUTKAN', '#view-permission-check button:has-text("LANJUTKAN")');
-        await btnLanjutkan.click();
+      const btnRetry = page.locator('#btn-perm-retry');
+      if (await btnRetry.isVisible().catch(() => false)) {
+        logAction.click('COBA LAGI IZINKAN AKSES', '#btn-perm-retry');
+        await btnRetry.click();
       }
     } else {
       console.log('  ✅ [INFO HAK AKSES] Hak akses Kamera & GPS sudah OK sejak awal, otomatis skip permission check dan langsung membuka Halaman Login.');
@@ -130,8 +130,8 @@ test.describe('PWA / Browser Pegawai Flow (Non-PWA Mode)', () => {
     if (!await dashboardView.isVisible().catch(() => false)) {
       const permView = page.locator('#view-permission-check');
       if (await permView.isVisible().catch(() => false)) {
-        const btnLanjutkan = page.locator('#view-permission-check button:has-text("LANJUTKAN")');
-        if (await btnLanjutkan.isVisible().catch(() => false)) await btnLanjutkan.click();
+        const btnRetry = page.locator('#btn-perm-retry');
+        if (await btnRetry.isVisible().catch(() => false)) await btnRetry.click();
       }
       await page.fill('#logNip', TEST_NIP);
       await page.fill('#logNik', TEST_PASSWORD);

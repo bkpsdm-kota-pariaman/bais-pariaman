@@ -63,22 +63,27 @@
     <div class="max-w-[480px] mx-auto bg-white min-h-screen relative shadow-xl main-container">
 
         <!-- VIEW: HAK AKSES DESKTOP DITOLAK (WAJIB HP) -->
-        <div id="view-desktop-denied" class="hidden-view fade-in text-center pt-12 px-6 pb-10 min-h-screen flex flex-col justify-center items-center bg-gray-50">
-            <div class="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6 shadow-inner">
+        <div id="view-desktop-denied"
+            class="hidden-view fade-in text-center pt-12 px-6 pb-10 min-h-screen flex flex-col justify-center items-center bg-gray-50">
+            <div
+                class="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6 shadow-inner">
                 <i class="bi bi-laptop-fill text-4xl"></i>
             </div>
             <h3 class="text-2xl font-extrabold text-red-700 mb-2">Akses Ditolak</h3>
             <p class="text-sm font-semibold text-gray-700 mb-4 max-w-sm">
-                Aplikasi BAIS Pariaman <strong>wajib dibuka melalui Smartphone (HP)</strong>. Anda tidak dapat menggunakan laptop/komputer desktop untuk absensi.
+                Aplikasi BAIS Pariaman <strong>wajib dibuka melalui Smartphone (HP)</strong>. Anda tidak dapat
+                menggunakan laptop/komputer desktop untuk absensi.
             </p>
             <div class="bg-yellow-50 border border-yellow-300 rounded-2xl p-5 text-left mb-6 w-full max-w-sm shadow-sm">
                 <h4 class="font-bold text-yellow-800 text-sm mb-2 flex items-center gap-2">
                     <i class="bi bi-exclamation-triangle-fill text-yellow-600 text-base"></i> Buka dari Smartphone (HP)?
                 </h4>
                 <p class="text-xs text-yellow-900 leading-relaxed mb-3">
-                    Jika Anda saat ini menggunakan HP namun melihat pesan ini, kemungkinan Anda mengaktifkan <strong>"Mode Desktop / Desktop Site"</strong> di browser.
+                    Jika Anda saat ini menggunakan HP namun melihat pesan ini, kemungkinan Anda mengaktifkan
+                    <strong>"Mode Desktop / Desktop Site"</strong> di browser.
                 </p>
-                <div class="bg-white p-3 rounded-xl border border-yellow-200 text-xs text-gray-700 space-y-1.5 font-medium">
+                <div
+                    class="bg-white p-3 rounded-xl border border-yellow-200 text-xs text-gray-700 space-y-1.5 font-medium">
                     <p class="font-bold text-gray-800 mb-1">Cara mematikan Mode Desktop:</p>
                     <p>1. Tekan titik tiga (<strong>⋮</strong>) atau menu browser di sudut atas/bawah.</p>
                     <p>2. Cari opsi <strong>"Situs Desktop"</strong> / <strong>"Desktop site"</strong>.</p>
@@ -86,7 +91,8 @@
                     <p>4. Muat ulang (refresh) halaman ini.</p>
                 </div>
             </div>
-            <button onclick="window.location.reload()" class="w-full max-w-sm bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-md active:scale-95 transition">
+            <button onclick="window.location.reload()"
+                class="w-full max-w-sm bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-md active:scale-95 transition">
                 <i class="bi bi-arrow-repeat mr-1.5"></i> MUAT ULANG HALAMAN
             </button>
         </div>
@@ -94,86 +100,115 @@
         <!-- VIEW: PENGECEKAN HAK AKSES PERANGKAT (GPS & KAMERA) -->
         <div id="view-permission-check" class="hidden-view fade-in bg-gray-50 min-h-screen pb-10">
             <div class="bg-red-700 text-white pt-8 px-5 pb-16 rounded-b-[30px] text-center shadow-md">
-                <h6 class="text-yellow-300 font-bold text-xs tracking-wider mb-1 drop-shadow-sm">PEMERINTAH KOTA PARIAMAN</h6>
+                <h6 class="text-yellow-300 font-bold text-xs tracking-wider mb-1 drop-shadow-sm">PEMERINTAH KOTA
+                    PARIAMAN</h6>
                 <h2 class="text-xl font-extrabold tracking-tight drop-shadow-md">
                     <i class="bi bi-shield-check text-red-200 mr-1"></i> Hak Akses Perangkat
                 </h2>
-                <p class="text-xs text-red-100 mt-1">Sistem memerlukan izin Lokasi (GPS) dan Kamera untuk mencatat absensi.</p>
+                <p class="text-xs text-red-100 mt-1">Izin Kamera dan Lokasi (GPS) wajib aktif untuk absensi.</p>
             </div>
 
             <div class="bg-white rounded-2xl p-5 shadow-xl -mt-10 mx-5 mb-5 relative border border-gray-100 space-y-4">
-                <!-- Status GPS / Lokasi -->
-                <div class="p-4 rounded-xl border border-gray-200 bg-gray-50">
-                    <div class="flex items-center justify-between mb-1">
+                <!-- Status List (GPS & Kamera) -->
+                <div class="space-y-3">
+                    <!-- Status GPS -->
+                    <div class="p-3.5 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xl font-bold">
+                            <div
+                                class="w-9 h-9 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-lg font-bold">
                                 <i class="bi bi-geo-alt-fill"></i>
                             </div>
                             <div>
-                                <h6 class="font-bold text-gray-800 text-sm">Hak Akses Lokasi (GPS)</h6>
-                                <p class="text-[11px] text-gray-500">Memastikan lokasi kegiatan Anda</p>
+                                <h6 class="font-bold text-gray-800 text-xs">Akses Lokasi (GPS)</h6>
+                                <p class="text-[10px] text-gray-500">Akurasi lokasi kegiatan</p>
                             </div>
                         </div>
                         <div id="badge-perm-gps">
                             <!-- Filled by JS -->
                         </div>
                     </div>
-                    <div id="action-perm-gps" class="mt-3">
-                        <!-- Filled by JS -->
-                    </div>
-                </div>
 
-                <!-- Status Kamera -->
-                <div class="p-4 rounded-xl border border-gray-200 bg-gray-50">
-                    <div class="flex items-center justify-between mb-1">
+                    <!-- Status Kamera -->
+                    <div class="p-3.5 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xl font-bold">
+                            <div
+                                class="w-9 h-9 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-lg font-bold">
                                 <i class="bi bi-camera-fill"></i>
                             </div>
                             <div>
-                                <h6 class="font-bold text-gray-800 text-sm">Hak Akses Kamera</h6>
-                                <p class="text-[11px] text-gray-500">Foto selfie bukti kehadiran</p>
+                                <h6 class="font-bold text-gray-800 text-xs">Akses Kamera</h6>
+                                <p class="text-[10px] text-gray-500">Swafoto bukti hadir</p>
                             </div>
                         </div>
                         <div id="badge-perm-camera">
                             <!-- Filled by JS -->
                         </div>
                     </div>
-                    <div id="action-perm-camera" class="mt-3">
-                        <!-- Filled by JS -->
+                </div>
+
+                <!-- Pesan Fokus Gagal Akses -->
+                <div id="perm-failure-message" class="p-3.5 bg-red-50 border border-red-200 rounded-xl text-center">
+                    <p class="text-xs font-bold text-red-700 mb-1 flex items-center justify-center gap-1.5">
+                        <i class="bi bi-exclamation-octagon-fill"></i> Hak Akses Belum Diizinkan
+                    </p>
+                    <p class="text-[11px] text-gray-600 leading-relaxed" id="perm-failure-desc">
+                        Sistem tidak dapat mengakses kamera atau lokasi Anda. Silakan tekan tombol coba lagi di bawah
+                        ini.
+                    </p>
+                </div>
+
+                <!-- Tombol Coba Lagi Utama -->
+                <button type="button" id="btn-perm-retry" onclick="cobaLagiHakAkses()"
+                    class="w-full bg-red-700 active:scale-95 transition-all text-white font-bold py-3.5 rounded-xl shadow-[0_4px_14px_0_rgba(185,28,28,0.39)] text-sm flex items-center justify-center gap-2">
+                    <i class="bi bi-arrow-repeat text-base"></i>
+                    <span>COBA LAGI IZINKAN AKSES</span>
+                </button>
+
+                <!-- Box Bantuan Browser & Absensi Cadangan (Muncul setelah 2x gagal) -->
+                <div id="box-perm-help" class="hidden-view pt-2 space-y-4 border-t border-gray-100">
+                    <!-- Tips Browser Jelas -->
+                    <div
+                        class="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed shadow-sm">
+                        <h6 class="font-bold text-blue-900 mb-1.5 flex items-center gap-1.5">
+                            <i class="bi bi-browser-chrome text-blue-600"></i> Tips: Coba Buka di Browser Lain
+                        </h6>
+                        <p class="text-[11px] text-blue-800 leading-relaxed">
+                            Jika izin tetap ditolak, buka link <strong>https://bais-pariaman.pariamankota.go.id</strong>
+                            menggunakan browser seperti:
+                        </p>
+                        <div class="mt-2 flex flex-wrap gap-1.5 font-bold text-[10px]">
+                            <span class="bg-white px-2 py-1 rounded-md border border-blue-200 text-blue-700">Google
+                                Chrome</span>
+                            <span class="bg-white px-2 py-1 rounded-md border border-blue-200 text-orange-600">Mozilla
+                                Firefox</span>
+                            <span class="bg-white px-2 py-1 rounded-md border border-blue-200 text-blue-600">Microsoft
+                                Edge</span>
+                            <span class="bg-white px-2 py-1 rounded-md border border-blue-200 text-gray-700">Safari
+                                (iPhone)</span>
+                        </div>
+                    </div>
+
+                    <!-- Tombol Absensi Cadangan Fokus -->
+                    <div class="p-4 bg-yellow-50 border border-yellow-300 rounded-xl text-center shadow-sm">
+                        <p class="text-xs text-yellow-900 mb-3 font-semibold leading-relaxed">
+                            Gunakan Absensi Cadangan jika izin kamera/lokasi di perangkat Anda tetap tidak dapat
+                            diaktifkan:
+                        </p>
+                        <a href="../absensi-cadangan/"
+                            class="block w-full bg-yellow-600 hover:bg-yellow-700 active:scale-95 text-white font-bold py-3.5 rounded-xl text-sm shadow-md transition flex items-center justify-center gap-2">
+                            <i class="bi bi-box-arrow-up-right"></i>
+                            <span>BUKA APLIKASI ABSENSI CADANGAN</span>
+                        </a>
                     </div>
                 </div>
-
-                <!-- Tips Browser -->
-                <div class="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed shadow-sm">
-                    <i class="bi bi-lightbulb-fill text-blue-600 mr-1"></i>
-                    <strong>Tips:</strong> Jika hak akses GPS/Kamera masih gagal, pastikan memberikan izin di browser Anda atau coba buka BAIS Pariaman menggunakan browser <strong>Google Chrome, Firefox, Microsoft Edge, atau Safari</strong>.
-                </div>
-
-                <!-- Tombol Lanjutkan -->
-                <button type="button" onclick="handleLanjutkanFromPermissionView()"
-                    class="w-full bg-red-700 active:scale-95 transition-all text-white font-bold py-3.5 rounded-xl shadow-[0_4px_14px_0_rgba(185,28,28,0.39)] text-sm flex items-center justify-center gap-2">
-                    <span>LANJUTKAN</span>
-                    <i class="bi bi-arrow-right-circle"></i>
-                </button>
-            </div>
-
-            <!-- Bagian Absensi Cadangan -->
-            <div class="mx-5 p-4 bg-yellow-50 border border-yellow-200 rounded-2xl text-center shadow-sm">
-                <p class="text-xs text-yellow-900 mb-3 font-medium leading-relaxed">
-                    Silakan pakai aplikasi absensi cadangan kalau misalkan ganti browser masih belum menyelesaikan masalah hak akses kamera/lokasi.
-                </p>
-                <a href="../absensi-cadangan/"
-                    class="block w-full bg-yellow-600 hover:bg-yellow-700 active:scale-95 text-white font-bold py-3 rounded-xl text-xs shadow transition">
-                    <i class="bi bi-box-arrow-up-right mr-1.5"></i> APLIKASI ABSENSI CADANGAN
-                </a>
             </div>
         </div>
 
         <div id="view-install" class="hidden-view fade-in text-center pt-16 px-6 pb-10">
             <img src="./icons/icon-192.png" alt="Logo" class="w-24 mx-auto mb-6 rounded-2xl shadow-md">
             <h3 class="text-xl font-bold text-red-700 mb-3">Install Aplikasi PWA</h3>
-            <p class="text-sm text-gray-600 mb-6">Install aplikasi ke Layar Utama (Home Screen) untuk akses lebih cepat dan praktis. Anda juga tetap dapat mengakses via browser web.
+            <p class="text-sm text-gray-600 mb-6">Install aplikasi ke Layar Utama (Home Screen) untuk akses lebih cepat
+                dan praktis. Anda juga tetap dapat mengakses via browser web.
             </p>
 
             <div id="boxInstallActions" class="mb-3">
@@ -719,7 +754,8 @@
                                         <i class="bi bi-exclamation-triangle-fill text-red-500 mt-0.5"></i>
                                         <p class="text-xs text-red-700 leading-relaxed">Sistem mendeteksi
                                             <strong>keterlambatan, lokasi tidak sesuai, atau kendala perangkat</strong>.
-                                            Mohon lengkapi informasi tambahan di bawah.</p>
+                                            Mohon lengkapi informasi tambahan di bawah.
+                                        </p>
                                     </div>
                                 </div>
 
@@ -759,7 +795,8 @@
                                             <i class="bi bi-info-circle-fill text-orange-500 mt-0.5"></i>
                                             <p class="text-xs text-orange-700 leading-relaxed">Alasan ini memerlukan
                                                 <strong>verifikasi oleh atasan</strong>. Pastikan bukti pendukung telah
-                                                dilampirkan.</p>
+                                                dilampirkan.
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -770,7 +807,8 @@
                                     <input type="file" id="buktiHadir" accept="image/*,application/pdf"
                                         class="w-full p-2 border border-yellow-200 rounded-lg text-sm bg-white"
                                         onchange="handleProofFileChange('buktiHadir')">
-                                    <p class="text-[10px] text-yellow-600 mt-1">Format: JPG, PNG, atau PDF. Maksimal 1 MB.</p>
+                                    <p class="text-[10px] text-yellow-600 mt-1">Format: JPG, PNG, atau PDF. Maksimal 1
+                                        MB.</p>
                                 </div>
                             </div>
                         </div>
@@ -956,7 +994,7 @@
                 <i class="bi bi-cloud-arrow-down-fill text-lg"></i>
                 <span>Update Versi Baru Tersedia</span>
             </button>
-            <p>BAIS Pariaman Kota Pariaman &copy; 2026</p>
+            <p>BAIS Pariaman <br>BKPSDM Kota Pariaman &copy; 2026</p>
             <p class="mt-1">Versi: <span id="appVersion" class="font-mono">...</span></p>
         </div>
 
