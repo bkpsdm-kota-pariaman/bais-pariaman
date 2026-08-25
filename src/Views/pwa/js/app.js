@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.169'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.172'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -498,10 +498,10 @@ window.onload = async () => {
         // 3. Pengecekan hak akses hardware (GPS & Kamera)
         const perms = await checkHardwarePermissions();
         if (perms.gps && perms.camera) {
-            // Sudah dapat hak akses keduanya, langsung ke login / dashboard
+            // Hak akses sudah OK sejak awal, langsung skip ke login / dashboard
             await checkAuthStatus();
         } else {
-            // Tampilkan view pengecekan hak akses
+            // Tampilkan view pengecekan hak akses jika ada izin yang belum diberikan
             renderPermissionCheckView(perms);
             switchView('view-permission-check');
         }
