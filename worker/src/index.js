@@ -855,16 +855,29 @@ export default {
 			}
 
 			const token = authHeader.substring(7);
-			const secret = new TextEncoder().encode(env.JWT_SECRET);
-
+			let jwtPayload;
 			try {
-				await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
+				const { payload: decodedPayload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
+				jwtPayload = decodedPayload;
 			} catch (err) {
 				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 			}
 
 			try {
 				const payload = await request.json();
+
+				// Validasi role: jika role = asn (bukan admin/super admin), foto_base64 / bukti dukung wajib diisi
+				const userRoles = Array.isArray(jwtPayload?.data?.role)
+					? jwtPayload.data.role
+					: (jwtPayload?.data?.role ? [jwtPayload.data.role] : ['asn']);
+				const isAdminOrSuperAdmin = userRoles.some(r => ['admin', 'super admin'].includes(String(r).trim().toLowerCase()));
+				const isSubmittedByAdmin = isAdminOrSuperAdmin || payload.status_verifikasi === 'Terverifikasi Oleh Admin';
+
+				const hasFoto = Boolean(payload.foto_base64 && String(payload.foto_base64).trim() !== '');
+
+				if (!isSubmittedByAdmin && !hasFoto) {
+					return jsonResponse(false, 400, 'Foto / bukti dukung wajib diisi.');
+				}
 
 				// Validasi jadwal (waktu mulai, strict time, strict location)
 				const validationError = await validateJadwalAbsen(payload.kode_akses, payload);

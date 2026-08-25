@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.164'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.168'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -256,6 +256,195 @@ window.addEventListener('popstate', function (event) {
     }
 });
 
+// ==========================================
+// DETEKSI SMARTPHONE & PENGECEKAN HAK AKSES
+// ==========================================
+
+let currentPermState = { gps: false, camera: false };
+
+/**
+ * Memeriksa apakah perangkat adalah smartphone (bukan laptop/desktop).
+ * Juga mendeteksi jika mode desktop diaktifkan pada browser HP.
+ */
+function isMobileDevice() {
+    const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const isWideScreen = window.innerWidth > 1024;
+
+    if (!isMobileUA || isWideScreen) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Memeriksa status hak akses lokasi (GPS) dan kamera.
+ */
+async function checkHardwarePermissions() {
+    let gpsGranted = false;
+    let camGranted = false;
+
+    if (navigator.permissions && navigator.permissions.query) {
+        try {
+            const geoRes = await navigator.permissions.query({ name: 'geolocation' });
+            gpsGranted = (geoRes.state === 'granted');
+        } catch (e) {}
+
+        try {
+            const camRes = await navigator.permissions.query({ name: 'camera' });
+            camGranted = (camRes.state === 'granted');
+        } catch (e) {}
+    }
+
+    currentPermState = { gps: gpsGranted, camera: camGranted };
+    return currentPermState;
+}
+
+/**
+ * Me-render status hak akses di view-permission-check.
+ */
+function renderPermissionCheckView(perms) {
+    const gpsBadge = document.getElementById('badge-perm-gps');
+    const gpsAction = document.getElementById('action-perm-gps');
+    const camBadge = document.getElementById('badge-perm-camera');
+    const camAction = document.getElementById('action-perm-camera');
+
+    if (!gpsBadge || !camBadge) return;
+
+    if (perms.gps) {
+        gpsBadge.innerHTML = `<span class="bg-green-100 text-green-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-green-200"><i class="bi bi-check-circle-fill text-green-600"></i> OK</span>`;
+        gpsAction.innerHTML = ``;
+    } else {
+        gpsBadge.innerHTML = `<span class="bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-red-200"><i class="bi bi-x-circle-fill text-red-600"></i> Belum Izin</span>`;
+        gpsAction.innerHTML = `<button type="button" onclick="requestGpsPermission()" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2 rounded-lg text-xs transition active:scale-95 shadow-sm"><i class="bi bi-geo-alt-fill mr-1"></i> CEK LOKASI</button>`;
+    }
+
+    if (perms.camera) {
+        camBadge.innerHTML = `<span class="bg-green-100 text-green-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-green-200"><i class="bi bi-check-circle-fill text-green-600"></i> OK</span>`;
+        camAction.innerHTML = ``;
+    } else {
+        camBadge.innerHTML = `<span class="bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-red-200"><i class="bi bi-x-circle-fill text-red-600"></i> Belum Izin</span>`;
+        camAction.innerHTML = `<button type="button" onclick="requestCameraPermission()" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2 rounded-lg text-xs transition active:scale-95 shadow-sm"><i class="bi bi-camera-fill mr-1"></i> CEK KAMERA</button>`;
+    }
+}
+
+/**
+ * Meminta hak akses lokasi (GPS).
+ */
+function requestGpsPermission() {
+    showLoading(true, "Meminta akses lokasi...");
+    if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                showLoading(false);
+                currentPermState.gps = true;
+                renderPermissionCheckView(currentPermState);
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Izin Lokasi Berhasil!', showConfirmButton: false, timer: 2000 });
+                if (currentPermState.gps && currentPermState.camera) {
+                    setTimeout(() => checkAuthStatus(), 800);
+                }
+            },
+            (err) => {
+                showLoading(false);
+                currentPermState.gps = false;
+                renderPermissionCheckView(currentPermState);
+                Swal.fire({
+                    title: 'Izin Lokasi Gagal',
+                    text: 'Sistem tidak dapat mengakses lokasi Anda. Silakan aktifkan izin lokasi di pengaturan browser.',
+                    icon: 'error',
+                    confirmButtonColor: '#b91c1c'
+                });
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    } else {
+        showLoading(false);
+        Swal.fire('Error', 'Browser tidak mendukung Geolocation.', 'error');
+    }
+}
+
+/**
+ * Meminta hak akses kamera.
+ */
+async function requestCameraPermission() {
+    showLoading(true, "Meminta akses kamera...");
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach(track => track.stop());
+        showLoading(false);
+        currentPermState.camera = true;
+        renderPermissionCheckView(currentPermState);
+        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Izin Kamera Berhasil!', showConfirmButton: false, timer: 2000 });
+        if (currentPermState.gps && currentPermState.camera) {
+            setTimeout(() => checkAuthStatus(), 800);
+        }
+    } catch (err) {
+        showLoading(false);
+        currentPermState.camera = false;
+        renderPermissionCheckView(currentPermState);
+        Swal.fire({
+            title: 'Izin Kamera Gagal',
+            text: 'Sistem tidak dapat mengakses kamera. Silakan aktifkan izin kamera di pengaturan browser.',
+            icon: 'error',
+            confirmButtonColor: '#b91c1c'
+        });
+    }
+}
+
+/**
+ * Menangani klik tombol LANJUTKAN di view pengecekan hak akses.
+ */
+function handleLanjutkanFromPermissionView() {
+    if (!currentPermState.gps || !currentPermState.camera) {
+        Swal.fire({
+            title: 'Perhatian Hak Akses',
+            text: 'Aplikasi tidak dapat berfungsi dengan baik jika hak akses Kamera dan Lokasi tidak diizinkan.',
+            icon: 'warning',
+            confirmButtonColor: '#b91c1c',
+            confirmButtonText: 'Saya Mengerti & Lanjutkan'
+        }).then(() => {
+            checkAuthStatus();
+        });
+    } else {
+        checkAuthStatus();
+    }
+}
+
+/**
+ * Mengatur visibilitas tombol INSTALL APLIKASI di halaman login.
+ * Hanya muncul saat dibuka via browser biasa (bukan PWA standalone).
+ */
+function updateInstallButtonVisibility() {
+    const btnInstall = document.getElementById('btnInstallInLogin');
+    if (!btnInstall) return;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isStandalone) {
+        btnInstall.classList.add('hidden-view');
+    } else {
+        btnInstall.classList.remove('hidden-view');
+    }
+}
+
+/**
+ * Memicu prompt instalasi PWA dari halaman login.
+ */
+async function triggerPwaInstallFromLogin() {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to install prompt: ${outcome}`);
+        deferredPrompt = null;
+    } else {
+        Swal.fire({
+            title: 'Instalasi Tidak Didukung',
+            html: 'Aplikasi tidak support di browser Anda. Silahkan coba browser lain seperti <b>Google Chrome, Firefox, atau Microsoft Edge</b> atau login langsung tanpa install aplikasi.',
+            icon: 'info',
+            confirmButtonColor: '#b91c1c',
+            confirmButtonText: 'Saya Mengerti'
+        });
+    }
+}
+
 // Aksi tombol install utama
 document.getElementById('btnInstallApp')?.addEventListener('click', async () => {
     if (deferredPrompt) {
@@ -295,14 +484,26 @@ window.onload = async () => {
             description: 'Penyimpanan persisten untuk aplikasi BAIS Pariaman.',
         });
 
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        await migrateStorage(); // Jalankan migrasi sebelum cek status
 
-        if (!isStandalone) {
-            // Paksa halaman instalasi jika diakses lewat browser biasa
-            switchView('view-install');
-        } else {
-            await migrateStorage(); // Jalankan migrasi sebelum cek status
+        // 1. Wajib dibuka dari Smartphone / HP (bukan Laptop/Desktop)
+        if (!isMobileDevice()) {
+            switchView('view-desktop-denied');
+            return;
+        }
+
+        // 2. Update visibilitas tombol install PWA di login
+        updateInstallButtonVisibility();
+
+        // 3. Pengecekan hak akses hardware (GPS & Kamera)
+        const perms = await checkHardwarePermissions();
+        if (perms.gps && perms.camera) {
+            // Sudah dapat hak akses keduanya, langsung ke login / dashboard
             await checkAuthStatus();
+        } else {
+            // Tampilkan view pengecekan hak akses
+            renderPermissionCheckView(perms);
+            switchView('view-permission-check');
         }
     } catch (error) {
         console.error("Fatal error during app startup:", error);

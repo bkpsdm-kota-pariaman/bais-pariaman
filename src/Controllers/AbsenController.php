@@ -71,15 +71,19 @@ class AbsenController {
         // Kita identifikasi ini dengan memeriksa status_verifikasi yang dikirim.
         $is_admin_cepat_fallback = ($statusVerifikasi === 'Terverifikasi Oleh Admin');
 
+        // Validasi role pengguna: jika role asn, foto/bukti dukung bersifat wajib. Jika admin/super admin, opsional.
+        $userRoles = isset($pegawaiData['role']) ? (array) $pegawaiData['role'] : ['asn'];
+        $userRoles = array_map('strtolower', array_map('trim', $userRoles));
+        $isAdminOrSuperAdmin = in_array('admin', $userRoles) || in_array('super admin', $userRoles) || $is_admin_cepat_fallback;
+
         // 3. Validasi input dasar
         $is_izin = (strtolower($statusKehadiran) !== 'hadir');
         $is_lokasi_valid = $is_izin ? true : ($lat !== null && $lng !== null && !empty($lokasi));
 
         if (empty($kodeAkses) || !$is_lokasi_valid || 
-            // Foto hanya wajib jika ini BUKAN fallback dari absensi cepat admin
-            (!$is_admin_cepat_fallback && (empty($foto) || $foto['error'] === UPLOAD_ERR_NO_FILE))
+            (!$isAdminOrSuperAdmin && (empty($foto) || $foto['error'] === UPLOAD_ERR_NO_FILE))
         ) {
-            Response::json(false, 400, "Data tidak lengkap. Kode, lokasi, dan foto wajib diisi. Pastikan GPS aktif atau Anda memilih 'Lanjutkan' jika GPS gagal.");
+            Response::json(false, 400, "Data tidak lengkap. Kode, lokasi, dan foto/bukti dukung wajib diisi.");
             return;
         }
 
@@ -515,6 +519,18 @@ class AbsenController {
                     $newFileName = 'NO_PHOTO_ADMIN_FAST_INPUT.jpg'; // Default filename
                     $uploadPath = null; // Tidak ada file yang di-upload secara default
 
+                    $statusVerifikasi = $payload['status_verifikasi'] ?? 'Terverifikasi Sistem';
+                    $statusKehadiran = $payload['status_kehadiran'] ?? 'Hadir';
+
+                    // Validasi role: foto/bukti dukung wajib jika role = asn (bukan admin/super admin)
+                    $userRoles = isset($pegawaiData['role']) ? (array) $pegawaiData['role'] : ['asn'];
+                    $userRoles = array_map('strtolower', array_map('trim', $userRoles));
+                    $isAdminOrSuperAdmin = in_array('admin', $userRoles) || in_array('super admin', $userRoles) || ($statusVerifikasi === 'Terverifikasi Oleh Admin');
+
+                    if (!$isAdminOrSuperAdmin && empty($fotoBase64)) {
+                        throw new \Exception("Foto / bukti dukung wajib diisi untuk pegawai (NIP: " . $nip . ").");
+                    }
+
                     if (!empty($fotoBase64)) {
                         // Jika ada foto, proses seperti biasa
                         $data = explode(',', $fotoBase64);
@@ -531,8 +547,6 @@ class AbsenController {
                             throw new \Exception("Gagal menyimpan file foto untuk NIP: " . $nip);
                         }
                     }
-                    $statusVerifikasi = $payload['status_verifikasi'] ?? 'Terverifikasi Sistem';
-                    $statusKehadiran = $payload['status_kehadiran'] ?? 'Hadir';
 
                     $itemLat = $payload['lat'] ?? null;
                     $itemLng = $payload['lng'] ?? null;
