@@ -102,13 +102,17 @@
             <div class="bg-red-700 text-white pt-8 px-5 pb-16 rounded-b-[30px] text-center shadow-md">
                 <h6 class="text-yellow-300 font-bold text-xs tracking-wider mb-1 drop-shadow-sm">PEMERINTAH KOTA
                     PARIAMAN</h6>
-                <h2 class="text-xl font-extrabold tracking-tight drop-shadow-md">
-                    <i class="bi bi-shield-check text-red-200 mr-1"></i> Hak Akses Perangkat
-                </h2>
-                <p class="text-xs text-red-100 mt-1">Izin Kamera dan Lokasi (GPS) wajib aktif untuk absensi.</p>
+                <h2 class="text-2xl font-extrabold tracking-tight drop-shadow-md"><i
+                        class="bi bi-geo-alt-fill text-red-200"></i> BAIS Pariaman</h2>
+                <p class="text-sm text-red-200 mt-1 font-medium">Bukti Absensi Instan &amp; Swafoto,<br>Berbasis Akurasi
+                    Lokasi ASN Daerah</p>
             </div>
 
             <div class="bg-white rounded-2xl p-5 shadow-xl -mt-10 mx-5 mb-5 relative border border-gray-100 space-y-4">
+                <h5 class="font-bold text-red-700 text-base text-center flex items-center justify-center gap-1.5 border-b border-gray-100 pb-3">
+                    <i class="bi bi-shield-check text-red-700 text-lg"></i> Pengecekan Akses Kamera &amp; GPS
+                </h5>
+
                 <!-- Status List (GPS & Kamera) -->
                 <div class="space-y-3">
                     <!-- Status GPS -->
@@ -152,16 +156,25 @@
                         <i class="bi bi-exclamation-octagon-fill"></i> Hak Akses Belum Diizinkan
                     </p>
                     <p class="text-[11px] text-gray-600 leading-relaxed" id="perm-failure-desc">
-                        Sistem tidak dapat mengakses kamera atau lokasi Anda. Silakan tekan tombol coba lagi di bawah
-                        ini.
+                        Sistem memerlukan izin Kamera dan Lokasi (GPS) Anda.
+                    </p>
+                </div>
+
+                <!-- Tips Panduan Klik IZINKAN / ALLOW -->
+                <div id="perm-prompt-tips" class="p-3 bg-yellow-50 border border-yellow-200 rounded-xl text-xs text-yellow-900 leading-relaxed shadow-sm">
+                    <p class="font-bold text-yellow-800 mb-1 flex items-center gap-1.5">
+                        <i class="bi bi-info-circle-fill text-yellow-600 text-sm"></i> Panduan Izin Perangkat:
+                    </p>
+                    <p class="text-[11px] text-yellow-900">
+                        Saat tombol di bawah diklik dan pesan / pop-up konfirmasi izin dari HP Anda muncul, tekan <strong class="bg-yellow-200 px-1 py-0.5 rounded text-yellow-950 font-extrabold">"IZINKAN"</strong> atau <strong class="bg-yellow-200 px-1 py-0.5 rounded text-yellow-950 font-extrabold">"ALLOW"</strong> agar dapat melanjutkan.
                     </p>
                 </div>
 
                 <!-- Tombol Coba Lagi Utama -->
                 <button type="button" id="btn-perm-retry" onclick="cobaLagiHakAkses()"
                     class="w-full bg-red-700 active:scale-95 transition-all text-white font-bold py-3.5 rounded-xl shadow-[0_4px_14px_0_rgba(185,28,28,0.39)] text-sm flex items-center justify-center gap-2">
-                    <i class="bi bi-arrow-repeat text-base"></i>
-                    <span>COBA LAGI IZINKAN AKSES</span>
+                    <i class="bi bi-arrow-right-circle-fill text-base"></i>
+                    <span>KLIK DISINI UNTUK MELANJUTKAN</span>
                 </button>
 
                 <!-- Box Bantuan Browser & Absensi Cadangan (Muncul setelah 2x gagal) -->
@@ -204,42 +217,25 @@
             </div>
         </div>
 
-        <div id="view-install" class="hidden-view fade-in text-center pt-16 px-6 pb-10">
-            <img src="./icons/icon-192.png" alt="Logo" class="w-24 mx-auto mb-6 rounded-2xl shadow-md">
-            <h3 class="text-xl font-bold text-red-700 mb-3">Install Aplikasi PWA</h3>
-            <p class="text-sm text-gray-600 mb-6">Install aplikasi ke Layar Utama (Home Screen) untuk akses lebih cepat
-                dan praktis. Anda juga tetap dapat mengakses via browser web.
-            </p>
-
-            <div id="boxInstallActions" class="mb-3">
-                <!-- Mengubah tombol menjadi gradien merah -->
-                <button id="btnInstallApp"
-                    class="w-full bg-red-700 active:scale-95 transition-transform text-white font-bold py-4 rounded-xl shadow-lg">
-                    INSTALL SEKARANG
-                </button>
+        <div id="view-install" class="hidden-view fade-in pt-8 px-5 pb-10">
+            <div class="text-center mb-6">
+                <img src="./icons/icon-192.png" alt="Logo" class="w-20 mx-auto mb-4 rounded-2xl shadow-md">
+                <h3 class="text-xl font-extrabold text-red-700 mb-2">Panduan &amp; Tutorial Install Manual</h3>
+                <p class="text-xs text-gray-600 max-w-sm mx-auto">
+                    Silakan tonton video panduan di bawah ini untuk menginstal aplikasi BAIS Pariaman di HP Anda.
+                </p>
                 <button type="button" onclick="checkAuthStatus()"
-                    class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-xl transition active:scale-95 mt-3 border border-gray-200">
-                    Buka Halaman Login
-                </button>
-                <button onclick="tampilkanTutorialManual()"
-                    class="w-full text-gray-500 font-semibold py-2 text-sm underline active:text-gray-700 transition mt-3">
-                    Bantuan / Install Manual
+                    class="mt-4 inline-flex items-center justify-center gap-2 bg-red-700 hover:bg-red-800 text-white font-bold py-3 px-6 rounded-xl transition active:scale-95 text-xs shadow-md">
+                    <i class="bi bi-arrow-left-circle-fill text-base"></i> Buka Halaman Login
                 </button>
             </div>
 
             <div id="boxTutorialManual"
-                class="hidden-view text-left bg-yellow-50 border border-yellow-200 rounded-xl p-5 mt-5 shadow-inner">
-                <h4
-                    class="font-bold text-yellow-800 mb-3 border-b border-yellow-200 pb-2 flex justify-between items-center">
-                    <span><i class="bi bi-info-circle"></i> Panduan Install Manual</span>
-                    <button onclick="sembunyikanTutorialManual()"
-                        class="text-yellow-800 text-2xl leading-none p-1 rounded-full hover:bg-yellow-200">&times;</button>
+                class="text-left bg-yellow-50 border border-yellow-200 rounded-xl p-4 shadow-inner">
+                <h4 class="font-bold text-yellow-800 mb-3 border-b border-yellow-200 pb-2 flex justify-between items-center text-sm">
+                    <span><i class="bi bi-play-btn-fill text-red-600 mr-1.5"></i> Video Tutorial Instalasi Browser</span>
                 </h4>
-                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4" role="alert">
-                    <p class="font-bold">Instalasi Otomatis Gagal</p>
-                    <p class="text-sm">Aplikasi BAIS Pariaman tidak bisa terinstall otomatis di HP Anda.</p>
-                </div>
-                <p class="text-xs text-gray-700 mb-4">Silahkan lihat video di bawah ini untuk panduan install manual.
+                <p class="text-xs text-gray-700 mb-4">
                     Anda mungkin perlu menginstall browser <strong>Google Chrome, Firefox,</strong> atau
                     <strong>Microsoft Edge</strong> dari Play Store/App Store terlebih dahulu.
                 </p>

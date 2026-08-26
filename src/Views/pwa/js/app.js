@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.175'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.177'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -309,6 +309,8 @@ function renderPermissionCheckView(perms) {
     const camBadge = document.getElementById('badge-perm-camera');
     const failureDesc = document.getElementById('perm-failure-desc');
     const boxHelp = document.getElementById('box-perm-help');
+    const btnRetry = document.getElementById('btn-perm-retry');
+    const promptTips = document.getElementById('perm-prompt-tips');
 
     if (!gpsBadge || !camBadge) return;
 
@@ -324,24 +326,28 @@ function renderPermissionCheckView(perms) {
         camBadge.innerHTML = `<span class="bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-red-200"><i class="bi bi-x-circle-fill text-red-600"></i> Ditolak</span>`;
     }
 
-    if (failureDesc) {
-        if (!perms.gps && !perms.camera) {
-            failureDesc.innerText = "Hak akses Lokasi (GPS) dan Kamera belum diizinkan. Silakan tekan tombol Coba Lagi di bawah.";
-        } else if (!perms.gps) {
-            failureDesc.innerText = "Hak akses Lokasi (GPS) belum diizinkan. Silakan tekan tombol Coba Lagi di bawah.";
-        } else if (!perms.camera) {
-            failureDesc.innerText = "Hak akses Kamera belum diizinkan. Silakan tekan tombol Coba Lagi di bawah.";
-        } else {
-            failureDesc.innerText = "Seluruh hak akses perangkat telah diizinkan. Mengalihkan ke halaman login...";
+    if (permRetryCount >= 2) {
+        if (failureDesc) {
+            failureDesc.innerText = "Hak akses gagal didapatkan setelah 2 kali percobaan. Silakan gunakan Absensi Cadangan di bawah ini.";
         }
-    }
-
-    if (boxHelp) {
-        if (permRetryCount >= 2) {
-            boxHelp.classList.remove('hidden-view');
-        } else {
-            boxHelp.classList.add('hidden-view');
+        if (btnRetry) btnRetry.classList.add('hidden-view');
+        if (promptTips) promptTips.classList.add('hidden-view');
+        if (boxHelp) boxHelp.classList.remove('hidden-view');
+    } else {
+        if (failureDesc) {
+            if (!perms.gps && !perms.camera) {
+                failureDesc.innerText = "Hak akses Lokasi (GPS) dan Kamera belum diizinkan. Silakan tekan tombol KLIK DISINI UNTUK MELANJUTKAN di bawah.";
+            } else if (!perms.gps) {
+                failureDesc.innerText = "Hak akses Lokasi (GPS) belum diizinkan. Silakan tekan tombol KLIK DISINI UNTUK MELANJUTKAN di bawah.";
+            } else if (!perms.camera) {
+                failureDesc.innerText = "Hak akses Kamera belum diizinkan. Silakan tekan tombol KLIK DISINI UNTUK MELANJUTKAN di bawah.";
+            } else {
+                failureDesc.innerText = "Seluruh hak akses perangkat telah diizinkan. Mengalihkan ke halaman login...";
+            }
         }
+        if (btnRetry) btnRetry.classList.remove('hidden-view');
+        if (promptTips) promptTips.classList.remove('hidden-view');
+        if (boxHelp) boxHelp.classList.add('hidden-view');
     }
 }
 
