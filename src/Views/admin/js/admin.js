@@ -3040,14 +3040,14 @@ async function hapusDataAbsensiKeseluruhan(nip, nama, kodeAkses) {
     }
 }
 
-function bukaModalVerifikasiKeseluruhan(pegawai) {
+async function bukaModalVerifikasiKeseluruhan(pegawai) {
     // Inject sementara kode_akses jadwal jika currentRekapData belum ada
     if (!currentRekapData || !currentRekapData.jadwal) {
         currentRekapData = { jadwal: { kode_akses: pegawai.kode_akses }, filtered_pegawai: [] };
     } else {
         currentRekapData.jadwal = currentRekapData.jadwal || { kode_akses: pegawai.kode_akses };
     }
-    bukaModalVerifikasi(pegawai);
+    await bukaModalVerifikasi(pegawai);
 }
 
 function exportRekapKeseluruhanToExcel() {
