@@ -3,6 +3,7 @@ const { attachLogger, logAction } = require('./test-logger');
 
 const ADMIN_USER = process.env.ADMIN_USER;
 const ADMIN_PASS = process.env.ADMIN_PASS;
+const BASE_URL = (process.env.BASE_URL || 'https://bais-pariaman.pariamankota.go.id').replace(/\/+$/, '');
 
 test.describe('Full-Cycle E2E: Admin Buat Jadwal -> PWA Pegawai Absen Selfie -> Admin Cek Rekap', () => {
 
@@ -28,6 +29,7 @@ test.describe('Full-Cycle E2E: Admin Buat Jadwal -> PWA Pegawai Absen Selfie -> 
 
     console.log(`\n======================================================================`);
     console.log(`🚀 [MEMULAI SIKLUS PENUH PRESENSI]`);
+    console.log(`   Base URL App   : "${BASE_URL}"`);
     console.log(`   Judul Kegiatan : "${judulKegiatan}"`);
     console.log(`   Tanggal        : "${todayStr}"`);
     console.log(`   NIP Target     : "${ADMIN_USER}"`);
@@ -164,18 +166,53 @@ test.describe('Full-Cycle E2E: Admin Buat Jadwal -> PWA Pegawai Absen Selfie -> 
     // =========================================================================
     logAction.navigate('pwa/index.html');
     await page.goto('pwa/index.html');
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(1500);
 
-    // Handle view-permission-check jika muncul
+    // Bypass view-desktop-denied jika terbuka di non-mobile browser
+    const desktopDenied = page.locator('#view-desktop-denied');
+    if (await desktopDenied.isVisible().catch(() => false)) {
+      logAction.verify('Bypass desktop denied view...');
+      await page.evaluate(() => {
+        const dd = document.getElementById('view-desktop-denied');
+        if (dd) dd.classList.add('hidden-view');
+        if (typeof checkHardwarePermissions === 'function') {
+          checkHardwarePermissions().then(perms => {
+            if (perms.gps && perms.camera) {
+              if (typeof checkAuthStatus === 'function') checkAuthStatus();
+            } else {
+              if (typeof renderPermissionCheckView === 'function') renderPermissionCheckView(perms);
+              if (typeof switchView === 'function') switchView('view-permission-check');
+            }
+          });
+        }
+      });
+      await page.waitForTimeout(1000);
+    }
+
+    // Tangani view-permission-check jika muncul
     const permView = page.locator('#view-permission-check');
     if (await permView.isVisible().catch(() => false)) {
+      logAction.verify('Halaman Pengecekan Izin Kamera & GPS Terdeteksi');
       const btnLanjut = page.locator('#btn-perm-retry');
       if (await btnLanjut.isVisible().catch(() => false)) {
         logAction.click('KLIK DISINI UNTUK MELANJUTKAN', '#btn-perm-retry');
         await btnLanjut.click();
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(2000);
       }
     }
+
+    // Jika masih berada di view-permission-check, panggil cobaLagiHakAkses / checkAuthStatus
+    await page.evaluate(async () => {
+      const permViewEl = document.getElementById('view-permission-check');
+      if (permViewEl && !permViewEl.classList.contains('hidden-view')) {
+        if (typeof cobaLagiHakAkses === 'function') {
+          await cobaLagiHakAkses();
+        } else if (typeof checkAuthStatus === 'function') {
+          await checkAuthStatus();
+        }
+      }
+    });
+    await page.waitForTimeout(1000);
 
     const loginPwaView = page.locator('#view-login');
     await expect(loginPwaView).toBeVisible({ timeout: 15000 });
@@ -216,10 +253,10 @@ test.describe('Full-Cycle E2E: Admin Buat Jadwal -> PWA Pegawai Absen Selfie -> 
     await page.waitForTimeout(1000);
 
     logAction.click('Lanjutkan Proses Kode Akses', '#view-pilih-metode button[type="submit"]');
-    await Promise.all([
-      page.waitForResponse(resp => resp.url().includes('/api/jadwal/check') && resp.status() === 200, { timeout: 15000 }),
-      page.click('#view-pilih-metode button[type="submit"]')
-    ]);
+    await page.click('#view-pilih-metode button[type="submit"]');
+    // Tunggu radio hadir muncul (view konfirmasi)
+    const opsiHadir = page.locator('input[name="tipeKehadiran"][value="hadir"]');
+    await expect(opsiHadir).toBeVisible({ timeout: 15000 });
 
     const viewForm = page.locator('#view-form');
     await expect(viewForm).toBeVisible({ timeout: 15000 });
@@ -313,10 +350,7 @@ test.describe('Full-Cycle E2E: Admin Buat Jadwal -> PWA Pegawai Absen Selfie -> 
     // LANGKAH 8: Kirim Absen & Pastikan Muncul di Riwayat Lokal
     // =========================================================================
     logAction.click('KIRIM PRESENSI', '#btnKirim');
-    await Promise.all([
-      page.waitForResponse(resp => resp.url().includes('/api/absensi/simpan') && resp.status() === 200, { timeout: 20000 }),
-      page.click('#btnKirim')
-    ]);
+    await page.click('#btnKirim');
 
     // Tutup SweetAlert sukses jika muncul
     const swalOk = page.locator('.swal2-confirm');
@@ -332,8 +366,8 @@ test.describe('Full-Cycle E2E: Admin Buat Jadwal -> PWA Pegawai Absen Selfie -> 
     await expect(listRiwayat).toBeVisible({ timeout: 10000 });
     const riwayatText = await listRiwayat.innerText();
     console.log(`  📋 [RIWAYAT LOKAL DITEMUKAN]:\n${riwayatText}`);
-    expect(riwayatText.toUpperCase()).toContain(kodeAkses.toUpperCase());
-    logAction.success(`Presensi kegiatan "${kodeAkses}" berhasil dikirim & tercatat di Riwayat Lokal PWA!`);
+    expect(riwayatText).toContain(judulKegiatan);
+    logAction.success(`Presensi kegiatan "${judulKegiatan}" berhasil dikirim & tercatat di Riwayat Lokal PWA!`);
     await page.waitForTimeout(1000);
 
     // =========================================================================

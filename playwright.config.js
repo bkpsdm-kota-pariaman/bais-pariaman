@@ -11,7 +11,7 @@ module.exports = defineConfig({
   fullyParallel: true,
   reporter: [['list']],
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:8080/',
+    baseURL: process.env.BASE_URL || 'https://bais-pariaman.pariamankota.go.id/',
     trace: 'on-first-retry',
     permissions: ['geolocation', 'camera'],
     geolocation: { latitude: -0.6276, longitude: 100.1209 },
@@ -19,7 +19,7 @@ module.exports = defineConfig({
       args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream']
     }
   },
-  webServer: isRemote ? undefined : {
+  webServer: (isRemote || !process.env.USE_LOCAL_SERVER) ? undefined : {
     command: 'node tests/server.js',
     port: 8080,
     reuseExistingServer: true,
@@ -44,7 +44,14 @@ module.exports = defineConfig({
     {
       name: 'Full Cycle E2E',
       testMatch: /.*full-cycle.*\.spec\.js$/,
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Pixel 5'],
+        permissions: ['geolocation', 'camera'],
+        geolocation: { latitude: -0.6276, longitude: 100.1209 },
+        launchOptions: {
+          args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream']
+        }
+      },
     },
   ],
 });

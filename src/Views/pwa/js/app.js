@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.182'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.184'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -294,6 +294,17 @@ async function checkHardwarePermissions() {
         try {
             const camRes = await navigator.permissions.query({ name: 'camera' });
             camGranted = (camRes.state === 'granted');
+        } catch (e) {}
+    }
+
+    // Fallback deteksi izin kamera via enumerateDevices (Chrome/Chromium tidak mendukung query {name: 'camera'})
+    if (!camGranted && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            if (videoDevices.length > 0 && videoDevices.some(d => d.label !== '')) {
+                camGranted = true;
+            }
         } catch (e) {}
     }
 
