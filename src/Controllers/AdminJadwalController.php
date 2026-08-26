@@ -26,12 +26,36 @@ class AdminJadwalController {
         $db = Database::getConnection(); 
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
         $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 10;
+        $search = trim($_GET['search'] ?? $_GET['q'] ?? '');
+        $kategori = trim($_GET['kategori'] ?? '');
         $offset = ($page - 1) * $limit;
 
-        $countStmt = $db->query("SELECT COUNT(*) FROM app_absensi_jadwal_kegiatan");
+        $where = [];
+        $params = [];
+
+        if ($search !== '') {
+            $where[] = "(kode_akses LIKE :search OR judul LIKE :search)";
+            $params[':search'] = '%' . $search . '%';
+        }
+
+        if ($kategori !== '' && strtolower($kategori) !== 'semua') {
+            $where[] = "kategori = :kategori";
+            $params[':kategori'] = $kategori;
+        }
+
+        $whereSql = !empty($where) ? ' WHERE ' . implode(' AND ', $where) : '';
+
+        $countStmt = $db->prepare("SELECT COUNT(*) FROM app_absensi_jadwal_kegiatan" . $whereSql);
+        foreach ($params as $key => $val) {
+            $countStmt->bindValue($key, $val);
+        }
+        $countStmt->execute();
         $totalRows = $countStmt->fetchColumn();
 
-        $stmt = $db->prepare("SELECT *, kv_sync_status FROM app_absensi_jadwal_kegiatan ORDER BY tanggal DESC, jam_mulai DESC LIMIT :limit OFFSET :offset");
+        $stmt = $db->prepare("SELECT *, kv_sync_status FROM app_absensi_jadwal_kegiatan" . $whereSql . " ORDER BY tanggal DESC, jam_mulai DESC LIMIT :limit OFFSET :offset");
+        foreach ($params as $key => $val) {
+            $stmt->bindValue($key, $val);
+        }
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();

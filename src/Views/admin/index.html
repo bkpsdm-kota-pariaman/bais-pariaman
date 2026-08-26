@@ -193,10 +193,37 @@
 
     <!-- DAFTAR JADWAL -->
     <div id="dashboardContainer" class="d-none">
-      <div class="d-flex justify-content-between align-items-center mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="fw-bold mb-0"><i class="bi bi-calendar-event"></i> Daftar Jadwal Kegiatan</h4>
         <button class="btn btn-danger fw-bold px-4 shadow-sm" onclick="bukaModalBuatKegiatan()"><i
             class="bi bi-plus-circle"></i> Buat Jadwal Baru</button>
+      </div>
+
+      <!-- FILTER JADWAL KEGIATAN -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body bg-light rounded p-3">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+              <label class="form-label fw-bold small text-secondary mb-1">Cari Kode Akses / Judul Kegiatan</label>
+              <input type="text" id="filterJadwalSearch" class="form-control form-control-sm" placeholder="Ketik Kode Akses atau Judul Kegiatan..." onkeypress="if(event.key==='Enter') terapkanFilterJadwal()">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold small text-secondary mb-1">Kategori Kegiatan</label>
+              <select id="filterJadwalKategori" class="form-select form-select-sm" onchange="terapkanFilterJadwal()">
+                <option value="semua">-- Semua Kategori --</option>
+                <option value="Apel Pagi">Apel Pagi</option>
+                <option value="Rapat">Rapat</option>
+                <option value="Upacara">Upacara</option>
+                <option value="Senam">Senam</option>
+                <option value="Lainnya">Lainnya</option>
+              </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+              <button class="btn btn-danger btn-sm flex-grow-1 fw-bold" onclick="terapkanFilterJadwal()"><i class="bi bi-search"></i> CARI</button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="resetFilterJadwal()"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- TOP PAGINATION JADWAL -->

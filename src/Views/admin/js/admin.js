@@ -437,9 +437,19 @@ async function loadJadwalKegiatan(isFromPagination = false) {
     loading.classList.remove('d-none');
     container.classList.add('d-none');
 
+    const searchInput = document.getElementById('filterJadwalSearch');
+    const kategoriSelect = document.getElementById('filterJadwalKategori');
+
+    const searchVal = searchInput ? encodeURIComponent(searchInput.value.trim()) : '';
+    const kategoriVal = (kategoriSelect && kategoriSelect.value !== 'semua') ? encodeURIComponent(kategoriSelect.value) : '';
+
+    let url = `${API_BASE_URL}/admin/jadwal?page=${paginasiState.page}&limit=${paginasiState.limit}`;
+    if (searchVal) url += `&search=${searchVal}`;
+    if (kategoriVal) url += `&kategori=${kategoriVal}`;
+    url += `&_=${new Date().getTime()}`;
+
     try {
-        // Tambahkan parameter unik (timestamp) untuk mencegah browser caching pada request GET
-        const result = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal?page=${paginasiState.page}&limit=${paginasiState.limit}&_=${new Date().getTime()}`);
+        const result = await fetchWithAuth(url);
         if (result.status) {
             currentJadwalData = result.data.data;
             renderJadwalTable(currentJadwalData);
@@ -453,6 +463,18 @@ async function loadJadwalKegiatan(isFromPagination = false) {
         loading.classList.add('d-none');
         container.classList.remove('d-none');
     }
+}
+
+function terapkanFilterJadwal() {
+    loadJadwalKegiatan(false);
+}
+
+function resetFilterJadwal() {
+    const searchInput = document.getElementById('filterJadwalSearch');
+    const kategoriSelect = document.getElementById('filterJadwalKategori');
+    if (searchInput) searchInput.value = '';
+    if (kategoriSelect) kategoriSelect.value = 'semua';
+    loadJadwalKegiatan(false);
 }
 
 /**

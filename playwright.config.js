@@ -27,12 +27,12 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'Admin Desktop',
-      testMatch: /.*admin.*\.spec\.js/,
+      testMatch: /admin-(?!full-cycle).*\.spec\.js$/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'PWA Mobile',
-      testMatch: /.*pwa.*\.spec\.js/,
+      testMatch: /pwa-(?!admin).*\.spec\.js$/,
       use: {
         ...devices['Pixel 5'],
         contextOptions: {
@@ -40,6 +40,11 @@ module.exports = defineConfig({
           geolocation: { latitude: -0.6276, longitude: 100.1209 }
         }
       },
+    },
+    {
+      name: 'Full Cycle E2E',
+      testMatch: /.*full-cycle.*\.spec\.js$/,
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 });
