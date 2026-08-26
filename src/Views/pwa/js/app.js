@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.178'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.179'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -305,61 +305,31 @@ async function checkHardwarePermissions() {
  * Me-render status hak akses di view-permission-check.
  */
 function renderPermissionCheckView(perms) {
-    const gpsBadge = document.getElementById('badge-perm-gps');
-    const camBadge = document.getElementById('badge-perm-camera');
-    const failureDesc = document.getElementById('perm-failure-desc');
-    const boxHelp = document.getElementById('box-perm-help');
-    const btnRetry = document.getElementById('btn-perm-retry');
-    const promptTips = document.getElementById('perm-prompt-tips');
+    const stateRequest = document.getElementById('perm-state-request');
+    const stateFallback = document.getElementById('perm-state-fallback');
 
-    if (!gpsBadge || !camBadge) return;
+    if (!stateRequest || !stateFallback) return;
 
-    if (perms.gps) {
-        gpsBadge.innerHTML = `<span class="bg-green-100 text-green-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-green-200"><i class="bi bi-check-circle-fill text-green-600"></i> OK</span>`;
+    if (permRetryCount >= 1 && (!perms.gps || !perms.camera)) {
+        // Jika setelah ditekan masih belum dapat izin -> langsung tampilkan pesan Absensi Cadangan & Tips Browser
+        stateRequest.classList.add('hidden-view');
+        stateFallback.classList.remove('hidden-view');
     } else {
-        gpsBadge.innerHTML = `<span class="bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-red-200"><i class="bi bi-x-circle-fill text-red-600"></i> Ditolak</span>`;
-    }
-
-    if (perms.camera) {
-        camBadge.innerHTML = `<span class="bg-green-100 text-green-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-green-200"><i class="bi bi-check-circle-fill text-green-600"></i> OK</span>`;
-    } else {
-        camBadge.innerHTML = `<span class="bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full text-xs flex items-center gap-1 border border-red-200"><i class="bi bi-x-circle-fill text-red-600"></i> Ditolak</span>`;
-    }
-
-    if (permRetryCount >= 2) {
-        if (failureDesc) {
-            failureDesc.innerText = "Hak akses gagal didapatkan setelah 2 kali percobaan. Silakan gunakan Absensi Cadangan di bawah ini.";
-        }
-        if (btnRetry) btnRetry.classList.add('hidden-view');
-        if (promptTips) promptTips.classList.add('hidden-view');
-        if (boxHelp) boxHelp.classList.remove('hidden-view');
-    } else {
-        if (failureDesc) {
-            if (!perms.gps && !perms.camera) {
-                failureDesc.innerText = "Hak akses Lokasi (GPS) dan Kamera belum diizinkan. Silakan tekan tombol KLIK DISINI UNTUK MELANJUTKAN di bawah.";
-            } else if (!perms.gps) {
-                failureDesc.innerText = "Hak akses Lokasi (GPS) belum diizinkan. Silakan tekan tombol KLIK DISINI UNTUK MELANJUTKAN di bawah.";
-            } else if (!perms.camera) {
-                failureDesc.innerText = "Hak akses Kamera belum diizinkan. Silakan tekan tombol KLIK DISINI UNTUK MELANJUTKAN di bawah.";
-            } else {
-                failureDesc.innerText = "Seluruh hak akses perangkat telah diizinkan. Mengalihkan ke halaman login...";
-            }
-        }
-        if (btnRetry) btnRetry.classList.remove('hidden-view');
-        if (promptTips) promptTips.classList.remove('hidden-view');
-        if (boxHelp) boxHelp.classList.add('hidden-view');
+        // Pesan tunggal default (Permintaan izin kamera & lokasi)
+        stateRequest.classList.remove('hidden-view');
+        stateFallback.classList.add('hidden-view');
     }
 }
 
 /**
  * Menangani klik tombol COBA LAGI IZINKAN AKSES.
  * Meminta izin GPS dan Kamera secara berurutan.
- * Jika 2x gagal, menampilkan bantuan ganti browser & absensi cadangan.
+ * Jika gagal, langsung beralih ke Absensi Cadangan & tips browser.
  * Jika berhasil, langsung berpindah ke login.
  */
 async function cobaLagiHakAkses() {
     permRetryCount++;
-    showLoading(true, "Meminta hak akses lokasi & kamera...");
+    showLoading(true, "Meminta izin lokasi & kamera...");
 
     // 1. Minta izin GPS
     if (!currentPermState.gps && 'geolocation' in navigator) {
@@ -386,7 +356,7 @@ async function cobaLagiHakAkses() {
     showLoading(false);
     renderPermissionCheckView(currentPermState);
 
-    // 3. Jika semua hak akses OK -> Langsung skip ke Login!
+    // 3. Jika semua hak akses OK -> Langsung berpindah ke Login!
     if (currentPermState.gps && currentPermState.camera) {
         Swal.fire({
             toast: true,
@@ -397,15 +367,6 @@ async function cobaLagiHakAkses() {
             timer: 1500
         });
         setTimeout(() => checkAuthStatus(), 500);
-    } else {
-        if (permRetryCount >= 2) {
-            Swal.fire({
-                title: 'Izin Masih Ditolak',
-                html: 'Telah mencoba 2x namun izin masih belum aktif.<br>Silakan ikuti tips ganti browser atau gunakan <b>Absensi Cadangan</b> di bawah.',
-                icon: 'warning',
-                confirmButtonColor: '#b91c1c'
-            });
-        }
     }
 }
 

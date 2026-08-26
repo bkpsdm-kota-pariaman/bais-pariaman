@@ -1884,6 +1884,13 @@ async function bukaModalVerifikasi(pegawai) {
     document.getElementById('verifNip').value = pegawai.nip;
     document.getElementById('verifKodeAkses').value = currentRekapData.jadwal.kode_akses;
 
+    const verifStatusSelect = document.getElementById('verifStatus');
+    if (pegawai.status_verifikasi === 'Ditolak Oleh Admin') {
+        verifStatusSelect.value = 'Ditolak Oleh Admin';
+    } else {
+        verifStatusSelect.value = 'Terverifikasi Oleh Admin';
+    }
+
     // --- NEW: Populate OPD and Jabatan ---
     await loadAllOpdList(); // Ensure OPD list is available
     const opdSelect = document.getElementById('verifOpd');
@@ -1924,13 +1931,6 @@ async function bukaModalVerifikasi(pegawai) {
     verifBuktiLabel.innerHTML = 'Upload Bukti Dukung <span class="text-secondary fw-normal">(Opsional, Maks 1MB)</span>';
     verifBuktiLabel.classList.remove('text-danger');
     verifBuktiDukung.classList.remove('border-danger');
-
-    const verifStatusSelect = document.getElementById('verifStatus');
-    if (pegawai.status_verifikasi === 'Ditolak Oleh Admin') {
-        verifStatusSelect.value = 'Ditolak Oleh Admin';
-    } else {
-        verifStatusSelect.value = 'Terverifikasi Oleh Admin';
-    }
 
     modalVerifikasi.show();
 }
@@ -3041,11 +3041,11 @@ async function hapusDataAbsensiKeseluruhan(nip, nama, kodeAkses) {
 }
 
 async function bukaModalVerifikasiKeseluruhan(pegawai) {
-    // Inject sementara kode_akses jadwal jika currentRekapData belum ada
-    if (!currentRekapData || !currentRekapData.jadwal) {
+    // Inject kode_akses jadwal spesifik pegawai ini agar selalu akurat
+    if (!currentRekapData) {
         currentRekapData = { jadwal: { kode_akses: pegawai.kode_akses }, filtered_pegawai: [] };
     } else {
-        currentRekapData.jadwal = currentRekapData.jadwal || { kode_akses: pegawai.kode_akses };
+        currentRekapData.jadwal = { kode_akses: pegawai.kode_akses };
     }
     await bukaModalVerifikasi(pegawai);
 }

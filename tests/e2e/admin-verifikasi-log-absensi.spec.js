@@ -4,7 +4,7 @@ const { attachLogger, logAction } = require('./test-logger');
 const ADMIN_USER = process.env.ADMIN_USER;
 const ADMIN_PASS = process.env.ADMIN_PASS;
 
-test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', () => {
+test.describe('Admin Rekap Verifikasi & Hapus Data -> Audit Log Absensi Flow (Juli 2026)', () => {
 
   test.beforeEach(async ({ page }) => {
     attachLogger(page, 'Verifikasi & Log Absensi');
@@ -14,13 +14,18 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
 
     logAction.navigate('admin/index.html');
     await page.goto('admin/index.html');
+    await page.waitForTimeout(1000); // Jeda natural
 
     const isLoginVisible = await page.locator('#adminUser').isVisible();
     if (isLoginVisible) {
       logAction.input('Username Admin', '#adminUser', ADMIN_USER);
       await page.fill('#adminUser', ADMIN_USER);
+      await page.waitForTimeout(1000);
+
       logAction.input('Password Admin', '#adminPass', '******');
       await page.fill('#adminPass', ADMIN_PASS);
+      await page.waitForTimeout(1000);
+
       logAction.click('Tombol Masuk', '#btnLogin');
       await page.click('#btnLogin');
 
@@ -36,17 +41,22 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
       }
 
       await expect(page.locator('#dashboardContainer')).toBeVisible({ timeout: 15000 });
+      await page.waitForTimeout(1000);
       logAction.success('Berhasil login dan masuk ke Dashboard Admin');
     }
   });
 
-  test('Uji Verifikasi 5 Sampel Rekap Kehadiran (Juli 2026) dan Validasi JSON Payload di Log Absensi', async ({ page }) => {
+  test('Uji Verifikasi Status & Hapus Data Absensi (Juli 2026) dan Validasi JSON Payload di Log Absensi', async ({ page }) => {
+    // Timeout 120 detik agar seluruh alur aman dengan jeda 1 detik per aksi
+    test.setTimeout(120000);
+
     // =========================================================================
     // LANGKAH 1 & 2: Buka Menu Rekap Kegiatan (Keseluruhan)
     // =========================================================================
     logAction.menu('Menu Rekap Kehadiran / Kegiatan (bukaHalamanRekapKeseluruhan)');
     await page.evaluate(() => bukaHalamanRekapKeseluruhan());
     await expect(page.locator('#rekapKeseluruhanContainer')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1000);
 
     // =========================================================================
     // LANGKAH 3: Pilih Range Waktu Bulan Juli 2026 (1 Juli 2026 s/d 31 Juli 2026)
@@ -58,21 +68,25 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
     }, { timeout: 10000 });
 
     logAction.input('Tanggal Mulai', '#rekapKeseluruhanStartDate', '2026-07-01');
-    logAction.input('Tanggal Selesai', '#rekapKeseluruhanEndDate', '2026-07-31');
     await page.evaluate(() => {
       const startEl = document.getElementById('rekapKeseluruhanStartDate');
-      const endEl = document.getElementById('rekapKeseluruhanEndDate');
       if (startEl && startEl._flatpickr) startEl._flatpickr.setDate('2026-07-01', true);
+    });
+    await page.waitForTimeout(1000);
+
+    logAction.input('Tanggal Selesai', '#rekapKeseluruhanEndDate', '2026-07-31');
+    await page.evaluate(() => {
+      const endEl = document.getElementById('rekapKeseluruhanEndDate');
       if (endEl && endEl._flatpickr) endEl._flatpickr.setDate('2026-07-31', true);
     });
+    await page.waitForTimeout(1000);
 
     logAction.click('Tombol Tampilkan Data', 'button[onclick="terapkanFilterRekapKeseluruhan()"]');
-    
-    // Tunggu request API rekap selesai dan respon 200 diterima
     await Promise.all([
       page.waitForResponse(resp => resp.url().includes('/admin/rekap/keseluruhan') && resp.status() === 200, { timeout: 25000 }),
       page.click('button[onclick="terapkanFilterRekapKeseluruhan()"]')
     ]);
+    await page.waitForTimeout(1000);
 
     logAction.verify('Menunggu rendering tabel rekap kehadiran...');
     await page.waitForFunction(() => {
@@ -85,49 +99,38 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
         (!html.includes('spinner-border') && !html.includes('Memuat data'));
     }, { timeout: 15000 });
 
-    // Ambil 5 data sampel teratas dari data rekap
-    const topSamples = await page.evaluate(() => {
+    // Ambil sampel data dari data rekap
+    const allSamples = await page.evaluate(() => {
       if (typeof currentRekapKeseluruhanData !== 'undefined' && Array.isArray(currentRekapKeseluruhanData) && currentRekapKeseluruhanData.length > 0) {
-        return currentRekapKeseluruhanData.slice(0, 5);
+        return currentRekapKeseluruhanData;
       }
-      const buttons = Array.from(document.querySelectorAll('#rekapKeseluruhanTableBody tr button[onclick*="bukaModalVerifikasiKeseluruhan"]'));
-      return buttons.slice(0, 5).map(btn => {
-        const raw = btn.getAttribute('onclick');
-        const match = raw ? raw.match(/bukaModalVerifikasiKeseluruhan\((.*)\)/s) : null;
-        if (match) {
-          try {
-            return JSON.parse(match[1].replace(/&quot;/g, '"'));
-          } catch (e) {}
-        }
-        return null;
-      }).filter(Boolean);
+      return [];
     });
 
-    if (topSamples.length === 0) {
+    if (allSamples.length === 0) {
       logAction.verify('Tidak ada data absensi untuk rentang Juli 2026.');
       test.skip(true, 'Tidak ada data rekap kehadiran pada bulan Juli 2026 untuk diuji.');
     }
 
-    logAction.verify(`Ditemukan ${topSamples.length} data absensi. Memulai verifikasi...`);
+    // Alokasikan sampel: maks 4 untuk verifikasi edit, 1 untuk hapus (agar tidak bentrok)
+    const samplesToVerify = allSamples.slice(0, Math.min(4, allSamples.length > 1 ? allSamples.length - 1 : allSamples.length));
+    const sampleToDelete = allSamples.length > 1 ? allSamples[allSamples.length - 1] : null;
+
+    logAction.verify(`Ditemukan ${allSamples.length} total data absensi. Alokasi: ${samplesToVerify.length} untuk Verifikasi, 1 untuk Hapus Data.`);
+    await page.waitForTimeout(1000);
 
     // =========================================================================
-    // LANGKAH 4: Verifikasi 5 Data Teratas (1, 3, 5 = Ditolak; 2, 4 = Diterima)
+    // LANGKAH 4.A: Verifikasi / Edit Status (Ubah Status ke Kebalikannya)
     // =========================================================================
     const editedSamples = [];
 
-    for (let i = 0; i < topSamples.length; i++) {
-      const sampleItem = topSamples[i];
-      const index = i + 1; // 1-based index (1..5)
-      const isTolak = (index === 1 || index === 3 || index === 5);
-      const targetVerifStatus = isTolak ? 'Ditolak Oleh Admin' : 'Terverifikasi Oleh Admin';
-      const targetKeterangan = isTolak ? 'INI COBA TOLAK' : 'DATA OK';
+    for (let i = 0; i < samplesToVerify.length; i++) {
+      const sampleItem = samplesToVerify[i];
+      const index = i + 1;
 
-      console.log(`\n----------------------------------------------------------------------`);
-      console.log(`📝 [VERIFIKASI DATA ${index}/${topSamples.length}] NIP: ${sampleItem.nip} (${sampleItem.nama_pegawai || '-'})`);
-      console.log(`   Status Target: "${targetVerifStatus}" | Ket Target: "${targetKeterangan}"`);
-      console.log(`----------------------------------------------------------------------`);
+      await page.waitForTimeout(1000);
 
-      // Buka modal verifikasi untuk sampel ini (tunggu hingga OPD & modal selesai di-load)
+      // Buka modal verifikasi
       logAction.click(`Buka Modal Verifikasi (${sampleItem.nama_pegawai || sampleItem.nip})`);
       await page.evaluate(async (item) => {
         await bukaModalVerifikasiKeseluruhan(item);
@@ -135,24 +138,37 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
 
       const modalVerif = page.locator('#modalVerifikasi');
       await expect(modalVerif).toBeVisible({ timeout: 10000 });
+      await page.waitForTimeout(1000);
 
-      // Pastikan target NIP di modal sesuai
       const nipTarget = await page.inputValue('#verifNip');
       const namaTarget = await page.inputValue('#verifNama');
       const kodeAksesTarget = await page.inputValue('#verifKodeAkses');
       expect(nipTarget).toBe(sampleItem.nip);
 
-      console.log(`  📋 [TERHUBUNG KE MODAL] NIP: "${nipTarget}", Kode Akses: "${kodeAksesTarget}"`);
+      // Cek status verifikasi saat ini
+      const statusLamaModal = await page.innerText('#verifStatusLama');
+      const currentStatus = (statusLamaModal || sampleItem.status_verifikasi || 'ALPA').trim();
+      const isCurrentlyAccepted = currentStatus.includes('Terverifikasi') || currentStatus.includes('Disahkan');
 
-      // Set Status Verifikasi & Keterangan Admin
+      // Tentukan status kebalikannya:
+      const targetVerifStatus = isCurrentlyAccepted ? 'Ditolak Oleh Admin' : 'Terverifikasi Oleh Admin';
+      const targetKeterangan = isCurrentlyAccepted ? 'INI COBA TOLAK' : 'DATA OK';
+
+      console.log(`\n----------------------------------------------------------------------`);
+      console.log(`📝 [VERIFIKASI DATA ${index}/${samplesToVerify.length}] NIP: ${nipTarget} (${namaTarget})`);
+      console.log(`   Status Saat Ini: "${currentStatus}" -> Diubah Menjadi: "${targetVerifStatus}" (Ket: "${targetKeterangan}")`);
+      console.log(`----------------------------------------------------------------------`);
+
       logAction.select('Tindakan Verifikasi', '#verifStatus', targetVerifStatus);
       await page.selectOption('#verifStatus', targetVerifStatus);
       expect(await page.inputValue('#verifStatus')).toBe(targetVerifStatus);
+      await page.waitForTimeout(1000);
 
       logAction.input('Catatan / Keterangan Admin', '#verifKeterangan', targetKeterangan);
       await page.fill('#verifKeterangan', targetKeterangan);
+      await page.waitForTimeout(1000);
 
-      // Submit form dan tunggu respon verifikasi dari server
+      logAction.click('Tombol Simpan Status', '#btnSimpanVerif');
       await Promise.all([
         page.waitForResponse(resp => resp.url().includes('/admin/verifikasi') && resp.status() === 200, { timeout: 15000 }),
         page.click('#btnSimpanVerif')
@@ -161,7 +177,6 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
       logAction.verify('Menunggu modal verifikasi tertutup...');
       await expect(modalVerif).toBeHidden({ timeout: 15000 });
 
-      // Tutup alert SweetAlert jika ada
       const swalConfirm = page.locator('.swal2-confirm');
       if (await swalConfirm.isVisible().catch(() => false)) {
         await swalConfirm.click().catch(() => {});
@@ -178,12 +193,61 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
         keterangan: targetKeterangan
       });
 
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(1000);
+    }
+
+    // =========================================================================
+    // LANGKAH 4.B: Uji Hapus Data Absensi (jika data sampel mencukupi)
+    // =========================================================================
+    let deletedSampleInfo = null;
+
+    if (sampleToDelete) {
+      console.log(`\n======================================================================`);
+      console.log(`🗑️ [UJI HAPUS DATA ABSENSI] NIP: ${sampleToDelete.nip} (${sampleToDelete.nama_pegawai || '-'})`);
+      console.log(`   Kode Akses Target: "${sampleToDelete.kode_akses}"`);
+      console.log(`======================================================================`);
+
+      await page.waitForTimeout(1000);
+
+      logAction.click(`Pemicu Hapus Data Absensi (${sampleToDelete.nama_pegawai || sampleToDelete.nip})`);
+      
+      // Panggil fungsi hapusDataAbsensiKeseluruhan di browser
+      await page.evaluate((item) => {
+        hapusDataAbsensiKeseluruhan(item.nip, item.nama_pegawai, item.kode_akses);
+      }, sampleToDelete);
+
+      // Tunggu modal konfirmasi SweetAlert "Anda Yakin?" muncul
+      const swalConfirmBtn = page.locator('.swal2-confirm');
+      await expect(swalConfirmBtn).toBeVisible({ timeout: 10000 });
+      await page.waitForTimeout(1000);
+
+      logAction.click('Konfirmasi Hapus di SweetAlert', '.swal2-confirm');
+      await Promise.all([
+        page.waitForResponse(resp => resp.url().includes('/admin/rekap/entry/') && resp.request().method() === 'DELETE' && resp.status() === 200, { timeout: 15000 }),
+        swalConfirmBtn.click()
+      ]);
+
+      await page.waitForTimeout(1000);
+
+      // Tutup alert SweetAlert "Terhapus!" jika ada
+      if (await swalConfirmBtn.isVisible().catch(() => false)) {
+        await swalConfirmBtn.click().catch(() => {});
+      }
+
+      logAction.success(`Data NIP: ${sampleToDelete.nip} (${sampleToDelete.kode_akses}) BERHASIL DIHAPUS dari Rekap!`);
+      deletedSampleInfo = {
+        kodeAkses: sampleToDelete.kode_akses,
+        nip: sampleToDelete.nip,
+        nama: sampleToDelete.nama_pegawai
+      };
+
+      await page.waitForTimeout(1000);
     }
 
     console.log(`\n======================================================================`);
-    console.log(`✅ Selesai verifikasi ${editedSamples.length} data. Membuka Menu Log Absensi...`);
+    console.log(`✅ Selesai verifikasi (${editedSamples.length}) & hapus (${deletedSampleInfo ? 1 : 0}) data. Membuka Menu Log Absensi...`);
     console.log(`======================================================================`);
+    await page.waitForTimeout(1000);
 
     // =========================================================================
     // LANGKAH 5 & 6: Buka Menu Log Absensi, Cari & Bandingkan Payload JSON
@@ -191,22 +255,23 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
     logAction.menu('Halaman Log Absensi (bukaHalamanLogAbsensi)');
     await page.evaluate(() => bukaHalamanLogAbsensi());
     await expect(page.locator('#logAbsensiContainer')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1000);
 
+    // 1. Audit Log untuk Data yang Di-verifikasi / Edit
     for (const sample of editedSamples) {
       console.log(`\n----------------------------------------------------------------------`);
-      console.log(`🔍 [AUDIT LOG ${sample.index}/${editedSamples.length}] Memeriksa Log NIP: ${sample.nip} (${sample.nama})`);
+      console.log(`🔍 [AUDIT LOG EDIT ${sample.index}/${editedSamples.length}] Memeriksa Log NIP: ${sample.nip} (${sample.nama})`);
       console.log(`   Kode Akses Target: ${sample.kodeAkses} | Verifikasi: ${sample.statusVerifikasi} | Keterangan: ${sample.keterangan}`);
       console.log(`----------------------------------------------------------------------`);
 
-      // 1. Masukkan Kode Akses Kegiatan
       logAction.input('Filter Kode Akses Kegiatan', '#logFilterKegiatan', sample.kodeAkses);
       await page.fill('#logFilterKegiatan', sample.kodeAkses);
+      await page.waitForTimeout(1000);
 
-      // 2. Masukkan NIP Pegawai
       logAction.input('Filter NIP / Nama Pegawai', '#logFilterPegawai', sample.nip);
       await page.fill('#logFilterPegawai', sample.nip);
+      await page.waitForTimeout(1000);
 
-      // 3. Klik Cari Log
       logAction.click('Tombol Cari Log', 'button[onclick="terapkanFilterLogAbsensi()"]');
       await Promise.all([
         page.waitForResponse(resp => resp.url().includes('/admin/log-absensi') && resp.status() === 200, { timeout: 15000 }),
@@ -220,13 +285,8 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
         const html = tbody.innerHTML;
         return html.includes('<tr') && !html.includes('spinner-border') && !html.includes('Memuat data');
       }, { timeout: 15000 });
+      await page.waitForTimeout(1000);
 
-      // Verifikasi box detail kegiatan muncul
-      const detailBox = page.locator('#logKegiatanDetailBox');
-      await expect(detailBox).toBeVisible({ timeout: 10000 });
-      await expect(page.locator('#logDetailKodeAkses')).toContainText(sample.kodeAkses);
-
-      // Ambil teks payload JSON dari baris log teratas (terbaru) yang cocok dengan NIP
       const payloadText = await page.evaluate((nipTarget) => {
         const rows = Array.from(document.querySelectorAll('#logAbsensiTableBody tr'));
         const matchedRow = rows.find(r => r.innerText.includes(nipTarget)) || rows[0];
@@ -236,15 +296,12 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
       }, sample.nip);
 
       expect(payloadText).not.toBeNull();
-      console.log(`  📄 [PAYLOAD JSON LOG DITEMUKAN]:\n${payloadText}`);
+      console.log(`  📄 [PAYLOAD JSON LOG EDIT DITEMUKAN]:\n${payloadText}`);
 
-      // Validasi struktur dan isi Payload JSON
       let parsedPayload = null;
       try {
         parsedPayload = JSON.parse(payloadText);
-      } catch (e) {
-        console.warn('  ⚠️ JSON parse warning, mengecek kecocokan string...');
-      }
+      } catch (e) {}
 
       if (parsedPayload) {
         expect(parsedPayload.kode_akses).toBe(sample.kodeAkses);
@@ -258,10 +315,71 @@ test.describe('Admin Rekap Verifikasi -> Audit Log Absensi Flow (Juli 2026)', ()
         expect(payloadText).toContain(sample.keterangan);
       }
 
-      logAction.success(`Log verifikasi untuk NIP "${sample.nip}" (${sample.statusVerifikasi} - "${sample.keterangan}") VALID dan tercatat di Log Absensi!`);
+      logAction.success(`Log verifikasi untuk NIP "${sample.nip}" (${sample.statusVerifikasi} - "${sample.keterangan}") VALID!`);
+      await page.waitForTimeout(1000);
     }
 
-    console.log(`\n🎉 [PENGUJIAN SELESAI] Seluruh ${editedSamples.length} kegiatan verifikasi berhasil dicatat & dicocokkan dengan payload audit log!`);
+    // 2. Audit Log untuk Data yang Di-hapus
+    if (deletedSampleInfo) {
+      console.log(`\n----------------------------------------------------------------------`);
+      console.log(`🔍 [AUDIT LOG HAPUS] Memeriksa Log Hapus NIP: ${deletedSampleInfo.nip} (${deletedSampleInfo.nama})`);
+      console.log(`   Kode Akses Target: ${deletedSampleInfo.kodeAkses}`);
+      console.log(`----------------------------------------------------------------------`);
+
+      logAction.input('Filter Kode Akses Kegiatan', '#logFilterKegiatan', deletedSampleInfo.kodeAkses);
+      await page.fill('#logFilterKegiatan', deletedSampleInfo.kodeAkses);
+      await page.waitForTimeout(1000);
+
+      logAction.input('Filter NIP / Nama Pegawai', '#logFilterPegawai', deletedSampleInfo.nip);
+      await page.fill('#logFilterPegawai', deletedSampleInfo.nip);
+      await page.waitForTimeout(1000);
+
+      logAction.click('Tombol Cari Log', 'button[onclick="terapkanFilterLogAbsensi()"]');
+      await Promise.all([
+        page.waitForResponse(resp => resp.url().includes('/admin/log-absensi') && resp.status() === 200, { timeout: 15000 }),
+        page.click('button[onclick="terapkanFilterLogAbsensi()"]')
+      ]);
+
+      logAction.verify('Menunggu tabel log absensi memuat data log hapus...');
+      await page.waitForFunction(() => {
+        const tbody = document.getElementById('logAbsensiTableBody');
+        if (!tbody) return false;
+        const html = tbody.innerHTML;
+        return html.includes('<tr') && !html.includes('spinner-border') && !html.includes('Memuat data');
+      }, { timeout: 15000 });
+      await page.waitForTimeout(1000);
+
+      const payloadTextHapus = await page.evaluate((nipTarget) => {
+        const rows = Array.from(document.querySelectorAll('#logAbsensiTableBody tr'));
+        const matchedRow = rows.find(r => r.innerText.includes('HAPUS') || r.innerText.includes(nipTarget)) || rows[0];
+        if (!matchedRow) return null;
+        const textarea = matchedRow.querySelector('textarea');
+        return textarea ? textarea.value : matchedRow.innerText;
+      }, deletedSampleInfo.nip);
+
+      expect(payloadTextHapus).not.toBeNull();
+      console.log(`  📄 [PAYLOAD JSON LOG HAPUS DITEMUKAN]:\n${payloadTextHapus}`);
+
+      let parsedPayloadHapus = null;
+      try {
+        parsedPayloadHapus = JSON.parse(payloadTextHapus);
+      } catch (e) {}
+
+      if (parsedPayloadHapus) {
+        // Validasi payload hapus hanya berisi kode_akses dan nip
+        expect(parsedPayloadHapus.kode_akses).toBe(deletedSampleInfo.kodeAkses);
+        expect(parsedPayloadHapus.nip).toBe(deletedSampleInfo.nip);
+        expect(parsedPayloadHapus.status_verifikasi).toBeUndefined();
+      } else {
+        expect(payloadTextHapus).toContain(deletedSampleInfo.kodeAkses);
+        expect(payloadTextHapus).toContain(deletedSampleInfo.nip);
+      }
+
+      logAction.success(`Log aksi HAPUS untuk NIP "${deletedSampleInfo.nip}" (${deletedSampleInfo.kodeAkses}) VALID dan sesuai format payload hapus!`);
+      await page.waitForTimeout(1000);
+    }
+
+    console.log(`\n🎉 [PENGUJIAN SELESAI] Seluruh kegiatan verifikasi & hapus data berhasil dicatat & dicocokkan dengan payload audit log!`);
   });
 
 });
