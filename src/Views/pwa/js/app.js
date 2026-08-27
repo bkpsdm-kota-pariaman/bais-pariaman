@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.186'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.188'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -289,12 +289,12 @@ async function checkHardwarePermissions() {
         try {
             const geoRes = await navigator.permissions.query({ name: 'geolocation' });
             gpsGranted = (geoRes.state === 'granted');
-        } catch (e) {}
+        } catch (e) { }
 
         try {
             const camRes = await navigator.permissions.query({ name: 'camera' });
             camGranted = (camRes.state === 'granted');
-        } catch (e) {}
+        } catch (e) { }
     }
 
     // Fallback deteksi izin kamera via enumerateDevices (Chrome/Chromium tidak mendukung query {name: 'camera'})
@@ -305,7 +305,7 @@ async function checkHardwarePermissions() {
             if (videoDevices.length > 0 && videoDevices.some(d => d.label !== '')) {
                 camGranted = true;
             }
-        } catch (e) {}
+        } catch (e) { }
     }
 
     currentPermState = { gps: gpsGranted, camera: camGranted };
@@ -343,8 +343,7 @@ function renderPermissionCheckView(perms) {
  * Menangani klik tombol aktivasi kamera dan lokasi.
  */
 async function cobaLagiHakAkses() {
-    permRetryCount++;
-    showLoading(true, "Meminta izin lokasi & kamera...");
+    showLoading(true, "Klik IZINKAN/ALLOW untuk mengaktifkan lokasi & kamera...");
 
     if (!currentPermState.gps && 'geolocation' in navigator) {
         await new Promise((resolve) => {
@@ -366,6 +365,7 @@ async function cobaLagiHakAkses() {
         }
     }
 
+    permRetryCount++;
     showLoading(false);
     renderPermissionCheckView(currentPermState);
 
@@ -549,7 +549,7 @@ function switchView(viewId) {
                     track.stop();
                     console.log("Stopped videoStream track");
                 });
-            } catch (e) {}
+            } catch (e) { }
             videoStream = null;
         }
         const v = document.getElementById('kamera');
@@ -559,7 +559,7 @@ function switchView(viewId) {
                 if (stream.getTracks) {
                     stream.getTracks().forEach(track => track.stop());
                 }
-            } catch (e) {}
+            } catch (e) { }
             v.srcObject = null;
         }
         // Pastikan juga mematikan semua elemen video aktif di DOM
@@ -570,7 +570,7 @@ function switchView(viewId) {
                     if (stream.getTracks) {
                         stream.getTracks().forEach(track => track.stop());
                     }
-                } catch (e) {}
+                } catch (e) { }
                 video.srcObject = null;
             }
         });
@@ -1493,10 +1493,10 @@ async function _startScanner(deviceId) {
     // Full cleanup sebelum inisialisasi ulang scanner
     if (html5QrCode) {
         if (html5QrCode.isScanning) {
-            try { await html5QrCode.stop(); } catch(e) {}
+            try { await html5QrCode.stop(); } catch (e) { }
         }
         if (html5QrCode.clear) {
-            try { await html5QrCode.clear(); } catch(e) {}
+            try { await html5QrCode.clear(); } catch (e) { }
         }
         html5QrCode = null;
     }
@@ -1513,7 +1513,7 @@ async function _startScanner(deviceId) {
         (decodedText, decodedResult) => {
             if (location.hash !== '#scanner') {
                 if (html5QrCode && html5QrCode.isScanning) {
-                    html5QrCode.stop().catch(e => {});
+                    html5QrCode.stop().catch(e => { });
                 }
                 return;
             }
@@ -1523,7 +1523,7 @@ async function _startScanner(deviceId) {
     ).then(() => {
         if (location.hash !== '#scanner') {
             if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode.stop().catch(e => {});
+                html5QrCode.stop().catch(e => { });
             }
         }
     }).catch(err => {
@@ -1572,7 +1572,7 @@ async function tutupScanner(fromPopState = false) {
             await html5QrCode.stop().catch(err => console.warn("Gagal menghentikan scanner.", err));
         }
         if (html5QrCode.clear) {
-            try { await html5QrCode.clear(); } catch(e) {}
+            try { await html5QrCode.clear(); } catch (e) { }
         }
         html5QrCode = null;
     }
@@ -2763,7 +2763,7 @@ async function handleScanSuccess(decodedText) {
         if (html5QrCode && html5QrCode.isScanning) {
             await html5QrCode.stop().catch(err => console.warn("Gagal menghentikan scanner setelah sukses.", err));
             if (html5QrCode.clear) {
-                try { await html5QrCode.clear(); } catch(e) {}
+                try { await html5QrCode.clear(); } catch (e) { }
             }
             html5QrCode = null;
         }
