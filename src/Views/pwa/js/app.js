@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.184'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.186'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -318,31 +318,34 @@ async function checkHardwarePermissions() {
 function renderPermissionCheckView(perms) {
     const stateRequest = document.getElementById('perm-state-request');
     const stateFallback = document.getElementById('perm-state-fallback');
+    const cameraStatus = document.getElementById('perm-camera-status');
+    const gpsStatus = document.getElementById('perm-gps-status');
 
     if (!stateRequest || !stateFallback) return;
 
-    if (permRetryCount >= 1 && (!perms.gps || !perms.camera)) {
-        // Jika setelah ditekan masih belum dapat izin -> langsung tampilkan pesan Absensi Cadangan & Tips Browser
-        stateRequest.classList.add('hidden-view');
-        stateFallback.classList.remove('hidden-view');
-    } else {
-        // Pesan tunggal default (Permintaan izin kamera & lokasi)
-        stateRequest.classList.remove('hidden-view');
-        stateFallback.classList.add('hidden-view');
-    }
+    const updateStatus = (element, granted) => {
+        if (!element) return;
+        element.textContent = granted ? 'Ok' : 'Belum Aktif';
+        element.className = granted
+            ? 'rounded-full bg-green-100 px-2.5 py-1 text-xs font-extrabold text-green-700'
+            : 'rounded-full bg-red-100 px-2.5 py-1 text-xs font-extrabold text-red-700';
+    };
+    updateStatus(cameraStatus, perms.camera);
+    updateStatus(gpsStatus, perms.gps);
+
+    const allGranted = perms.gps && perms.camera;
+    const showFallback = permRetryCount >= 2 && !allGranted;
+    stateRequest.classList.toggle('hidden-view', showFallback);
+    stateFallback.classList.toggle('hidden-view', !showFallback);
 }
 
 /**
- * Menangani klik tombol COBA LAGI IZINKAN AKSES.
- * Meminta izin GPS dan Kamera secara berurutan.
- * Jika gagal, langsung beralih ke Absensi Cadangan & tips browser.
- * Jika berhasil, langsung berpindah ke login.
+ * Menangani klik tombol aktivasi kamera dan lokasi.
  */
 async function cobaLagiHakAkses() {
     permRetryCount++;
     showLoading(true, "Meminta izin lokasi & kamera...");
 
-    // 1. Minta izin GPS
     if (!currentPermState.gps && 'geolocation' in navigator) {
         await new Promise((resolve) => {
             navigator.geolocation.getCurrentPosition(
@@ -353,7 +356,6 @@ async function cobaLagiHakAkses() {
         });
     }
 
-    // 2. Minta izin Kamera
     if (!currentPermState.camera && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -367,7 +369,6 @@ async function cobaLagiHakAkses() {
     showLoading(false);
     renderPermissionCheckView(currentPermState);
 
-    // 3. Jika semua hak akses OK -> Langsung berpindah ke Login!
     if (currentPermState.gps && currentPermState.camera) {
         Swal.fire({
             toast: true,

@@ -108,80 +108,50 @@
             </div>
 
             <div class="bg-white rounded-2xl p-6 shadow-xl -mt-10 mx-5 mb-5 relative border border-gray-100">
-                <!-- PESAN TUNGGAL 1: MINTA AKSES KAMERA & GPS (Default) -->
-                <div id="perm-state-request" class="space-y-4 text-center">
-                    <div class="w-16 h-16 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center text-3xl mx-auto shadow-inner border border-red-100">
-                        <i class="bi bi-camera-video-fill"></i>
-                    </div>
-
-                    <div class="space-y-2">
-                        <h4 class="font-extrabold text-gray-800 text-base">Izin Kamera &amp; Lokasi Diperlukan</h4>
-                        <p class="text-xs text-gray-600 leading-relaxed px-1">
-                            Aplikasi BAIS Pariaman memerlukan izin <strong>Kamera</strong> dan <strong>Lokasi (GPS)</strong> untuk presensi ASN. Silakan klik tombol di bawah untuk memberikan izin.
-                        </p>
-                    </div>
-
-                    <!-- Panduan Singkat Alert -->
-                    <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-xl text-xs text-yellow-900 leading-relaxed text-left flex items-start gap-2.5 shadow-xs">
-                        <i class="bi bi-info-circle-fill text-yellow-600 text-base flex-shrink-0 mt-0.5"></i>
-                        <div>
-                            <span class="font-bold text-yellow-950">Panduan Izin:</span>
-                            <p class="text-[11px] text-yellow-900 mt-0.5">
-                                Saat jendela konfirmasi dari HP/browser Anda muncul, tekan <strong class="bg-yellow-200 px-1 py-0.5 rounded text-yellow-950 font-extrabold">"IZINKAN"</strong> atau <strong class="bg-yellow-200 px-1 py-0.5 rounded text-yellow-950 font-extrabold">"ALLOW"</strong> agar dapat melanjutkan.
-                            </p>
+                <div id="perm-state-request" class="space-y-5">
+                    <div class="text-center">
+                        <div class="w-16 h-16 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center text-3xl mx-auto shadow-inner border border-red-100">
+                            <i class="bi bi-shield-check"></i>
                         </div>
+                        <h4 class="font-extrabold text-gray-800 text-lg mt-3">Persiapan Absensi</h4>
+                        <p class="text-xs text-gray-600 mt-1">Aktifkan kamera dan lokasi untuk melanjutkan presensi.</p>
                     </div>
 
-                    <!-- Tombol Utama Dapatkan Hak Akses -->
+                    <ul class="space-y-3" aria-label="Status hak akses perangkat">
+                        <li class="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                            <span class="flex items-center gap-3 font-bold text-sm text-gray-800"><i class="bi bi-camera-video-fill text-red-700 text-lg"></i>Kamera</span>
+                            <span id="perm-camera-status" class="rounded-full bg-red-100 px-2.5 py-1 text-xs font-extrabold text-red-700">Belum Aktif</span>
+                        </li>
+                        <li class="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                            <span class="flex items-center gap-3 font-bold text-sm text-gray-800"><i class="bi bi-geo-alt-fill text-red-700 text-lg"></i>Lokasi</span>
+                            <span id="perm-gps-status" class="rounded-full bg-red-100 px-2.5 py-1 text-xs font-extrabold text-red-700">Belum Aktif</span>
+                        </li>
+                    </ul>
+
                     <button type="button" id="btn-perm-retry" onclick="cobaLagiHakAkses()"
                         class="w-full bg-red-700 hover:bg-red-800 active:scale-95 transition-all text-white font-bold py-3.5 rounded-xl shadow-[0_4px_14px_0_rgba(185,28,28,0.39)] text-sm flex items-center justify-center gap-2">
-                        <i class="bi bi-arrow-right-circle-fill text-base"></i>
-                        <span>KLIK DISINI UNTUK MELANJUTKAN</span>
+                        <i class="bi bi-camera-video-fill text-base"></i>
+                        <span>Aktifkan Kamera &amp; Lokasi</span>
                     </button>
                 </div>
 
-                <!-- PESAN TUNGGAL 2: GAGAL AKSES -> ABSENSI CADANGAN & TIPS BROWSER -->
-                <div id="perm-state-fallback" class="hidden-view space-y-4 text-center">
-                    <div class="w-16 h-16 rounded-2xl bg-yellow-50 text-yellow-600 flex items-center justify-center text-3xl mx-auto shadow-inner border border-yellow-200">
-                        <i class="bi bi-shield-exclamation"></i>
+                <div id="perm-state-fallback" class="hidden-view space-y-5">
+                    <div class="text-center">
+                        <div class="w-16 h-16 rounded-2xl bg-yellow-50 text-yellow-600 flex items-center justify-center text-3xl mx-auto shadow-inner border border-yellow-200">
+                            <i class="bi bi-shield-exclamation"></i>
+                        </div>
+                        <h4 class="font-extrabold text-gray-800 text-base mt-3">Belum berhasil? Coba salah satu cara berikut:</h4>
                     </div>
 
-                    <div class="space-y-2">
-                        <h4 class="font-extrabold text-gray-800 text-base">Gunakan Absensi Cadangan</h4>
-                        <p class="text-xs text-gray-600 leading-relaxed px-1">
-                            Akses kamera/GPS belum dapat diaktifkan di browser ini. Silakan gunakan <strong>Absensi Cadangan</strong> di bawah untuk melakukan presensi.
-                        </p>
+                    <div class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-left text-sm text-blue-950">
+                        <span class="font-extrabold">1.</span> Gunakan browser lain seperti Google Chrome/Firefox/Microsoft Edge
                     </div>
 
-                    <!-- Tombol Utama Menuju Absensi Cadangan -->
-                    <a href="../absensi-cadangan/"
+                    <a href="../absensi-cadangan/" id="btn-absensi-cadangan"
                         class="w-full bg-yellow-500 hover:bg-yellow-600 active:scale-95 transition-all text-gray-950 font-extrabold py-3.5 rounded-xl shadow-md text-sm flex items-center justify-center gap-2">
                         <i class="bi bi-box-arrow-up-right text-base"></i>
-                        <span>BUKA ABSENSI CADANGAN</span>
+                        <span>2. Gunakan Absensi Cadangan</span>
                     </a>
-
-                    <!-- Tombol Coba Cek Izin Perangkat Lagi (Besar Warna Merah) -->
-                    <button type="button" onclick="cobaLagiHakAkses()"
-                        class="w-full bg-red-700 hover:bg-red-800 active:scale-95 transition-all text-white font-bold py-3.5 rounded-xl shadow-[0_4px_14px_0_rgba(185,28,28,0.39)] text-sm flex items-center justify-center gap-2">
-                        <i class="bi bi-arrow-repeat text-base"></i>
-                        <span>COBA CEK IZIN PERANGKAT LAGI</span>
-                    </button>
-
-                    <!-- Tips Alternatif Browser -->
-                    <div class="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed text-left shadow-xs space-y-2">
-                        <h6 class="font-bold text-blue-950 flex items-center gap-1.5 text-xs">
-                            <i class="bi bi-browser-chrome text-blue-600"></i> Tips: Coba Buka di Browser Lain
-                        </h6>
-                        <p class="text-[11px] text-blue-800 leading-relaxed">
-                            Anda juga dapat membuka link <strong>https://bais-pariaman.pariamankota.go.id</strong> menggunakan browser lain:
-                        </p>
-                        <div class="flex flex-wrap gap-1.5 font-bold text-[10px]">
-                            <span class="bg-white px-2 py-1 rounded-md border border-blue-200 text-blue-700">Google Chrome</span>
-                            <span class="bg-white px-2 py-1 rounded-md border border-blue-200 text-orange-600">Mozilla Firefox</span>
-                            <span class="bg-white px-2 py-1 rounded-md border border-blue-200 text-blue-600">Microsoft Edge</span>
-                            <span class="bg-white px-2 py-1 rounded-md border border-blue-200 text-gray-700">Safari (iPhone)</span>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
