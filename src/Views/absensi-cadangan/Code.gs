@@ -136,8 +136,9 @@ function copyAndRenameKeepFormat() {
 // Fungsi untuk menangani permintaan (request) metode GET dari frontend
 // ---------------------------------------------------------------
 // MODE HYBRID:
-//   - Jika ada ?action=getOpd  → kembalikan JSON daftar OPD (API)
-//   - Jika tidak ada action    → sajikan halaman HTML absensi cadangan
+//   - Jika ada ?action=getOpd   → kembalikan JSON daftar OPD (API)
+//   - Jika ada ?action=loginAsn → kembalikan JSON hasil login (API)
+//   - Jika tidak ada action     → sajikan halaman HTML absensi cadangan
 //     sebagai LAST RESORT saat server PHP / Worker down.
 //
 // Syarat: file 'index.html' harus ada di dalam project GAS ini
@@ -148,6 +149,13 @@ function doGet(e) {
     if (e.parameter && e.parameter.action === 'getOpd') {
         const opdList = getOpdList();
         return ContentService.createTextOutput(JSON.stringify({ status: true, data: opdList }))
+            .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Endpoint API: login (fallback GET)
+    if (e.parameter && e.parameter.action === 'loginAsn') {
+        const result = loginAsn(e.parameter);
+        return ContentService.createTextOutput(JSON.stringify(result))
             .setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -176,13 +184,26 @@ function getScriptUrl() {
 // Fungsi untuk menangani pengiriman form absensi (POST request)
 function doPost(e) {
     try {
-        const data = JSON.parse(e.postData.contents);
+        let data = {};
+        if (e && e.parameter) {
+            Object.assign(data, e.parameter);
+        }
+        if (e && e.postData && e.postData.contents) {
+            try {
+                const bodyData = JSON.parse(e.postData.contents);
+                Object.assign(data, bodyData);
+            } catch (errParse) {
+                Logger.log('doPost JSON parse error: ' + errParse.toString());
+            }
+        }
+
+        const action = data.action || (e && e.parameter && e.parameter.action);
 
         // -------------------------------------------------------
         // ROUTING: Tentukan action berdasarkan field 'action'
         // Jika tidak ada action, anggap sebagai submit absen (legacy)
         // -------------------------------------------------------
-        if (data.action === 'loginAsn') {
+        if (action === 'loginAsn') {
             const result = loginAsn(data);
             return ContentService.createTextOutput(JSON.stringify(result))
                 .setMimeType(ContentService.MimeType.JSON);
@@ -238,8 +259,8 @@ function loginAsn(data) {
             return { status: false, code: 401, message: 'NIP atau NIK tidak ditemukan atau tidak cocok', data: null };
         }
 
-        // Ambil semua data sekaligus untuk efisiensi (6 kolom A-F)
-        const dataPegawai = sheetPegawai.getRange(2, 1, lastRow - 1, 6).getValues();
+        // Ambil semua data sekaligus untuk efisiensi (6 kolom A-F) dengan getDisplayValues agar NIP/NIK tidak berubah format
+        const dataPegawai = sheetPegawai.getRange(2, 1, lastRow - 1, 6).getDisplayValues();
 
         let pegawaiDitemukan = null;
         for (let i = 0; i < dataPegawai.length; i++) {

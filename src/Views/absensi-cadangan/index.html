@@ -113,8 +113,9 @@
                             <label class="block text-xs font-bold text-gray-500 mb-1.5">NIK (16 Digit) <span
                                     class="text-red-500">*</span></label>
                             <div class="relative">
-                                <input type="password" inputmode="numeric" id="loginNik" class="inp-field"
-                                    style="padding-right:3rem;" placeholder="Masukkan 16 Digit NIK"
+                                <input type="text" inputmode="numeric" id="loginNik" class="inp-field"
+                                    style="padding-right:3rem; -webkit-text-security: disc;"
+                                    placeholder="Masukkan 16 Digit NIK"
                                     oninput="this.value = this.value.replace(/\D/g, '').substring(0, 16)"
                                     maxlength="16">
                                 <button type="button" onclick="toggleNikVisibility()"
@@ -437,11 +438,11 @@
         // [MODE 2] Dihosting dari GAS → SCRIPT_URL = URL halaman itu sendiri
         // Deploy ke GAS: salin file ini ke 'index.html' di editor Apps Script
         // =========================================================================
-        const GAS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyNTJlk-53sKqyF1Sy2RR2zqkOitDKvBSAA2ZD6fKDcfpKKqMrj4BacioA60aLtx-N82w/exec";
+        const GAS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxGeScmNpeAOHnBd_s39KxtZPhgL5nwvoR6pO8-uXpXl8RSi0YgUTupTeDJR4AErx2Z/exec";
         let SCRIPT_URL = GAS_SCRIPT_URL;
 
         // Konfigurasi URL API Eksternal (Worker / Server PHP)
-        const IS_BETA = false; // Ubah ke true saat testing di environment beta
+        const IS_BETA = true; // Ubah ke true saat testing di environment beta
         const API_WORKER_URL = IS_BETA ? "https://absensi-kegiatan-asn-worker-dev.bidpp-bkpsdm.workers.dev" : "https://absensi-kegiatan-asn-worker.bidpp-bkpsdm.workers.dev"; // Sesuaikan URL
         const API_PHP_URL = IS_BETA ? "https://api-esdm.pariamankota.go.id/beta-bais-pariaman/api" : "https://bais-pariaman.pariamankota.go.id/api"; // Sesuaikan URL
 
@@ -450,6 +451,40 @@
             google.script.run.withSuccessHandler(function (url) {
                 if (url) SCRIPT_URL = url;
             }).getScriptUrl();
+        }
+
+        /**
+         * Helper komunikasi API GAS (Mendukung Web Server Mandiri & Direct GAS Web App)
+         */
+        async function callGasApi(action, payload) {
+            if (typeof google !== 'undefined' && google.script && google.script.run) {
+                return new Promise((resolve, reject) => {
+                    if (action === 'loginAsn') {
+                        google.script.run
+                            .withSuccessHandler((res) => resolve(res))
+                            .withFailureHandler((err) => reject(err))
+                            .loginAsn(payload);
+                    } else if (action === 'submitAbsen') {
+                        google.script.run
+                            .withSuccessHandler((res) => resolve(res))
+                            .withFailureHandler((err) => reject(err))
+                            .prosesAbsen(payload);
+                    } else {
+                        google.script.run
+                            .withSuccessHandler((res) => resolve(res))
+                            .withFailureHandler((err) => reject(err))
+                            .doPost({ parameter: { action }, postData: { contents: JSON.stringify(payload) } });
+                    }
+                });
+            }
+
+            const urlTarget = SCRIPT_URL + "?action=" + encodeURIComponent(action) + "&_t=" + Date.now();
+            const response = await fetch(urlTarget, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            return await response.json();
         }
 
         // =========================================================================
@@ -518,8 +553,13 @@
         function toggleNikVisibility() {
             const inp = document.getElementById('loginNik');
             const icon = document.getElementById('nikEyeIcon');
-            if (inp.type === 'password') { inp.type = 'text'; icon.className = 'bi bi-eye-slash'; }
-            else { inp.type = 'password'; icon.className = 'bi bi-eye'; }
+            if (inp.style.webkitTextSecurity === 'none') {
+                inp.style.webkitTextSecurity = 'disc';
+                icon.className = 'bi bi-eye';
+            } else {
+                inp.style.webkitTextSecurity = 'none';
+                icon.className = 'bi bi-eye-slash';
+            }
         }
 
         // =========================================================================
@@ -533,16 +573,10 @@
 
             showLoading(true, 'Memverifikasi data...');
             try {
-                const urlTarget = SCRIPT_URL + "?action=loginAsn&_t=" + Date.now();
-                const response = await fetch(urlTarget, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: 'loginAsn', nip, nik })
-                });
-                const res = await response.json();
+                const res = await callGasApi('loginAsn', { action: 'loginAsn', nip, nik });
                 showLoading(false);
 
-                if (res.status && res.data) {
+                if (res && res.status && res.data) {
                     const user = res.data.user || {};
                     const pCache = res.data.pegawai_to_cache || {};
                     sesiPegawai = {
@@ -554,7 +588,7 @@
                     };
                     tampilkanViewAbsen();
                 } else {
-                    Swal.fire('Login Gagal', res.message || 'NIP atau NIK tidak ditemukan.', 'error');
+                    Swal.fire('Login Gagal', (res && res.message) ? res.message : 'NIP atau NIK tidak ditemukan.', 'error');
                 }
             } catch (err) {
                 showLoading(false);
@@ -831,16 +865,10 @@
 
             showLoading(true, "Mengunggah Data...");
             try {
-                const urlTarget = SCRIPT_URL + "?action=submitAbsen&_t=" + Date.now();
-                const response = await fetch(urlTarget, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payload)
-                });
-                const res = await response.json();
+                const res = await callGasApi('submitAbsen', payload);
                 showLoading(false);
 
-                if (res.status) {
+                if (res && res.status) {
                     const dataRes = res.data || {};
                     document.getElementById('receiptWaktu').innerText = dataRes.waktu || new Date().toLocaleString('id-ID');
                     document.getElementById('receiptNama').innerText = dataRes.nama || sesiPegawai.nama;
@@ -858,12 +886,12 @@
                     document.getElementById('receiptView').classList.remove('hidden-view');
                     window.scrollTo(0, 0);
                 } else {
-                    Swal.fire('Gagal', res.message || 'Terjadi kesalahan. Coba lagi.', 'error');
+                    Swal.fire('Gagal', (res && res.message) ? res.message : 'Terjadi kesalahan. Coba lagi.', 'error');
                 }
             } catch (err) {
                 showLoading(false);
                 Swal.fire('Error Koneksi', 'Gagal terhubung ke server. Periksa koneksi internet Anda.', 'error');
-                console.error("Fetch Error:", err);
+                console.error("Submit Error:", err);
             }
         }
 
