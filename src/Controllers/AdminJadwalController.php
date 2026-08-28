@@ -34,8 +34,9 @@ class AdminJadwalController {
         $params = [];
 
         if ($search !== '') {
-            $where[] = "(kode_akses LIKE :search OR judul LIKE :search)";
-            $params[':search'] = '%' . $search . '%';
+            $where[] = "(kode_akses LIKE :search1 OR judul LIKE :search2)";
+            $params[':search1'] = '%' . $search . '%';
+            $params[':search2'] = '%' . $search . '%';
         }
 
         if ($kategori !== '' && strtolower($kategori) !== 'semua') {

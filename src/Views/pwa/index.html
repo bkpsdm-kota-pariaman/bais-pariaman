@@ -54,10 +54,12 @@
 
 <body class="text-gray-800 overflow-x-hidden">
 
-    <div id="loadingOverlay" class="fixed inset-0 bg-white/95 z-[9999] flex flex-col justify-center items-center">
+    <div id="loadingOverlay"
+        class="fixed inset-0 bg-white/95 z-[9999] flex flex-col justify-center items-center px-6 text-center">
         <!-- Mengubah spinner dan teks menjadi merah -->
-        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600 mb-3"></div>
-        <h6 class="text-red-700 font-bold" id="loadingText">Memuat Aplikasi...</h6>
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600 mb-3 flex-shrink-0"></div>
+        <h6 class="text-red-700 font-bold text-center px-4 max-w-xs sm:max-w-sm break-words leading-normal"
+            id="loadingText">Memuat Aplikasi...</h6>
     </div>
 
     <div class="max-w-[480px] mx-auto bg-white min-h-screen relative shadow-xl main-container">
@@ -150,26 +152,25 @@
                             class="w-16 h-16 rounded-2xl bg-yellow-50 text-yellow-600 flex items-center justify-center text-3xl mx-auto shadow-inner border border-yellow-200">
                             <i class="bi bi-shield-exclamation"></i>
                         </div>
-                        <h4 class="font-extrabold text-gray-800 text-base mt-3">Belum berhasil? Coba salah satu cara
-                            berikut:</h4>
+                        <h4 class="font-extrabold text-gray-800 text-base mt-3">Hak Akses Kamera/Lokasi Belum Diizinkan
+                        </h4>
+                        <p class="text-xs text-gray-600 mt-1">Anda tetap dapat masuk ke aplikasi BAIS Pariaman atau
+                            menggunakan Absensi Cadangan jika terjadi kendala pada perangkat Anda.</p>
                     </div>
 
-                    <div class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-left text-sm text-blue-950">
-                        <span class="font-extrabold"></span> Gunakan browser lain seperti <b>Google
-                            Chrome/Firefox/Microsoft Edge</b>
-                    </div>
+                    <div class="space-y-3 pt-2">
+                        <button type="button" onclick="checkAuthStatus()"
+                            class="w-full bg-red-700 hover:bg-red-800 active:scale-95 transition-all text-white font-bold py-3.5 rounded-xl shadow-[0_4px_14px_0_rgba(185,28,28,0.39)] text-sm flex items-center justify-center gap-2">
+                            <i class="bi bi-box-arrow-in-right text-base"></i>
+                            <span>TETAP LANJUT KE BAIS PARIAMAN</span>
+                        </button>
 
-                    <div class="flex items-center justify-center mb-6">
-                        <div class="w-full h-px bg-gray-300"></div>
-                        <span class="px-4 text-xs font-bold text-gray-400 bg-white">ATAU</span>
-                        <div class="w-full h-px bg-gray-300"></div>
+                        <a href="../absensi-cadangan/" id="btn-absensi-cadangan"
+                            class="w-full bg-gray-800 hover:bg-gray-900 active:scale-95 transition-all text-white font-bold py-3.5 rounded-xl shadow-md text-sm flex items-center justify-center gap-2 text-center">
+                            <i class="bi bi-box-arrow-up-right text-base"></i>
+                            <span>ABSENSI CADANGAN</span>
+                        </a>
                     </div>
-
-                    <a href="../absensi-cadangan/" id="btn-absensi-cadangan"
-                        class="w-full bg-red-700 hover:bg-red-800 active:scale-95 transition-all text-white font-bold py-3.5 rounded-xl shadow-[0_4px_14px_0_rgba(185,28,28,0.39)] text-sm flex items-center justify-center gap-2">
-                        <i class="bi bi-box-arrow-up-right text-base"></i>
-                        <span>Gunakan Absensi Cadangan</span>
-                    </a>
                 </div>
             </div>
         </div>

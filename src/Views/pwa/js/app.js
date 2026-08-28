@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.189'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.192'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -602,14 +602,48 @@ function sembunyikanTutorialManual() {
 
 function showLoading(show, text = "") {
     const overlay = document.getElementById('loadingOverlay');
+    const loadingText = document.getElementById('loadingText');
     if (show) {
-        document.getElementById('loadingText').innerText = text;
-        overlay.classList.remove('hidden');
-        overlay.classList.add('flex');
+        if (loadingText) {
+            loadingText.innerText = text;
+            loadingText.classList.add('text-center', 'px-4', 'max-w-xs', 'sm:max-w-sm', 'break-words', 'leading-normal');
+        }
+        if (overlay) {
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex', 'px-6', 'text-center');
+        }
     } else {
-        overlay.classList.add('hidden');
-        overlay.classList.remove('flex');
+        if (overlay) {
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
+        }
     }
+}
+
+/**
+ * Menampilkan pesan alert jika akses kamera atau lokasi gagal/ditolak saat penggunaan aplikasi.
+ * Menyediakan tombol OK untuk kembali ke view aplikasi utama dan tombol ABSENSI CADANGAN.
+ */
+function tampilkanAlertAbsensiCadangan(pesan = "Gagal mengakses kamera atau lokasi.", onOkCallback = null) {
+    Swal.fire({
+        title: 'Akses Kamera/Lokasi Gagal',
+        html: `<p class="text-sm text-gray-700 mb-2">${escapeHtml(pesan)}</p><p class="text-xs text-gray-500">Anda dapat kembali ke aplikasi utama atau beralih ke Absensi Cadangan.</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#b91c1c',
+        cancelButtonColor: '#374151',
+        confirmButtonText: 'ABSENSI CADANGAN',
+        cancelButtonText: 'OK',
+        reverseButtons: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = '../absensi-cadangan/';
+        } else {
+            if (typeof onOkCallback === 'function') {
+                onOkCallback();
+            }
+        }
+    });
 }
 
 /**
@@ -1229,7 +1263,9 @@ async function adminCepatMulaiPindai() {
             proceedToScan();
         } catch (e) {
             showLoading(false);
-            Swal.fire('Lokasi Diperlukan', 'Gagal mendapatkan lokasi Anda. Pastikan GPS aktif dan izin lokasi diberikan.', 'error');
+            tampilkanAlertAbsensiCadangan('Gagal mendapatkan lokasi Anda. Pastikan GPS aktif dan izin lokasi diberikan.', () => {
+                switchView('view-admin-cepat');
+            });
             return;
         }
     } else {
@@ -1528,8 +1564,9 @@ async function _startScanner(deviceId) {
         }
     }).catch(err => {
         console.error("Gagal memulai pemindai QR:", err);
-        Swal.fire("Kesalahan Kamera", "Gagal memulai kamera. Pastikan izin telah diberikan.", "error");
-        if (location.hash === '#scanner') history.back();
+        tampilkanAlertAbsensiCadangan("Gagal memulai kamera untuk pemindaian. Pastikan izin kamera telah diberikan di browser/HP Anda.", () => {
+            if (location.hash === '#scanner') history.back();
+        });
     });
 }
 
@@ -1886,6 +1923,8 @@ async function cekLokasiOtomatis() {
         if (btnLanjut) {
             btnLanjut.style.display = 'flex';
         }
+
+        tampilkanAlertAbsensiCadangan("Sistem gagal mendeteksi lokasi GPS Anda.");
     }
 }
 function cleanupAbsenForm() {
@@ -2100,7 +2139,7 @@ async function kirimAbsensi() {
             const userForHistory = await parseJwt(token);
             if (userForHistory && userForHistory.nip && currentJadwal) {
                 const waktuServer = res.data?.waktu || getCurrentServerTime().toISOString();
-                simpanRiwayatLokal(currentJadwal.judul, currentJadwal.kategori, waktuServer, currentJadwal.kode_akses, userForHistory.nip);
+                await simpanRiwayatLokal(currentJadwal.judul, currentJadwal.kategori, waktuServer, currentJadwal.kode_akses, userForHistory.nip);
             }
             Swal.fire('BERHASIL!', res.message || 'Data Absensi telah diterima.', 'success');
             batalAbsen();
@@ -2366,7 +2405,7 @@ async function mulaiKameraSelfie() {
             console.error("Gagal memulai kamera selfie:", e);
             isKameraError = true;
             updateConditionalFormElements();
-            Swal.fire("Kesalahan Kamera", "Kamera aplikasi gagal dimuat atau akses ditolak. Anda dialihkan untuk menggunakan bukti dukung.", "warning");
+            tampilkanAlertAbsensiCadangan("Kamera selfie gagal dimuat atau akses ditolak. Anda dapat menggunakan Absensi Cadangan.");
         }
     };
 
