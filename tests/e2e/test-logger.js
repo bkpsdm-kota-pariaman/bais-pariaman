@@ -65,6 +65,8 @@ const logAction = {
   check: (label, selector) => console.log(`  ☑️  [AKSI: CENTANG] ${label} (${selector})`),
   click: (label, selector) => console.log(`  👆 [AKSI: KLIK TOMBOL] ${label} (${selector})`),
   dialogConfirm: (title) => console.log(`  ✅ [AKSI: KONFIRMASI DIALOG] Menyetujui dialog: "${title}"`),
+  step: (deskripsi) => console.log(`\n📌 [LANGKAH] ${deskripsi}`),
+  info: (deskripsi) => console.log(`  ℹ️  ${deskripsi}`),
   verify: (deskripsi) => console.log(`  🔍 [VERIFIKASI] ${deskripsi}`),
   success: (deskripsi) => console.log(`  ✨ [BERHASIL] ${deskripsi}\n`)
 };
