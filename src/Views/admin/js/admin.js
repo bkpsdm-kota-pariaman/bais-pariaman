@@ -414,7 +414,7 @@ async function fetchAdmin(url, options = {}) {
             throw new Error('Respons dari server tidak valid (Bukan JSON).');
         }
 
-        if (!resp.ok) {
+        if (!resp.ok && resp.status >= 500) {
             const errMsg = result.message ? result.message : ('HTTP ' + resp.status);
             throw new Error(errMsg);
         }
@@ -3377,15 +3377,7 @@ function exportOpdToExcel() {
     exportRawDataToExcel(currentOpdData, 'Data_OPD');
 }
 
-// exportRekapToExcel didefinisikan secara lengkap di fungsi utama rekap
-
-function exportRekapKeseluruhanToExcel() {
-    exportRawDataToExcel(currentRekapKeseluruhanData, 'Rekap_Keseluruhan');
-}
-
-function exportStatistikToExcel() {
-    exportRawDataToExcel(currentStatistikData, 'Statistik_Kehadiran');
-}
+// exportStatistikToExcel didefinisikan secara lengkap di fungsi utama statistik
 
 /**
  * =================================================
@@ -3410,13 +3402,20 @@ function bukaModalImportAbsen() {
     modalImportAbsen.show();
 }
 
-document.getElementById('modalImportAbsen').addEventListener('hidden.bs.modal', function () {
-    document.getElementById('formImportAbsen').reset();
-    parsedImportData = [];
-    document.getElementById('previewImportBody').innerHTML = '';
-    document.getElementById('previewImportContainer').classList.add('d-none');
-    document.getElementById('btnProsesImport').classList.add('d-none');
-});
+const modalImportAbsenEl = document.getElementById('modalImportAbsen');
+if (modalImportAbsenEl) {
+    modalImportAbsenEl.addEventListener('hidden.bs.modal', function () {
+        const formEl = document.getElementById('formImportAbsen');
+        if (formEl) formEl.reset();
+        parsedImportData = [];
+        const previewEl = document.getElementById('previewImportBody');
+        if (previewEl) previewEl.innerHTML = '';
+        const previewContainer = document.getElementById('previewImportContainer');
+        if (previewContainer) previewContainer.classList.add('d-none');
+        const btnProses = document.getElementById('btnProsesImport');
+        if (btnProses) btnProses.classList.add('d-none');
+    });
+}
 
 let parsedImportData = [];
 
@@ -3651,13 +3650,13 @@ function isSuperAdmin() {
 function checkSuperAdminUI() {
     const isSuper = isSuperAdmin();
     const divider = document.getElementById('menuDividerLogAbsensi');
-    const item = document.getElementById('menuItemLogAbsensi');
+    const itemLog = document.getElementById('menuItemLogAbsensi');
     if (isSuper) {
         if (divider) divider.classList.remove('d-none');
-        if (item) item.classList.remove('d-none');
+        if (itemLog) itemLog.classList.remove('d-none');
     } else {
         if (divider) divider.classList.add('d-none');
-        if (item) item.classList.add('d-none');
+        if (itemLog) itemLog.classList.add('d-none');
     }
 }
 

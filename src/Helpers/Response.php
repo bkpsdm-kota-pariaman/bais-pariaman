@@ -11,8 +11,10 @@ class Response {
      * @param int $httpStatus HTTP Status Code asli (default: 200)
      */
     public static function json(bool $status, int $code, string $message, $data = null, int $httpStatus = 200) {
-        // Set HTTP Response Code
-        http_response_code($httpStatus);
+        // PENTING: Selalu mengembalikan HTTP Response Code 200 di tingkat protokol (kecuali server error >= 500)
+        // Ini mencegah browser menampilkan log error merah di DevTools Console saat terjadi kesalahan validasi / 4xx.
+        $actualHttpStatus = ($httpStatus >= 500 || $code >= 500) ? 500 : 200;
+        http_response_code($actualHttpStatus);
         
         // Set Header
         header('Content-Type: application/json; charset=utf-8');

@@ -127,7 +127,7 @@ class AuthController {
         $config = require APP_PATH . '/config/config.php';
         $secretKey = $config['jwt_secret'];
         $issuedAt = time();
-        $expirationTime = $issuedAt + 180; // Berlaku 3 menit (180 detik)
+        $expirationTime = $issuedAt + 1800; // Berlaku 30 menit (1800 detik)
 
         $payload = [
             'exp' => $expirationTime,

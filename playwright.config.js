@@ -11,7 +11,7 @@ module.exports = defineConfig({
   fullyParallel: true,
   reporter: [['list']],
   use: {
-    baseURL: process.env.BASE_URL || 'https://bais-pariaman.pariamankota.go.id/',
+    baseURL: process.env.BASE_URL || 'http://localhost:8080/',
     trace: 'on-first-retry',
     permissions: ['geolocation', 'camera'],
     geolocation: { latitude: -0.6276, longitude: 100.1209 },
@@ -19,11 +19,11 @@ module.exports = defineConfig({
       args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream']
     }
   },
-  webServer: (isRemote || !process.env.USE_LOCAL_SERVER) ? undefined : {
+  webServer: (!process.env.BASE_URL || process.env.BASE_URL.includes('localhost') || process.env.USE_LOCAL_SERVER) ? {
     command: 'node tests/server.js',
     port: 8080,
     reuseExistingServer: true,
-  },
+  } : undefined,
   projects: [
     {
       name: 'Admin Desktop',

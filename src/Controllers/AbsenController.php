@@ -345,6 +345,21 @@ class AbsenController {
 
         $db = Database::getConnection();
         $newFileName = 'NO_PHOTO_ADMIN_FAST_INPUT.jpg'; // Default untuk absen cepat
+        $fotoBase64 = $_POST['foto_base64'] ?? null;
+        if (!empty($fotoBase64)) {
+            $cleaned = preg_replace('#^data:image/\w+;base64,#i', '', $fotoBase64);
+            $decodedFoto = base64_decode($cleaned);
+            if ($decodedFoto !== false) {
+                $uniqueName = 'absen_admin_' . ($_POST['nip'] ?? time()) . '_' . time() . '.jpg';
+                $uploadDir = APP_PATH . '/public_html/uploads/foto_absensi/';
+                if (!is_dir($uploadDir)) {
+                    @mkdir($uploadDir, 0755, true);
+                }
+                if (@file_put_contents($uploadDir . $uniqueName, $decodedFoto)) {
+                    $newFileName = $uniqueName;
+                }
+            }
+        }
 
         // 6. Dapatkan detail jadwal
         $stmtJadwal = $db->prepare("SELECT judul, kategori FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses LIMIT 1");

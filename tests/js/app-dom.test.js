@@ -1,9 +1,8 @@
-const { switchView, toggleTipeKehadiran, batalAbsen } = require('../../src/Views/pwa/js/app.js');
+const { switchView, pilihOpsiKehadiran } = require('../../src/Views/pwa/js/app.js');
 
 describe('PWA DOM Functions', () => {
 
   beforeAll(() => {
-    // Mock scrollTo to prevent JSDOM 'not implemented' error
     window.scrollTo = jest.fn();
   });
 
@@ -25,53 +24,46 @@ describe('PWA DOM Functions', () => {
     });
 
     it('should do nothing if target view does not exist', () => {
-      // It won't crash, but it won't unhide anything because the target is missing
       switchView('view-unknown');
       expect(document.getElementById('view-dashboard').classList.contains('hidden-view')).toBe(true);
     });
   });
 
-  describe('toggleTipeKehadiran', () => {
+  describe('pilihOpsiKehadiran', () => {
     beforeEach(() => {
       document.body.innerHTML = `
-        <select id="tipeKehadiran">
-          <option value="hadir" selected>Hadir</option>
-          <option value="izin">Izin/Keterangan</option>
-        </select>
+        <div id="opsiKehadiranAwal"></div>
+        <input type="radio" name="tipeKehadiran" value="hadir" id="radio-hadir" />
+        <input type="radio" name="tipeKehadiran" value="izin" id="radio-izin" />
         
         <div id="flowHadir"></div>
         <div id="flowIzin" class="hidden-view"></div>
+        <div id="hasilFoto" class="hidden-view"></div>
+        <input type="hidden" id="fotoBase64" value="" />
+        <video id="kamera"></video>
         
         <input type="text" id="alasanIzin" value="">
         <input type="text" id="keteranganIzin" value="">
         <input type="file" id="buktiIzin">
         
-        <button id="btnKirim"></button>
+        <button id="btnKirim" disabled></button>
       `;
-      // Mock File object properties if needed, but we start with empty files
     });
 
-    it('should show flowHadir and hide flowIzin when hadir is selected', () => {
-      const select = document.getElementById('tipeKehadiran');
-      select.value = 'hadir';
-      
-      toggleTipeKehadiran();
+    it('should show flowHadir and hide flowIzin when hadir option is picked', () => {
+      pilihOpsiKehadiran('hadir');
       
       expect(document.getElementById('flowHadir').classList.contains('hidden-view')).toBe(false);
       expect(document.getElementById('flowIzin').classList.contains('hidden-view')).toBe(true);
-      expect(document.getElementById('btnKirim').disabled).toBe(true); // Always disabled in hadir flow initially
+      expect(document.getElementById('radio-hadir').checked).toBe(true);
     });
 
-    it('should show flowIzin and hide flowHadir when izin is selected', () => {
-      const select = document.getElementById('tipeKehadiran');
-      select.value = 'izin';
-      
-      toggleTipeKehadiran();
+    it('should show flowIzin and hide flowHadir when izin option is picked', () => {
+      pilihOpsiKehadiran('izin');
       
       expect(document.getElementById('flowIzin').classList.contains('hidden-view')).toBe(false);
       expect(document.getElementById('flowHadir').classList.contains('hidden-view')).toBe(true);
-      // btnKirim will be disabled because form is empty
-      expect(document.getElementById('btnKirim').disabled).toBe(true);
+      expect(document.getElementById('radio-izin').checked).toBe(true);
     });
   });
 

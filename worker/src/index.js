@@ -56,10 +56,10 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 	return R * c; // in metres
 }
 
-// Helper untuk format JSON Response terstandarisasi dengan status header 200 (kecuali server error >= 500)
+// Helper untuk format JSON Response terstandarisasi.
+// PENTING: Selalu mengembalikan HTTP status 200 di tingkat protokol HTTP agar browser tidak menampilkan log error merah di DevTools Console.
+// Status keberhasilan (true/false) dan kode error riil (400, 401, 403, 500, dll) dikirim melalui body JSON (status & code).
 function jsonResponse(success, statusCode, message, data = null, customHeaders = {}) {
-	const isServerError = statusCode >= 500;
-	const httpStatus = isServerError ? statusCode : 200;
 	const body = {
 		status: success,
 		code: statusCode,
@@ -67,13 +67,49 @@ function jsonResponse(success, statusCode, message, data = null, customHeaders =
 		...(data !== null && { data })
 	};
 	return new Response(JSON.stringify(body), {
-		status: httpStatus,
+		status: 200,
 		headers: {
 			'Content-Type': 'application/json',
 			...corsHeaders,
 			...customHeaders
 		}
 	});
+}
+
+// Helper untuk verifikasi token admin/super admin dari header Authorization
+async function verifyAdminToken(request, env) {
+	if (!env.JWT_SECRET) return null;
+	const authHeader = request.headers.get('Authorization');
+	if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+	const token = authHeader.substring(7);
+	try {
+		const secret = new TextEncoder().encode(env.JWT_SECRET);
+		const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
+		const userRoles = Array.isArray(payload?.data?.role) ? payload.data.role : (payload?.data?.role ? [payload.data.role] : []);
+		const isAdmin = userRoles.some(r => ['admin', 'super admin'].includes(String(r).trim().toLowerCase()));
+		if (!isAdmin) return null;
+		return payload;
+	} catch (e) {
+		return null;
+	}
+}
+
+// Helper untuk verifikasi token KHUSUS super admin dari header Authorization
+async function verifySuperAdminToken(request, env) {
+	if (!env.JWT_SECRET) return null;
+	const authHeader = request.headers.get('Authorization');
+	if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+	const token = authHeader.substring(7);
+	try {
+		const secret = new TextEncoder().encode(env.JWT_SECRET);
+		const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
+		const userRoles = Array.isArray(payload?.data?.role) ? payload.data.role : (payload?.data?.role ? [payload.data.role] : []);
+		const isSuperAdmin = userRoles.some(r => String(r).trim().toLowerCase() === 'super admin');
+		if (!isSuperAdmin) return null;
+		return payload;
+	} catch (e) {
+		return null;
+	}
 }
 
 export default {
@@ -94,8 +130,9 @@ export default {
 			});
 		}
 
-		const url = new URL(request.url);
-		const pathname = url.pathname;
+		try {
+			const url = new URL(request.url);
+			const pathname = url.pathname;
 
 		// Helper validasi jadwal
 		const validateJadwalAbsen = async (kodeAkses, payload) => {
@@ -367,8 +404,8 @@ export default {
 					return jsonResponse(true, 200, `Jadwal ${effectiveKodeAkses} berhasil disimpan/diperbarui di cache.`);
 				} catch (e) {
 					console.error(`[KV JADWAL PUT Error] Gagal menyimpan jadwal:`, e);
-					const status = e instanceof SyntaxError ? 400 : 503;
-					const message = status === 400 ? `Gagal memproses request: ${e.message}` : `Gagal menyimpan data jadwal ke KV. Error: ${e.message}`;
+					const status = e instanceof SyntaxError ? 400 : 500;
+					const message = status === 400 ? `Gagal memproses request: ${e.message}` : `Server worker error: Gagal menyimpan data jadwal ke KV. Error: ${e.message}`;
 					return jsonResponse(false, status, message);
 				}
 			}
@@ -381,7 +418,7 @@ export default {
 					return jsonResponse(true, 200, `Jadwal ${kodeAkses} berhasil dihapus dari cache.`);
 				} catch (e) {
 					console.error(`[KV JADWAL DELETE Error] Gagal menghapus jadwal ${kodeAkses}:`, e);
-					return jsonResponse(false, 503, `Gagal menghapus data jadwal dari KV. Error: ${e.message}`);
+					return jsonResponse(false, 500, `Server worker error: Gagal menghapus data jadwal dari KV. Error: ${e.message}`);
 				}
 			}
 
@@ -592,7 +629,7 @@ export default {
 			try {
 				// Buat JWT baru dengan masa berlaku singkat
 				const issuedAt = Math.floor(Date.now() / 1000);
-				const expirationTime = issuedAt + 180; // Berlaku 3 menit (180 detik)
+				const expirationTime = issuedAt + 1800; // Berlaku 30 menit (1800 detik)
 				const pegawaiData = decodedToken.data;
 
 				const tempPayload = {
@@ -655,8 +692,8 @@ export default {
 					return jsonResponse(true, 200, `Cache untuk NIP ${nip} berhasil disimpan/diperbarui.`);
 				} catch (e) {
 					console.error(`[KV PEGAWAI PUT Error] Gagal menyimpan NIP ${nip}:`, e);
-					const status = e instanceof SyntaxError ? 400 : 503;
-					const message = status === 400 ? `Gagal memproses request: ${e.message}` : `Gagal menyimpan data ke KV. Error: ${e.message}`;
+					const status = e instanceof SyntaxError ? 400 : 500;
+					const message = status === 400 ? `Gagal memproses request: ${e.message}` : `Server worker error: Gagal menyimpan data ke KV. Error: ${e.message}`;
 					return jsonResponse(false, status, message);
 				}
 			}
@@ -668,7 +705,7 @@ export default {
 					return jsonResponse(true, 200, `Cache untuk NIP ${nip} berhasil dihapus.`);
 				} catch (e) {
 					console.error(`[KV PEGAWAI DELETE Error] Gagal menghapus NIP ${nip}:`, e);
-					return jsonResponse(false, 503, `Gagal menghapus data dari KV. Error: ${e.message}`);
+					return jsonResponse(false, 500, `Server worker error: Gagal menghapus data dari KV. Error: ${e.message}`);
 				}
 			}
 
@@ -718,7 +755,7 @@ export default {
 				return jsonResponse(true, 200, `${pegawaiList.length} data pegawai berhasil disinkronkan.`);
 			} catch (e) {
 				console.error(`[KV PEGAWAI BULK PUT Error] Gagal menyimpan batch:`, e);
-				return jsonResponse(false, 503, `Gagal menyimpan sebagian atau semua data ke KV. Error: ${e.message}`);
+				return jsonResponse(false, 500, `Server worker error: Gagal menyimpan sebagian atau semua data ke KV. Error: ${e.message}`);
 			}
 		}
 
@@ -819,10 +856,16 @@ export default {
 				delete payload.user_token;
 
 				// Buat payload untuk antrian, gunakan token user dari body dan set keterangan_verifikasi
+				if (!env.MY_QUEUE) {
+					console.error("Binding MY_QUEUE belum dikonfigurasi.");
+					return jsonResponse(false, 500, 'Server worker error: Binding Queue belum dikonfigurasi di Cloudflare.');
+				}
+
 				const keteranganAdmin = payload.keterangan_verifikasi || payload.keterangan || 'Absensi Cepat oleh Admin';
 				const queuePayload = {
 					...payload,
 					keterangan_verifikasi: keteranganAdmin,
+					foto_base64: payload.foto_base64 || null,
 					jwt_token: userToken,
 					submittedAt: new Date().toISOString()
 				};
@@ -831,8 +874,8 @@ export default {
 
 				return jsonResponse(true, 202, 'Absensi Cepat telah diterima dan akan segera diproses.');
 			} catch (error) {
-				console.error('Error di fetch handler (producer absen-cepat) worker:', error);
-				return jsonResponse(false, 500, 'Server worker error: Gagal memproses permintaan Absensi Cepat Anda.');
+				console.error('Error di fetch handler (producer absen-cepat) worker / queue limit:', error);
+				return jsonResponse(false, 500, 'Server worker / Queue limit exceeded: ' + (error.message || 'Gagal memproses permintaan Absensi Cepat Anda.'));
 			}
 		}
 
@@ -885,6 +928,11 @@ export default {
 					return jsonResponse(false, validationError.code, validationError.message);
 				}
 
+				if (!env.MY_QUEUE) {
+					console.error("Binding MY_QUEUE belum dikonfigurasi.");
+					return jsonResponse(false, 500, 'Server worker error: Binding Queue belum dikonfigurasi di Cloudflare.');
+				}
+
 				const queuePayload = { ...payload, jwt_token: token, submittedAt: new Date().toISOString() };
 				await env.MY_QUEUE.send(queuePayload);
 
@@ -894,14 +942,18 @@ export default {
 
 				return jsonResponse(true, 202, pesanSukses, { waktu: new Date().toISOString() });
 			} catch (error) {
-				console.error('Error di fetch handler (producer) worker:', error);
-				return jsonResponse(false, 500, 'Server worker error: Gagal memproses permintaan Anda.');
+				console.error('Error di fetch handler (producer) worker / queue limit:', error);
+				return jsonResponse(false, 500, 'Server worker / Queue limit exceeded: ' + (error.message || 'Gagal memproses permintaan Anda.'));
 			}
 		}
 
 		// Fallback untuk rute yang tidak dikenal
 		return jsonResponse(false, 404, 'Endpoint tidak ditemukan di worker.');
-	},
+	} catch (topLevelErr) {
+		console.error("Unhandled Exception di Worker:", topLevelErr);
+		return jsonResponse(false, 500, "Server worker error: " + (topLevelErr.message || "Terjadi kesalahan internal pada worker."));
+	}
+},
 
 	/**
 	 * Queue handler: Berperan sebagai CONSUMER.
@@ -911,60 +963,91 @@ export default {
 	 * @param {ExecutionContext} ctx
 	 */
 	async queue(batch, env) {
-		// 1. Validasi environment variables untuk mode bulk
 		if (!env.ORIGIN_API_BULK_URL || !env.WORKER_SECRET) {
-			console.error("Secrets 'ORIGIN_API_BULK_URL' and 'WORKER_SECRET' must be set for bulk processing.");
-			// Coba lagi semua pesan di batch ini nanti, berharap konfigurasi sudah diperbaiki.
-			batch.retryAll({ delaySeconds: 300 }); // Coba lagi setelah 5 menit
+			console.error("[Queue Consumer] Secrets ORIGIN_API_BULK_URL / WORKER_SECRET belum diatur.");
+			batch.retryAll({ delaySeconds: 300 });
 			return;
 		}
 
-		// 2. Kumpulkan semua pesan dari batch untuk dikirim sekaligus.
+		if (!batch.messages || batch.messages.length === 0) return;
+
 		const messagesToSend = batch.messages.map(msg => ({
 			id: msg.id,
 			body: msg.body
 		}));
 
-		if (messagesToSend.length === 0) {
-			console.log("[Queue Consumer] Batch kosong, tidak ada yang diproses.");
-			return;
-		}
+		const firstAttempts = batch.messages[0]?.attempts || 1;
+		const nipSummary = messagesToSend.map(m => m.body?.nip || m.body?.kode_akses || m.id).join(', ');
 
-		console.log(`[Queue Consumer] Memproses batch berisi ${messagesToSend.length} pesan.`);
+		console.log(`[Queue Batch] Memproses ${messagesToSend.length} pesan (Attempt #${firstAttempts}). Target: [${nipSummary}]`);
+
+		// Beri jeda/selisih 5 detik setiap pengiriman bulk agar server PHP tidak terbebani lonjakan request
+		await new Promise(resolve => setTimeout(resolve, 5000));
+
+		let response;
+		let isServerError = false;
+		let errorText = '';
+		let httpStatus = 500;
 
 		try {
-			// 3. Kirim seluruh batch sebagai satu request POST.
-			const response = await fetch(env.ORIGIN_API_BULK_URL, {
+			response = await fetch(env.ORIGIN_API_BULK_URL, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'X-Worker-Secret': env.WORKER_SECRET
 				},
 				body: JSON.stringify(messagesToSend),
-				signal: AbortSignal.timeout(60000) // Timeout lebih lama (60 detik) untuk proses bulk
+				signal: AbortSignal.timeout(60000)
 			});
 
-			// 4. Tangani response dari endpoint bulk.
 			if (response.ok) {
-				// HTTP 200-299: Sukses. Pesan akan otomatis dihapus dari antrian.
 				const responseData = await response.json();
-				console.log(`[Queue Consumer] Batch SUKSES. Respon server:`, responseData.message);
-				// LOGIKA BARU: Tambahkan logging untuk error yang dilaporkan oleh PHP
+				console.log(`[Queue Batch SUKSES] Batch ${messagesToSend.length} pesan berhasil diproses server PHP.`);
 				if (responseData.errors && responseData.errors.length > 0) {
-					console.error(`[Queue Consumer] Detail kegagalan dari server PHP:`, JSON.stringify(responseData.errors, null, 2));
+					console.warn(`[Queue Batch Warnings] ${responseData.errors.length} pesan ditolak PHP:`, JSON.stringify(responseData.errors));
 				}
+				return;
 			} else {
-				// HTTP 4xx atau 5xx: Gagal. Seluruh batch akan dicoba lagi.
-				const errorText = await response.text();
-				console.error(`[Queue Consumer] Batch GAGAL. Server merespon dengan status ${response.status}: ${errorText}. Data yang gagal: ${JSON.stringify(messagesToSend)}. Mencoba ulang seluruh batch...`);
-				batch.retryAll({ delaySeconds: 120 }); // Coba lagi setelah 2 menit
-			}
+				isServerError = true;
+				httpStatus = response.status;
+				errorText = await response.text();
 
+				if (httpStatus === 520) {
+					console.error(`[Queue Gagal - Server PHP Overload HTTP 520] Server PHP tidak merespon/down. NIPs: [${nipSummary}]`);
+				} else if (httpStatus >= 500) {
+					console.error(`[Queue Gagal - Server PHP Error HTTP ${httpStatus}] ${errorText}. NIPs: [${nipSummary}]`);
+				} else if (httpStatus >= 400) {
+					console.error(`[Queue Gagal - Server PHP Ditolak HTTP ${httpStatus}] ${errorText}. NIPs: [${nipSummary}]`);
+				}
+			}
 		} catch (error) {
-			// Error jaringan atau exception lain saat fetch.
-			console.error(`[Queue Consumer] Error jaringan saat memproses batch:`, error, `Data yang gagal: ${JSON.stringify(messagesToSend)}`);
-			// Coba lagi seluruh batch.
-			batch.retryAll();
+			isServerError = true;
+			errorText = error.message || String(error);
+			httpStatus = (error.message && error.message.includes('520')) ? 520 : 504;
+			console.error(`[Queue Gagal - Jaringan/Cloudflare Timeout] ${errorText}. NIPs: [${nipSummary}]`);
+		}
+
+		if (isServerError) {
+			const is5xxOrNetwork = httpStatus >= 500;
+
+			for (const msg of batch.messages) {
+				const currentAttempt = msg.attempts || 1;
+
+				if (is5xxOrNetwork) {
+					// HANYA error server (5xx / 520 / network error) yang di-retry 1 menit kedepan
+					if (currentAttempt >= 5) {
+						console.error(`[Queue FATAL 5XX] Pesan ID ${msg.id} (NIP: ${msg.body?.nip || '-'}) telah gagal setelah 5x percobaan.`);
+						msg.ack();
+					} else {
+						console.log(`[Queue RETRY 5XX #${currentAttempt}/5] Server PHP error HTTP ${httpStatus}. Pesan ID ${msg.id} akan dicoba ulang 1 menit lagi...`);
+						msg.retry({ delaySeconds: 60 });
+					}
+				} else {
+					// Error 4xx (Data error): langsung di-ACK (tanpa retry dan tanpa simpan KV)
+					console.warn(`[Queue DITOLAK 4XX] Pesan ID ${msg.id} (NIP: ${msg.body?.nip || '-'}) ditolak PHP dengan HTTP ${httpStatus}. Dihapus dari antrian.`);
+					msg.ack();
+				}
+			}
 		}
 	},
 };

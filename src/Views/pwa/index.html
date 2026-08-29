@@ -575,14 +575,14 @@
                                 class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                                 <input type="radio" name="tipeKehadiran" value="hadir"
                                     class="w-5 h-5 text-red-600 focus:ring-red-500 border-gray-300"
-                                    onclick="pilihOpsiKehadiran('hadir')" onchange="pilihOpsiKehadiran('hadir')">
+                                    onclick="window.pilihOpsiKehadiran && pilihOpsiKehadiran('hadir')">
                                 <span class="ml-3 text-sm font-medium text-gray-700">✅ Hadir</span>
                             </label>
                             <label
                                 class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                                 <input type="radio" name="tipeKehadiran" value="izin"
                                     class="w-5 h-5 text-red-600 focus:ring-red-500 border-gray-300"
-                                    onclick="pilihOpsiKehadiran('izin')" onchange="pilihOpsiKehadiran('izin')">
+                                    onclick="window.pilihOpsiKehadiran && pilihOpsiKehadiran('izin')">
                                 <span class="ml-3 text-sm font-medium text-gray-700">❌ Tidak Hadir (Dinas Luar, Kegiatan
                                     lain dengan SPT, Cuti atau alasan lainnya)</span>
                             </label>
@@ -902,6 +902,17 @@
                             </select>
                         </div>
                         <div class="text-left">
+                            <label for="admin-cepat-mode-foto"
+                                class="block text-sm font-bold text-gray-700 mb-2"><i
+                                    class="bi bi-camera-fill mr-1"></i> Mode Foto Pegawai</label>
+                            <select id="admin-cepat-mode-foto"
+                                class="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-yellow-400 outline-none text-sm bg-white font-medium shadow-sm transition">
+                                <option value="tidak" selected>Tanpa Foto (Paling Cepat / Instan)</option>
+                                <option value="tanya">Konfirmasi Foto (Ambil Foto / Kirim Langsung)</option>
+                                <option value="wajib">Wajib Ambil Foto Pegawai</option>
+                            </select>
+                        </div>
+                        <div class="text-left">
                             <label for="admin-cepat-keterangan" class="block text-sm font-bold text-gray-700 mb-2"><i
                                     class="bi bi-pencil-square mr-1"></i> Keterangan (Wajib)</label>
                             <textarea
@@ -910,14 +921,58 @@
                                 placeholder="Contoh: Absensi massal saat apel pagi."
                                 required>Absensi Cepat oleh Admin</textarea>
                         </div>
-                        <div class="mt-6">
-                            <button type="button" onclick="adminCepatMulaiPindai()"
-                                class="w-full bg-blue-600 active:scale-95 transition-all text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2">
-                                <i class="bi bi-qr-code-scan"></i>
-                                MULAI PINDAI
+                        <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button type="button" onclick="adminCepatMulaiPindai('kamera')"
+                                class="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all text-white font-bold py-3.5 px-4 rounded-xl shadow-md flex items-center justify-center gap-2">
+                                <i class="bi bi-camera-fill text-lg"></i>
+                                <span>PINDAI KAMERA HP</span>
+                            </button>
+                            <button type="button" onclick="adminCepatMulaiPindai('usb')"
+                                class="w-full bg-gray-800 hover:bg-gray-900 active:scale-95 transition-all text-white font-bold py-3.5 px-4 rounded-xl shadow-md flex items-center justify-center gap-2">
+                                <i class="bi bi-upc-scan text-lg text-yellow-400"></i>
+                                <span>SCANNER USB / GUN</span>
                             </button>
                         </div>
                     </div>
+                </div>
+
+                <!-- Section Mode Scanner USB / Hardware Gun -->
+                <div id="admin-cepat-usb-section" class="hidden-view bg-white rounded-2xl p-6 shadow-xl border-2 border-yellow-400">
+                    <div class="flex items-center justify-between mb-3 border-b border-gray-100 pb-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-lg bg-yellow-100 text-yellow-800 flex items-center justify-center text-lg font-bold">
+                                <i class="bi bi-upc-scan"></i>
+                            </div>
+                            <div>
+                                <h6 class="font-bold text-gray-800 text-sm">Mode Scanner USB / Gun</h6>
+                                <span class="text-[11px] text-green-600 font-semibold flex items-center gap-1">
+                                    <span class="w-2 h-2 rounded-full bg-green-500 animate-ping"></span> Standby & Siap Scan
+                                </span>
+                            </div>
+                        </div>
+                        <button type="button" onclick="tutupModeScannerUsb()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold px-3 py-1.5 rounded-lg active:scale-95 transition">
+                            Tutup
+                        </button>
+                    </div>
+
+                    <form onsubmit="prosesInputScannerUsb(event)" class="space-y-3">
+                        <div>
+                            <label for="admin-cepat-usb-input" class="block text-xs font-bold text-gray-600 mb-1">
+                                Input Token Scanner (Otomatis terisi saat menembak QR)
+                            </label>
+                            <div class="relative">
+                                <input type="text" id="admin-cepat-usb-input"
+                                    class="w-full px-4 py-3.5 rounded-xl border-2 border-yellow-400 focus:ring-4 focus:ring-yellow-200 outline-none font-mono text-xs font-bold text-gray-800 bg-yellow-50/40 transition placeholder:text-gray-400 placeholder:font-sans"
+                                    placeholder="Arahkan scanner USB ke QR Profil pegawai..." autofocus autocomplete="off">
+                                <button type="submit" class="absolute right-2 top-2 bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold px-3 py-1.5 rounded-lg text-xs transition active:scale-95">
+                                    KIRIM
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-gray-500 leading-tight">
+                            <i class="bi bi-info-circle text-blue-600 mr-1"></i> Scanner USB otomatis menekan <code>Enter</code> setelah scan. Kursor akan selalu standby di kotak input ini.
+                        </p>
+                    </form>
                 </div>
             </div>
         </div>
@@ -1019,6 +1074,89 @@
             <button onclick="tutupModalUserQr()"
                 class="mt-6 w-full bg-gray-100 border border-gray-200 hover:bg-gray-200 text-gray-800 font-bold py-3.5 rounded-xl transition active:scale-95 shadow-sm">
                 TUTUP
+            </button>
+        </div>
+    </div>
+
+    <!-- View E-Ticket QR Code Profil Pegawai (Full Screen Dedicated View) -->
+    <div id="view-qr-ticket" class="hidden-view fade-in min-h-screen bg-gradient-to-b from-red-900 via-gray-900 to-black text-white pb-12 flex flex-col justify-between">
+        <!-- Header E-Ticket -->
+        <div class="p-4 flex items-center justify-between border-b border-white/10 backdrop-blur-md bg-white/5 sticky top-0 z-10">
+            <div class="flex items-center gap-3">
+                <button onclick="tutupQrTicketView()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white active:scale-90 transition">
+                    <i class="bi bi-arrow-left text-xl"></i>
+                </button>
+                <div>
+                    <h6 class="font-black text-base tracking-wide text-white flex items-center gap-1.5">
+                        <i class="bi bi-ticket-perforated-fill text-yellow-400"></i> E-PRESENSI PASS
+                    </h6>
+                    <span class="text-[10px] text-gray-400 font-semibold tracking-wider uppercase">Pemerintah Kota Pariaman</span>
+                </div>
+            </div>
+            <div class="px-2.5 py-1 rounded-full bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 font-bold text-[11px] flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-yellow-400 animate-ping"></span>
+                <span>AKTIF</span>
+            </div>
+        </div>
+
+        <!-- Kartu Tiket Utama -->
+        <div class="px-4 py-4 max-w-md mx-auto w-full flex-1 flex flex-col justify-center">
+            <div class="bg-white text-gray-900 rounded-3xl shadow-2xl overflow-hidden border border-gray-100 relative">
+                <!-- Bagian Atas Tiket: Profil Pegawai -->
+                <div class="p-5 bg-gradient-to-br from-red-700 to-red-900 text-white relative">
+                    <div class="flex items-center gap-3.5 mb-3">
+                        <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-2xl shadow-inner font-bold">
+                            👤
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h5 id="ticketNamaPegawai" class="font-extrabold text-base leading-tight truncate text-white">Nama Pegawai</h5>
+                            <p id="ticketNipPegawai" class="text-xs text-red-100 font-mono tracking-wider mt-0.5">NIP: -</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-2 border-t border-white/20 text-xs">
+                        <div>
+                            <span class="text-[10px] text-red-200 block uppercase font-bold">Perangkat Daerah</span>
+                            <strong id="ticketOpdPegawai" class="font-semibold block truncate text-[11px]">-</strong>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-red-200 block uppercase font-bold">Waktu Dibuat</span>
+                            <strong id="ticketWaktuDibuat" class="font-semibold block text-[11px] font-mono">-</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Garis Perforasi E-Ticket -->
+                <div class="relative flex items-center justify-between px-2 bg-white">
+                    <div class="w-5 h-5 rounded-full bg-black -ml-5 shadow-inner"></div>
+                    <div class="flex-1 border-t-2 border-dashed border-gray-300 mx-2"></div>
+                    <div class="w-5 h-5 rounded-full bg-black -mr-5 shadow-inner"></div>
+                </div>
+
+                <!-- Bagian Bawah Tiket: Timer 15 Detik & QR Code -->
+                <div class="p-5 text-center flex flex-col items-center bg-white">
+                    <!-- Timer 15 Detik di Atas QR Code -->
+                    <div class="mb-4 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-50 border border-red-200 text-red-700 shadow-sm animate-pulse">
+                        <i class="bi bi-stopwatch-fill text-red-600 text-base"></i>
+                        <span class="text-xs font-bold">Berlaku:</span>
+                        <span id="ticketCountdown" class="font-black text-base font-mono text-red-600 min-w-[20px]">15</span>
+                        <span class="text-xs font-bold text-red-600">detik</span>
+                    </div>
+
+                    <!-- QR Code Container (Maksimal sesuai lebar layar) -->
+                    <div class="p-3 bg-white border-2 border-gray-200 rounded-2xl shadow-md w-full max-w-[290px] aspect-square flex items-center justify-center overflow-hidden">
+                        <div id="ticketQrContainer" class="w-full h-full flex items-center justify-center [&>img]:w-full [&>img]:h-full [&>canvas]:w-full [&>canvas]:h-full"></div>
+                    </div>
+
+                    <p class="text-[11px] text-gray-500 font-medium mt-3 leading-tight">
+                        Tunjukkan QR Pass ini kepada Petugas / Admin Presensi di Lokasi.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Tombol Tutup Besar & Jelas di Bawah -->
+            <button onclick="tutupQrTicketView()" class="mt-5 w-full bg-red-600 hover:bg-red-700 active:scale-95 text-white font-extrabold py-4 px-6 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 text-base tracking-wider uppercase border border-red-500">
+                <i class="bi bi-x-circle-fill text-xl"></i>
+                <span>TUTUP QR TICKET</span>
             </button>
         </div>
     </div>

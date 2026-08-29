@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.192'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.210'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -25,6 +25,8 @@ let isKameraError = false;
 let isGpsError = false;
 let deferredPrompt = null;
 let lastInvalidFileAlertKey = null;
+let selfieCameraGeneration = 0;
+let isSubmittingAdminCepat = false;
 
 /**
  * Memigrasikan data dari localStorage (sistem lama) ke localForage (sistem baru).
@@ -887,11 +889,13 @@ async function prosesLogin(e) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            if (!response.ok) throw new Error(`Worker merespon dengan status ${response.status}`);
+            if (!response.ok && response.status >= 500) {
+                throw new Error(`Worker web server error HTTP ${response.status}`);
+            }
             res = await response.json();
             if (!res.status) {
-                if (res.code === 404) {
-                    throw new Error("Worker Cache MISS");
+                if (res.code === 404 || res.code >= 500) {
+                    throw new Error("Worker Cache MISS / Server Error");
                 }
                 Swal.fire('Gagal', res.message || 'Terjadi kesalahan saat login.', 'error');
                 return;
@@ -994,44 +998,62 @@ async function fetchWithAuth(url, options = {}) {
     return response;
 }
 
+// Deduplicate OPD downloads in the same page and reject stale responses across tabs.
+let opdCacheInFlight = null;
+let opdCacheRequestStartedAt = 0;
+
 // Fungsi untuk mengambil list OPD dari API dan menyimpannya di localStorage
 async function fetchAndCacheOpdList(tokenOverride) {
-    // Gunakan token yang diberikan jika ada, jika tidak, ambil dari penyimpanan.
-    const tokenToUse = tokenOverride || (await localforage.getItem('asn_jwt_token'));
-    if (!tokenToUse) return;
+    if (opdCacheInFlight) return opdCacheInFlight;
 
-    const saveOpdList = async (list) => {
-        await localforage.setItem('list_opd', list);
-        await localforage.setItem('opd_cache_version', APP_VERSION);
-        console.log(`List OPD berhasil diunduh dan disimpan untuk versi ${APP_VERSION}.`);
-    };
+    const requestStartedAt = Date.now();
+    opdCacheRequestStartedAt = Math.max(opdCacheRequestStartedAt, requestStartedAt);
 
-    try {
-        // 1. Coba ambil dari Worker terlebih dahulu
-        console.log('Mencoba mengambil daftar OPD dari Worker Cache...');
-        const workerResponse = await fetch(`${WORKER_URL}/api/opd/list?cb=${Date.now()}`);
-        if (workerResponse.ok) {
+    opdCacheInFlight = (async () => {
+        // Gunakan token yang diberikan jika ada, jika tidak, ambil dari penyimpanan.
+        const tokenToUse = tokenOverride || (await localforage.getItem('asn_jwt_token'));
+        if (!tokenToUse) return;
+
+        const saveOpdList = async (list) => {
+            // Request lama, termasuk dari tab lain, tidak boleh menimpa hasil baru.
+            const latestWrittenAt = await localforage.getItem('opd_cache_written_at') || 0;
+            if (requestStartedAt < opdCacheRequestStartedAt || requestStartedAt < latestWrittenAt) return;
+            await localforage.setItem('list_opd', list);
+            await localforage.setItem('opd_cache_version', APP_VERSION);
+            await localforage.setItem('opd_cache_written_at', requestStartedAt);
+            console.log(`List OPD berhasil diunduh dan disimpan untuk versi ${APP_VERSION}.`);
+        };
+
+        try {
+            // 1. Coba ambil dari Worker terlebih dahulu
+            console.log('Mencoba mengambil daftar OPD dari Worker Cache...');
+            const workerResponse = await fetch(`${WORKER_URL}/api/opd/list?cb=${Date.now()}`);
             const workerData = await workerResponse.json();
             if (workerData.status && Array.isArray(workerData.data)) {
                 console.log('Berhasil mendapatkan daftar OPD dari Worker.');
                 await saveOpdList(workerData.data);
-                return; // Selesai
+                return;
+            }
+            throw new Error('Cache miss atau data worker tidak valid.');
+        } catch (workerError) {
+            // 2. Jika Worker gagal (cache miss, network error), fallback ke server utama
+            console.warn('Gagal mengambil OPD dari worker, fallback ke server utama:', workerError.message);
+            try {
+                const originResponse = await fetchWithAuth(`${API_BASE_URL}/opd/list`, { token: tokenToUse });
+                const originData = await originResponse.json();
+                if (originData.status && Array.isArray(originData.data)) {
+                    await saveOpdList(originData.data);
+                }
+            } catch (originError) {
+                console.error('Gagal mengambil list OPD dari server utama:', originError);
             }
         }
-        // Jika worker response tidak ok atau data tidak valid, akan jatuh ke blok catch.
-        throw new Error('Cache miss atau data worker tidak valid.');
-    } catch (workerError) {
-        // 2. Jika Worker gagal (cache miss, network error), fallback ke server utama
-        console.warn('Gagal mengambil OPD dari worker, fallback ke server utama:', workerError.message);
-        try {
-            const originResponse = await fetchWithAuth(`${API_BASE_URL}/opd/list`, { token: tokenToUse });
-            const originData = await originResponse.json();
-            if (originData.status && Array.isArray(originData.data)) {
-                await saveOpdList(originData.data);
-            }
-        } catch (originError) {
-            console.error('Gagal mengambil list OPD dari server utama:', originError);
-        }
+    })();
+
+    try {
+        return await opdCacheInFlight;
+    } finally {
+        opdCacheInFlight = null;
     }
 }
 
@@ -1039,39 +1061,60 @@ async function fetchAndCacheOpdList(tokenOverride) {
 // 5. FUNGSI KHUSUS ADMIN
 // ==========================================
 
+let ticketCountdownInterval = null;
+
 async function generateUserQrToken() {
     const token = await localforage.getItem('asn_jwt_token');
     if (!token) return;
 
-    showLoading(true, "Membuat QR Code...");
+    showLoading(true, "Membuat E-Presensi Pass...");
 
     try {
-        const showQrModal = (tempToken) => {
-            const modal = document.getElementById('modalUserQr');
-            const qrContainer = document.getElementById('userQrContainer');
-            const countdownEl = document.getElementById('qrCountdown');
+        const userProfile = (await localforage.getItem('user_profile')) || {};
+        const parsedData = (await parseJwt(token)) || {};
 
-            qrContainer.innerHTML = '';
-            userQrCodeInstance = new QRCode(qrContainer, {
-                text: tempToken,
-                width: 288,                             // Sesuaikan dengan ukuran container w-72 h-72 (18rem * 16px)
-                height: 288,
-                colorDark: "#000000",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.M
-            });
+        const nama = userProfile.nama || parsedData.nama || 'Pegawai ASN';
+        const nip = userProfile.nip || parsedData.nip || '-';
+        const opd = userProfile.opd || parsedData.opd || '-';
 
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+        const now = new Date();
+        const waktuStr = now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-            let timeLeft = 60;
-            countdownEl.innerText = timeLeft;
-            if (qrCountdownInterval) clearInterval(qrCountdownInterval);
-            qrCountdownInterval = setInterval(() => {
+        const showQrTicket = (tempToken) => {
+            const elNama = document.getElementById('ticketNamaPegawai');
+            const elNip = document.getElementById('ticketNipPegawai');
+            const elOpd = document.getElementById('ticketOpdPegawai');
+            const elWaktu = document.getElementById('ticketWaktuDibuat');
+            const qrContainer = document.getElementById('ticketQrContainer');
+            const countdownEl = document.getElementById('ticketCountdown');
+
+            if (elNama) elNama.innerText = nama;
+            if (elNip) elNip.innerText = `NIP: ${nip}`;
+            if (elOpd) elOpd.innerText = opd;
+            if (elWaktu) elWaktu.innerText = waktuStr;
+
+            if (qrContainer) {
+                qrContainer.innerHTML = '';
+                new QRCode(qrContainer, {
+                    text: tempToken,
+                    width: 280,
+                    height: 280,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }
+
+            switchView('view-qr-ticket');
+
+            let timeLeft = 15;
+            if (countdownEl) countdownEl.innerText = timeLeft;
+            if (ticketCountdownInterval) clearInterval(ticketCountdownInterval);
+            ticketCountdownInterval = setInterval(() => {
                 timeLeft--;
-                countdownEl.innerText = timeLeft;
+                if (countdownEl) countdownEl.innerText = timeLeft;
                 if (timeLeft <= 0) {
-                    tutupModalUserQr();
+                    tutupQrTicketView();
                 }
             }, 1000);
         };
@@ -1085,19 +1128,16 @@ async function generateUserQrToken() {
         };
 
         try {
-            // 1. Coba ke Worker
             console.log("Mencoba membuat QR Code via Worker...");
             const tempToken = await callApi(`${WORKER_URL}/api/token/generate-temporary`);
-            showQrModal(tempToken);
+            showQrTicket(tempToken);
         } catch (workerError) {
-            // 2. Jika Worker gagal, fallback ke Server Origin
             console.warn("Gagal membuat QR Code via Worker, fallback ke server utama...", workerError);
             const tempToken = await callApi(`${API_BASE_URL}/token/generate-temporary`);
-            showQrModal(tempToken);
+            showQrTicket(tempToken);
         }
     } catch (finalError) {
-        // Jika keduanya gagal
-        console.error("Gagal membuat QR Code dari worker dan server utama.", finalError);
+        console.error("Gagal membuat QR Code.", finalError);
         const errorMsg = finalError.message || "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
         Swal.fire("Gagal Membuat QR", errorMsg, "error");
     } finally {
@@ -1105,13 +1145,68 @@ async function generateUserQrToken() {
     }
 }
 
+function tutupQrTicketView() {
+    if (ticketCountdownInterval) clearInterval(ticketCountdownInterval);
+    const container = document.getElementById('ticketQrContainer');
+    if (container) container.innerHTML = '';
+    switchView('view-dashboard');
+}
+
 function tutupModalUserQr() {
-    clearInterval(qrCountdownInterval);
-    const modal = document.getElementById('modalUserQr');
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-    document.getElementById('userQrContainer').innerHTML = '';
-    userQrCodeInstance = null;
+    tutupQrTicketView();
+}
+
+function tutupModeScannerUsb() {
+    const section = document.getElementById('admin-cepat-usb-section');
+    if (section) section.classList.add('hidden-view');
+    isAbsenCepatMode = false;
+}
+
+function playBeepSound() {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+        }
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880; // A5 pitch
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.12);
+
+        // Bersihkan AudioContext agar tidak menumpuk di memori
+        setTimeout(() => {
+            if (ctx && typeof ctx.close === 'function') {
+                ctx.close().catch(() => {});
+            }
+        }, 300);
+    } catch (e) {
+        // Silent catch: kegagalan audio tidak boleh mengganggu alur absensi
+    }
+}
+
+async function prosesInputScannerUsb(e) {
+    if (e) e.preventDefault();
+    const input = document.getElementById('admin-cepat-usb-input');
+    if (!input) return;
+    const decodedText = input.value.trim();
+    if (!decodedText) return;
+
+    playBeepSound();
+    await handleScanSuccess(decodedText);
+
+    input.value = '';
+    setTimeout(() => {
+        if (input && typeof input.focus === 'function') input.focus();
+    }, 150);
 }
 
 function bukaAbsenkanPegawai() {
@@ -1206,7 +1301,7 @@ async function adminCepatCekJadwal(event) {
 }
 
 
-async function adminCepatMulaiPindai() {
+async function adminCepatMulaiPindai(mode = 'kamera') {
     const keterangan = document.getElementById('admin-cepat-keterangan').value.trim();
     if (!keterangan) {
         Swal.fire('Gagal', 'Keterangan wajib diisi sebelum memulai pemindaian.', 'error');
@@ -1233,11 +1328,25 @@ async function adminCepatMulaiPindai() {
         // Simpan parameter ke state
         adminCepatState.status_kehadiran = document.getElementById('admin-cepat-status-kehadiran').value;
         adminCepatState.status_verifikasi = document.getElementById('admin-cepat-status-verifikasi').value;
+        const elModeFoto = document.getElementById('admin-cepat-mode-foto');
+        adminCepatState.mode_foto = elModeFoto ? elModeFoto.value : 'tidak';
         adminCepatState.keterangan = keterangan;
         isAbsenCepatMode = true; // Aktifkan mode pindai cepat
 
-        // Buka scanner utama yang sudah ada dan berfungsi
-        bukaScanner(false, 'Pindai QR Profil (Absen Cepat)', false);
+        if (mode === 'usb') {
+            const usbSection = document.getElementById('admin-cepat-usb-section');
+            if (usbSection) usbSection.classList.remove('hidden-view');
+            const usbInput = document.getElementById('admin-cepat-usb-input');
+            if (usbInput) {
+                usbInput.value = '';
+                setTimeout(() => usbInput.focus(), 150);
+            }
+        } else {
+            const usbSection = document.getElementById('admin-cepat-usb-section');
+            if (usbSection) usbSection.classList.add('hidden-view');
+            // Buka scanner utama kamera yang sudah ada
+            bukaScanner(false, 'Pindai QR Profil (Absen Cepat)', false);
+        }
     };
 
     // 2. Validasi Lokasi Awal
@@ -1311,7 +1420,6 @@ async function silentlyRefreshTokenIfNeeded() {
             try {
                 // 1. Coba refresh via Worker. fetchWithAuth akan mengambil token dari localForage.
                 response = await fetchWithAuth(`${WORKER_URL}/api/profil/refresh-token`, { method: 'POST' });
-                if (!response.ok) throw new Error(`Worker merespon dengan status ${response.status}`);
                 res = await response.json();
                 if (!res.status || !res.data || !res.data.token) throw new Error(res.message || "Gagal refresh token di worker");
             } catch (workerError) {
@@ -1349,21 +1457,27 @@ async function refreshProfil() {
     showLoading(true, "Menyinkronkan...");
 
     try {
-        // Hanya ambil sinkronisasi dari Worker tanpa fallback
-        console.log("Mencoba sinkronisasi profil via Worker...");
-        const response = await fetchWithAuth(`${WORKER_URL}/api/profil/sync`, { method: "POST" });
-        if (!response.ok) {
-            throw new Error(`Worker merespon dengan status ${response.status}`);
+        let res;
+        try {
+            console.log("Mencoba sinkronisasi profil via Worker...");
+            const response = await fetchWithAuth(`${WORKER_URL}/api/profil/sync`, { method: "POST" });
+            res = await response.json();
+            if (!res.status) throw new Error(res.message || "Gagal sinkronisasi profil di worker");
+        } catch (workerError) {
+            console.warn("Gagal sinkronisasi profil via Worker, fallback ke server utama:", workerError.message);
+            const fallbackResponse = await fetchWithAuth(`${API_BASE_URL}/profil/refresh`, { method: "GET" });
+            if (!fallbackResponse.ok) {
+                throw new Error(`Server utama merespon dengan status ${fallbackResponse.status}`);
+            }
+            res = await fallbackResponse.json();
         }
 
-        const res = await response.json();
-
-        if (res.status && res.data && res.data.token) {
+        if (res && res.status && res.data && res.data.token) {
             await localforage.setItem("asn_jwt_token", res.data.token);
             renderProfil();
             Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3500, icon: 'success', title: res.message || 'Profil berhasil diperbarui!' });
         } else {
-            Swal.fire('Gagal Sinkronisasi', res.message || 'Gagal menyinkronkan profil.', 'error');
+            Swal.fire('Gagal Sinkronisasi', res?.message || 'Gagal menyinkronkan profil.', 'error');
         }
     } catch (finalError) {
         console.error("Error saat sinkronisasi profil (termasuk fallback):", finalError);
@@ -1733,18 +1847,18 @@ async function handleServerValidation(kode, bypassHistoryCheck = false) {
             // 1. Coba ambil dari Worker
             console.log("Mencoba validasi jadwal via Worker...");
             response = await fetch(`${WORKER_URL}/api/jadwal-by-kode/${kode}${cacheBuster}`);
-            if (!response.ok) {
-                throw new Error(`Worker responded with status ${response.status}`);
+            if (!response.ok && response.status >= 500) {
+                throw new Error(`Worker web server error HTTP ${response.status}`);
             }
             res = await response.json();
             if (!res.status) {
-                if (res.code === 404) {
+                if (res.code === 404 || res.code >= 500) {
                     throw new Error("Worker Cache MISS");
                 }
                 throw new Error(res.message);
             }
         } catch (workerError) {
-            if (workerError.message !== "Worker Cache MISS" && !workerError.message.includes("status 500") && !workerError.message.includes("Failed to fetch") && !workerError.message.includes("NetworkError")) {
+            if (workerError.message !== "Worker Cache MISS" && !workerError.message.includes("500") && !workerError.message.includes("Failed to fetch") && !workerError.message.includes("NetworkError") && !(workerError instanceof SyntaxError)) {
                 throw workerError;
             }
             // 2. Fallback ke server utama
@@ -1852,15 +1966,17 @@ async function cekLokasiOtomatis() {
     const boxGagal = document.getElementById('boxLokasiGagal');
     const stGeoLoading = document.getElementById('statusGeoLoading');
 
+    const targetKodeAkses = currentJadwal ? currentJadwal.kode_akses : null;
+
     // Hide failure box and show loading status
-    boxGagal.classList.add('hidden-view');
-    stGeo.classList.add('hidden-view'); // Pastikan div hasil disembunyikan
-    stGeoLoading.classList.remove('hidden-view'); // Tampilkan loading besar
+    if (boxGagal) boxGagal.classList.add('hidden-view');
+    if (stGeo) stGeo.classList.add('hidden-view');
+    if (stGeoLoading) stGeoLoading.classList.remove('hidden-view');
 
     if (!navigator.geolocation) {
-        stGeoLoading.classList.add('hidden-view');
-        stGeo.classList.add('hidden-view');
-        boxGagal.classList.remove('hidden-view');
+        if (stGeoLoading) stGeoLoading.classList.add('hidden-view');
+        if (stGeo) stGeo.classList.add('hidden-view');
+        if (boxGagal) boxGagal.classList.remove('hidden-view');
         return;
     }
 
@@ -1878,8 +1994,8 @@ async function cekLokasiOtomatis() {
         stGeo.className = "bg-blue-50 text-blue-700 py-2 px-4 rounded-lg text-xs font-bold border border-blue-200";
         const alamat = await getAlamatFromKoordinat(rLat, rLng);
 
-        // Cegah race condition jika user telah membatalkan form saat geocoding berjalan
-        if (!currentJadwal) return;
+        // Cegah race condition jika user telah membatalkan atau berganti form jadwal saat geocoding berjalan
+        if (!currentJadwal || currentJadwal.kode_akses !== targetKodeAkses) return;
 
         document.getElementById('alamat').value = alamat;
 
@@ -2111,21 +2227,27 @@ async function kirimAbsensi() {
                     status_kehadiran: statusKehadiran, status_verifikasi: statusVerifikasi
                 });
                 response = await fetchWithAuth(`${WORKER_URL}/api/absen/submit`, { method: "POST", body: workerBody, token: token });
-                if (!response.ok) throw new Error(`Worker merespon dengan status ${response.status}`);
+                if (!response.ok && response.status >= 500) {
+                    throw new Error(`Worker web server error HTTP ${response.status}`);
+                }
                 res = await response.json();
                 if (!res.status) {
-                    throw new Error(res.message || 'Worker mengembalikan status false');
+                    const workerCode = Number(res.code);
+                    if (Number.isFinite(workerCode) && workerCode >= 400 && workerCode < 500) {
+                        throw new Error(res.message || `Worker menolak absensi (kode ${workerCode}).`);
+                    }
+                    throw new Error(res.message || 'Worker mengembalikan status false (server error / limit exceeded)');
                 }
             } catch (workerError) {
-                // Jika worker memberikan respon validasi resmi (status: false dengan message), langsung teruskan error
-                if (res && res.status === false && res.message) {
-                    throw new Error(res.message);
+                // Respons validasi Worker (4xx) bersifat final; fallback hanya untuk error server Cloudflare (5xx) atau jaringan/timeout.
+                if (res && res.status === false && Number(res.code) >= 400 && Number(res.code) < 500) {
+                    throw new Error(res.message || `Absensi ditolak (kode ${res.code}).`);
                 }
-                // 2. Jika Worker gagal karena network atau 500, fallback ke server utama
-                console.warn("Gagal mengirim ke Worker, fallback ke server utama.", workerError.message);
+                // Jika Worker gagal (HTTP 5xx / timeout / network error), fallback otomatis ke Server Utama (PHP)
+                console.warn("[PWA Fallback] Worker Cloudflare bermasalah, fallback ke server utama (PHP):", workerError.message);
                 res = await sendToOriginServer();
                 if (!res.status) throw new Error(res.message || "Fallback ke server utama juga gagal.");
-                response = { ok: true }; // Anggap OK karena sudah ditangani
+                response = { ok: true }; // Anggap OK karena sudah ditangani via fallback PHP
             }
         } else {
             // Langsung kirim ke server utama jika antrian tidak aktif
@@ -2136,6 +2258,7 @@ async function kirimAbsensi() {
 
         // Cek hasil akhir setelah semua logika
         if (response.ok && res.status) {
+            playBeepSound();
             const userForHistory = await parseJwt(token);
             if (userForHistory && userForHistory.nip && currentJadwal) {
                 const waktuServer = res.data?.waktu || getCurrentServerTime().toISOString();
@@ -2158,7 +2281,9 @@ async function kirimAbsensi() {
 }
 
 
-async function adminCepatKirimAbsensi(userToken) {
+async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
+    if (isSubmittingAdminCepat) return;
+    isSubmittingAdminCepat = true;
     try {
         const userData = parseJwt(userToken, true);
         if (!userData) {
@@ -2167,15 +2292,11 @@ async function adminCepatKirimAbsensi(userToken) {
         }
 
         const jadwal = adminCepatState.jadwal;
-
-        // Cek strict time dihapus sepenuhnya
-
         const kode = jadwal.kode_akses;
         const statusKehadiran = adminCepatState.status_kehadiran;
         const statusVerifikasi = adminCepatState.status_verifikasi;
         const keteranganAdmin = adminCepatState.keterangan;
 
-        // Ambil lokasi dari state (sudah divalidasi sebelumnya)
         const lat = adminCepatState.lat || '0';
         const lng = adminCepatState.lng || '0';
 
@@ -2200,13 +2321,24 @@ async function adminCepatKirimAbsensi(userToken) {
                 keterangan_verifikasi: keteranganAdmin,
                 status_kehadiran: statusKehadiran,
                 status_verifikasi: statusVerifikasi,
+                foto_base64: fotoBase64 || null
             });
             response = await fetchWithAuth(workerUrl, { method: "POST", body: workerBody, token: adminToken });
-            if (!response.ok) throw new Error(`Worker merespon dengan status ${response.status}`);
+            if (!response.ok && response.status >= 500) {
+                throw new Error(`Worker web server error HTTP ${response.status}`);
+            }
             res = await response.json();
-            if (!res.status) throw new Error(res.message || 'Worker mengembalikan status false');
+            if (!res.status) {
+                const workerCode = Number(res.code);
+                if (Number.isFinite(workerCode) && workerCode >= 400 && workerCode < 500) {
+                    throw new Error(res.message || `Absensi Cepat ditolak (kode ${workerCode}).`);
+                }
+                throw new Error(res.message || 'Worker mengembalikan status false');
+            }
         } catch (workerError) {
-            // 2. Jika Worker gagal, fallback ke server PHP
+            if (res && res.status === false && Number(res.code) >= 400 && Number(res.code) < 500) {
+                throw new Error(res.message || `Absensi Cepat ditolak (kode ${res.code}).`);
+            }
             console.warn("Gagal mengirim absensi cepat ke Worker, fallback ke server utama.", workerError.message);
 
             const fallbackUrl = `${API_BASE_URL}/absen-cepat/submit`;
@@ -2219,12 +2351,15 @@ async function adminCepatKirimAbsensi(userToken) {
             fallbackBody.append('keterangan_verifikasi', keteranganAdmin);
             fallbackBody.append('status_kehadiran', statusKehadiran);
             fallbackBody.append('status_verifikasi', statusVerifikasi);
+            if (fotoBase64) fallbackBody.append('foto_base64', fotoBase64);
+            fallbackBody.append('status_verifikasi', statusVerifikasi);
 
             response = await fetchWithAuth(fallbackUrl, { method: "POST", body: fallbackBody, token: adminToken });
             res = await response.json();
         }
 
         if (response.ok && res.status) {
+            playBeepSound();
             Swal.fire({ toast: true, position: 'bottom', icon: 'success', title: `Berhasil: ${userData.nama}`, showConfirmButton: false, timer: 1500, timerProgressBar: true });
         } else {
             Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Gagal: ${res.message || 'Error'}`, showConfirmButton: false, timer: 2000 });
@@ -2234,8 +2369,9 @@ async function adminCepatKirimAbsensi(userToken) {
         Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Gagal: ${e.message || 'Error Koneksi'}`, showConfirmButton: false, timer: 2000 });
         // Lemparkan kembali error agar bisa ditangkap oleh pemanggil jika perlu.
         throw e;
+    } finally {
+        isSubmittingAdminCepat = false;
     }
-    // Blok 'finally' yang sebelumnya ada di sini telah dihapus.
 }
 
 function tampilkanFormLanjutan() {
@@ -2375,17 +2511,20 @@ async function mulaiKameraSelfie() {
     const v = document.getElementById('kamera');
     const cameraSelect = document.getElementById('selfie-camera-select');
     const cameraContainer = document.getElementById('selfie-camera-selection-container');
+    const targetJadwalKode = currentJadwal?.kode_akses;
 
     // Hentikan stream yang mungkin masih berjalan sebelum memulai yang baru
     if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
+        try { videoStream.getTracks().forEach(track => track.stop()); } catch (e) {}
+        videoStream = null;
     }
 
     // Fungsi internal untuk memulai stream dengan deviceId tertentu
     const startStream = async (deviceId) => {
-        // Hentikan lagi untuk memastikan saat berganti kamera
+        const currentGen = ++selfieCameraGeneration;
         if (videoStream) {
-            videoStream.getTracks().forEach(track => track.stop());
+            try { videoStream.getTracks().forEach(track => track.stop()); } catch (e) {}
+            videoStream = null;
         }
         const constraints = {
             audio: false,
@@ -2393,15 +2532,19 @@ async function mulaiKameraSelfie() {
         };
         try {
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            // Cegah race condition/leak jika form dibatalkan saat kamera sedang diinisialisasi
-            if (!currentJadwal) {
+            // Cegah race condition/leak jika request kamera lain dibuat atau form dibatalkan/diganti
+            if (currentGen !== selfieCameraGeneration || !currentJadwal || currentJadwal.kode_akses !== targetJadwalKode) {
                 stream.getTracks().forEach(track => track.stop());
                 return;
             }
+            if (videoStream) {
+                try { videoStream.getTracks().forEach(track => track.stop()); } catch (e) {}
+            }
             videoStream = stream;
-            v.srcObject = videoStream;
+            if (v) v.srcObject = videoStream;
             isKameraError = false;
         } catch (e) {
+            if (currentGen !== selfieCameraGeneration) return;
             console.error("Gagal memulai kamera selfie:", e);
             isKameraError = true;
             updateConditionalFormElements();
@@ -2499,13 +2642,15 @@ function validasiTombolKirim() {
         return;
     }
 
-    const b64 = document.getElementById('fotoBase64').value;
-    const latValue = document.getElementById('lat').value;
     const btnKirim = document.getElementById('btnKirim');
+    if (!btnKirim) return;
 
-    const ket = document.getElementById('keterangan').value.trim();
+    const b64 = document.getElementById('fotoBase64')?.value || '';
+    const latValue = document.getElementById('lat')?.value;
+
+    const ket = document.getElementById('keterangan')?.value?.trim() || '';
     const wajibKeterangan = isLuarRadius || isTerlambat || isGpsError || isKameraError;
-    const isKoordinatOk = latValue !== null && latValue !== '';
+    const isKoordinatOk = latValue !== null && latValue !== undefined && latValue !== '';
     const isKeteranganOk = !wajibKeterangan || ket !== '';
 
     const isFormValid = b64 && isKoordinatOk && isKeteranganOk;
@@ -2660,7 +2805,11 @@ window.prosesKodeManualDariPilihMetode = function (event) {
 }
 
 window.pilihOpsiKehadiran = function (opsi) {
-    document.getElementById('opsiKehadiranAwal').classList.add('hidden-view');
+    const radioEl = document.querySelector(`input[name="tipeKehadiran"][value="${opsi}"]`);
+    if (radioEl) radioEl.checked = true;
+
+    const elOpsiAwal = document.getElementById('opsiKehadiranAwal');
+    if (elOpsiAwal) elOpsiAwal.classList.add('hidden-view');
     if (opsi === 'hadir') {
         if (currentJadwal && currentJadwal.is_strict_time == 1 && isTerlambat) {
             Swal.fire({
@@ -2681,9 +2830,12 @@ window.pilihOpsiKehadiran = function (opsi) {
         setVal('buktiIzin');
 
         window._isTidakHadir = false;
-        document.getElementById('flowHadir').classList.remove('hidden-view');
-        document.getElementById('flowIzin').classList.add('hidden-view');
-        document.getElementById('warningTidakHadir').classList.add('hidden-view');
+        const elFlowHadir = document.getElementById('flowHadir');
+        if (elFlowHadir) elFlowHadir.classList.remove('hidden-view');
+        const elFlowIzin = document.getElementById('flowIzin');
+        if (elFlowIzin) elFlowIzin.classList.add('hidden-view');
+        const elWarning = document.getElementById('warningTidakHadir');
+        if (elWarning) elWarning.classList.add('hidden-view');
         startHadirFlow();
     } else {
         // Matikan kamera selfie jika sempat berjalan
@@ -2706,9 +2858,12 @@ window.pilihOpsiKehadiran = function (opsi) {
         setVal('alamat');
         setVal('fotoBase64');
 
-        document.getElementById('flowHadir').classList.add('hidden-view');
-        document.getElementById('form-absen-lanjutan').classList.add('hidden-view');
-        document.getElementById('flowIzin').classList.remove('hidden-view');
+        const elFlowHadir = document.getElementById('flowHadir');
+        if (elFlowHadir) elFlowHadir.classList.add('hidden-view');
+        const elFormLanjutan = document.getElementById('form-absen-lanjutan');
+        if (elFormLanjutan) elFormLanjutan.classList.add('hidden-view');
+        const elFlowIzin = document.getElementById('flowIzin');
+        if (elFlowIzin) elFlowIzin.classList.remove('hidden-view');
 
         window._isTidakHadir = true;
         checkIzinForm(); // Lakukan pengecekan validasi form izin
@@ -2747,6 +2902,53 @@ window.checkIzinForm = function () {
  * Membedakan antara alur absensi normal dan alur absensi cepat admin.
  * @param {string} decodedText - Teks dari hasil pindaian QR.
  */
+async function ambilSnapshotFotoCepat() {
+    return new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.setAttribute('capture', 'user');
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                resolve(null);
+                return;
+            }
+            try {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const maxDim = 480;
+                        let w = img.width;
+                        let h = img.height;
+                        if (w > h && w > maxDim) {
+                            h = Math.round((h * maxDim) / w);
+                            w = maxDim;
+                        } else if (h > maxDim) {
+                            w = Math.round((w * maxDim) / h);
+                            h = maxDim;
+                        }
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, w, h);
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.65);
+                        resolve(compressedBase64);
+                    };
+                    img.src = evt.target.result;
+                };
+                reader.readAsDataURL(file);
+            } catch (err) {
+                console.warn("Gagal memproses snapshot kamera:", err);
+                resolve(null);
+            }
+        };
+        input.click();
+    });
+}
+
 async function handleScanSuccess(decodedText) {
     if (isProcessingScan) return;
     isProcessingScan = true;
@@ -2760,28 +2962,65 @@ async function handleScanSuccess(decodedText) {
 
         const isProfileToken = decodedText.startsWith("BB:");
         if (isProfileToken) {
-            // 2. Jika QR valid, tampilkan loading dan proses absensi.
-            showLoading(true, "Memproses Absensi...");
             const token = decodedText.replace("BB:", "");
+            const modeFoto = adminCepatState.mode_foto || 'tidak';
+            const userData = parseJwt(token, true) || { nama: 'Pegawai ASN', nip: '-' };
+
             try {
-                // Panggil fungsi pengiriman, yang akan menampilkan notifikasi toast sendiri.
-                await adminCepatKirimAbsensi(token);
+                let fotoBase64 = null;
+
+                if (modeFoto === 'tanya') {
+                    showLoading(false);
+                    const promptResult = await Swal.fire({
+                        title: 'QR Code Terverifikasi',
+                        html: `<div class="text-left text-sm space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                <div><strong class="text-gray-700">Nama:</strong> ${userData.nama || '-'}</div>
+                                <div><strong class="text-gray-700">NIP:</strong> <span class="font-mono">${userData.nip || '-'}</span></div>
+                                <div><strong class="text-gray-700">OPD:</strong> ${userData.opd || '-'}</div>
+                               </div>
+                               <p class="text-xs text-gray-500 mt-3">Apakah Anda ingin menyertakan foto pegawai atau kirim langsung?</p>`,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: '<i class="bi bi-camera-fill"></i> Foto Pegawai',
+                        cancelButtonText: '<i class="bi bi-send-fill"></i> Kirim Langsung',
+                        confirmButtonColor: '#2563eb',
+                        cancelButtonColor: '#16a34a',
+                        showDenyButton: true,
+                        denyButtonText: 'Batal',
+                        denyButtonColor: '#6b7280'
+                    });
+
+                    if (promptResult.isConfirmed) {
+                        fotoBase64 = await ambilSnapshotFotoCepat();
+                        showLoading(true, "Mengirim Absensi + Foto...");
+                        await adminCepatKirimAbsensi(token, fotoBase64);
+                    } else if (promptResult.isDismissed && promptResult.dismiss === Swal.DismissReason.cancel) {
+                        showLoading(true, "Memproses Absensi...");
+                        await adminCepatKirimAbsensi(token, null);
+                    }
+                } else if (modeFoto === 'wajib') {
+                    showLoading(false);
+                    fotoBase64 = await ambilSnapshotFotoCepat();
+                    if (fotoBase64) {
+                        showLoading(true, "Mengirim Absensi + Foto...");
+                        await adminCepatKirimAbsensi(token, fotoBase64);
+                    }
+                } else {
+                    // Mode 'tidak' (Default instan)
+                    showLoading(true, "Memproses Absensi...");
+                    await adminCepatKirimAbsensi(token, null);
+                }
             } catch (e) {
-                // Menangkap error tak terduga dari fungsi pengiriman.
-                console.error("Terjadi kesalahan tidak terduga saat mengirim absensi cepat:", e);
-                Swal.fire("Kesalahan", "Terjadi kesalahan tidak terduga.", "error");
+                console.error("Terjadi kesalahan saat mengirim absensi cepat:", e);
+                Swal.fire("Kesalahan", e.message || "Terjadi kesalahan tidak terduga.", "error");
             } finally {
-                // 3. Setelah selesai (baik sukses atau gagal), sembunyikan loading.
                 showLoading(false);
-                // Beri jeda singkat agar pengguna bisa melihat notifikasi toast.
                 setTimeout(() => {
-                    // 4. Mulai ulang scanner untuk pindaian berikutnya.
-                    // Pastikan kita masih dalam mode absen cepat.
                     if (isAbsenCepatMode) {
                         const selectedCameraId = document.getElementById('camera-select').value;
                         _startScanner(selectedCameraId);
                     }
-                }, 500); // Jeda 0.5 detik
+                }, 600);
             }
         } else {
             // 5. Jika QR tidak valid, tampilkan pesan error yang memblokir.
@@ -2790,8 +3029,7 @@ async function handleScanSuccess(decodedText) {
                 text: "Harap pindai QR Code Profil Pegawai yang valid (diawali dengan 'BB:').",
                 icon: "error",
                 confirmButtonText: "Coba Lagi"
-            }).then((result) => {
-                // 6. Setelah pengguna menekan "OK", mulai ulang scanner.
+            }).then(() => {
                 if (isAbsenCepatMode) {
                     const selectedCameraId = document.getElementById('camera-select').value;
                     _startScanner(selectedCameraId);
@@ -2841,6 +3079,6 @@ function updateConditionalFormElements() {
 // EXPORTS UNTUK TESTING (Diabaikan oleh browser)
 if (typeof module !== 'undefined') {
     if (module.exports) {
-        module.exports = { getDistanceInMeters, parseJwt, switchView, batalAbsen };
+        module.exports = { getDistanceInMeters, parseJwt, switchView, pilihOpsiKehadiran, batalAbsen };
     }
 }
