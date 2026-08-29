@@ -552,6 +552,28 @@ function renderJadwalTable(jadwalList) {
  */
 async function bukaModalBuatKegiatan() {
     document.getElementById('formKegiatanBaru').reset();
+
+    // Auto-fill: Tanggal = Hari Ini, Jam Mulai = Sekarang - 10 Menit, Jam Selesai = Sekarang + 1 Jam
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const tanggalHariIni = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+    const timeStart = new Date(now.getTime() - 10 * 60 * 1000);
+    const jamMulaiAuto = `${pad(timeStart.getHours())}:${pad(timeStart.getMinutes())}`;
+
+    const timeEnd = new Date(now.getTime() + 60 * 60 * 1000);
+    const jamSelesaiAuto = `${pad(timeEnd.getHours())}:${pad(timeEnd.getMinutes())}`;
+
+    const inputTanggal = document.getElementById('newTanggal');
+    if (inputTanggal) {
+        inputTanggal.value = tanggalHariIni;
+        if (inputTanggal._flatpickr) inputTanggal._flatpickr.setDate(tanggalHariIni);
+    }
+    const inputJamMulai = document.getElementById('newJamMulai');
+    if (inputJamMulai) inputJamMulai.value = jamMulaiAuto;
+    const inputJamSelesai = document.getElementById('newJamSelesai');
+    if (inputJamSelesai) inputJamSelesai.value = jamSelesaiAuto;
+
     // Sembunyikan dan reset pengaturan lanjutan
     document.getElementById('advancedSettingsAdd').classList.add('d-none');
     document.getElementById('newAktifkanAntrian').value = '';

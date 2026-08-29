@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { superAdminUser, getSampleAsnUsers } = require('../fixtures/load-credentials');
+const { superAdminUser, getSampleAsnUsers, getDynamicActiveScheduleTimes } = require('../fixtures/load-credentials');
 
 test.describe('E2E Suite 4: Admin Absensi Cepat, QR Scan & Siklus Penuh Presensi', () => {
 
@@ -81,8 +81,9 @@ test.describe('E2E Suite 4: Admin Absensi Cepat, QR Scan & Siklus Penuh Presensi
 
     test('3. Absensi Cepat Admin (Mode Hardware Scanner USB / Gun) — Standby & Input Enter', async ({ page }) => {
         const activeAdmin = superAdminUser || { nip: '198501012010011001', nama: 'Admin BKPSDM' };
+        const times = getDynamicActiveScheduleTimes();
 
-        await page.evaluate((adm) => {
+        await page.evaluate(({ adm, scheduleTimes }) => {
             localStorage.setItem('jwt_token', 'mock_admin_jwt_in_pwa');
             localStorage.setItem('user_profile', JSON.stringify({
                 nama: adm.nama,
@@ -93,14 +94,20 @@ test.describe('E2E Suite 4: Admin Absensi Cepat, QR Scan & Siklus Penuh Presensi
             if (denied) denied.style.display = 'none';
             if (typeof switchView === 'function') switchView('view-admin-cepat');
 
-            // Buka step 2 & buka mode scanner USB
-            adminCepatState.jadwal = { kode_akses: 'TESTKODE', kategori: 'Apel Pagi' };
+            // Buka step 2 & buka mode scanner USB dengan jam aktif sekarang
+            adminCepatState.jadwal = {
+                kode_akses: 'TESTKODE',
+                kategori: 'Apel Pagi',
+                tanggal: scheduleTimes.tanggal,
+                jam_mulai: scheduleTimes.jam_mulai,
+                jam_selesai: scheduleTimes.jam_selesai
+            };
             const s1 = document.getElementById('admin-cepat-step1');
             const s2 = document.getElementById('admin-cepat-step2');
             if (s1) s1.classList.add('hidden-view');
             if (s2) s2.classList.remove('hidden-view');
             if (typeof adminCepatMulaiPindai === 'function') adminCepatMulaiPindai('usb');
-        }, activeAdmin);
+        }, { adm: activeAdmin, scheduleTimes: times });
 
         const usbSection = page.locator('#admin-cepat-usb-section');
         await expect(usbSection).toBeVisible({ timeout: 10000 });
