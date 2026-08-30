@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.220'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.222'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -351,8 +351,22 @@ async function cobaLagiHakAkses() {
         await new Promise((resolve) => {
             navigator.geolocation.getCurrentPosition(
                 () => { currentPermState.gps = true; resolve(); },
-                () => { currentPermState.gps = false; resolve(); },
-                { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+                async (err) => {
+                    // Kode 1 = PERMISSION_DENIED. Jika bukan 1 (misal timeout 3 atau position unavailable 2), artinya izin sudah diberikan!
+                    if (err && err.code !== 1) {
+                        currentPermState.gps = true;
+                    } else {
+                        currentPermState.gps = false;
+                    }
+                    if (navigator.permissions && navigator.permissions.query) {
+                        try {
+                            const geoRes = await navigator.permissions.query({ name: 'geolocation' });
+                            if (geoRes.state === 'granted') currentPermState.gps = true;
+                        } catch (e) { }
+                    }
+                    resolve();
+                },
+                { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
             );
         });
     }
@@ -366,6 +380,11 @@ async function cobaLagiHakAkses() {
             currentPermState.camera = false;
         }
     }
+
+    // Re-check hardware permissions dari browser API secara keseluruhan
+    const checkedPerms = await checkHardwarePermissions();
+    if (checkedPerms.gps) currentPermState.gps = true;
+    if (checkedPerms.camera) currentPermState.camera = true;
 
     permRetryCount++;
     showLoading(false);
@@ -383,6 +402,7 @@ async function cobaLagiHakAkses() {
         setTimeout(() => checkAuthStatus(), 500);
     }
 }
+
 
 /**
  * Mengatur visibilitas tombol INSTALL APLIKASI di halaman login.
