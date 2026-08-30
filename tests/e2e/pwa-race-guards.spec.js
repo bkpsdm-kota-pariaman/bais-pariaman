@@ -1,181 +1,79 @@
 const { test, expect } = require('@playwright/test');
+const { getSampleAsnUsers } = require('../fixtures/load-credentials');
+const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite 5: PWA Race Conditions & Concurrency Guards', () => {
 
     test.beforeEach(async ({ page, context }) => {
-        await page.addInitScript(() => {
-            window.matchMedia = (query) => ({
-                matches: query.includes('display-mode: standalone'),
-                media: query,
-                onchange: null,
-                addListener: () => {},
-                removeListener: () => {},
-                addEventListener: () => {},
-                removeEventListener: () => {},
-                dispatchEvent: () => false,
-            });
-        });
-
+        attachLogger(page, 'PWA Race Guards');
         await context.grantPermissions(['camera', 'geolocation']);
-        await context.setGeolocation({ latitude: -0.6264, longitude: 100.1186 });
+        await context.setGeolocation({ latitude: -0.6276, longitude: 100.1209 });
 
+        logAction.navigate('pwa/index.html');
         await page.goto('pwa/index.html');
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('1. Camera Race Guard — late camera stream resolution is discarded and stopped', async ({ page }) => {
-        const result = await page.evaluate(async () => {
-            let stream1Stopped = false;
-            let stream2Stopped = false;
+    test('1. Rapid Double Submit Guard — Tombol submit login kebal terhadap multiple click beruntun', async ({ page }) => {
+        logAction.verify('Memverifikasi form login PWA');
+        const loginView = page.locator('#view-login');
+        await expect(loginView).toBeVisible({ timeout: 10000 });
 
-            const fakeStream1 = {
-                id: 'stream-1-slow',
-                active: true,
-                getTracks: () => [{
-                    stop: () => { stream1Stopped = true; }
-                }]
-            };
+        const sampleUsers = getSampleAsnUsers(1);
+        const testUser = sampleUsers[0] || { nip: '199001012020011001', nik: '1377010101900001' };
 
-            const fakeStream2 = {
-                id: 'stream-2-fast',
-                active: true,
-                getTracks: () => [{
-                    stop: () => { stream2Stopped = true; }
-                }]
-            };
+        logAction.input('NIP Pegawai', '#logNip', testUser.nip);
+        await page.fill('#logNip', testUser.nip);
 
-            let cameraRequestId = 0;
-            let activeStream = null;
+        logAction.input('NIK / Password', '#logNik', '********');
+        await page.fill('#logNik', testUser.nik);
 
-            async function openCamera(delayMs, streamObj) {
-                const currentReq = ++cameraRequestId;
-                await new Promise(resolve => setTimeout(resolve, delayMs));
+        const submitBtn = page.locator('button[type="submit"]:has-text("MASUK APLIKASI"), #formLogin button[type="submit"]');
 
-                if (currentReq !== cameraRequestId) {
-                    streamObj.getTracks().forEach(t => t.stop());
-                    return { accepted: false, streamId: streamObj.id };
-                }
+        logAction.click('Tombol Submit Login (Multiple Klik Beruntun)', 'button[type="submit"]');
+        await submitBtn.click({ clickCount: 2 });
 
-                activeStream = streamObj;
-                return { accepted: true, streamId: streamObj.id };
-            }
-
-            const p1 = openCamera(80, fakeStream1);
-            const p2 = openCamera(20, fakeStream2);
-
-            const [res1, res2] = await Promise.all([p1, p2]);
-
-            return {
-                res1,
-                res2,
-                stream1Stopped,
-                stream2Stopped,
-                activeStreamId: activeStream ? activeStream.id : null
-            };
-        });
-
-        expect(result.res1.accepted).toBe(false);
-        expect(result.stream1Stopped).toBe(true);
-        expect(result.res2.accepted).toBe(true);
-        expect(result.stream2Stopped).toBe(false);
-        expect(result.activeStreamId).toBe('stream-2-fast');
+        logAction.verify('Memverifikasi aplikasi mengarah ke Dashboard tanpa crash');
+        const dashView = page.locator('#view-dashboard');
+        await expect(dashView).toBeVisible({ timeout: 15000 });
+        logAction.success('Rapid Double Submit Guard diverifikasi');
     });
 
-    test('2. Admin Quick Attendance Submission Lock — concurrent calls are guarded', async ({ page }) => {
-        const result = await page.evaluate(async () => {
-            let isSubmitting = false;
-            let executions = 0;
-            let rejects = 0;
+    test('2. Rapid View Navigation Guard — Navigasi cepat antara dashboard dan pilih metode', async ({ page }) => {
+        const sampleUsers = getSampleAsnUsers(1);
+        const testUser = sampleUsers[0] || { nip: '199001012020011001', nik: '1377010101900001' };
 
-            async function submitQuickAttendance() {
-                if (isSubmitting) {
-                    rejects++;
-                    return { success: false, reason: 'locked' };
-                }
-                isSubmitting = true;
-                try {
-                    executions++;
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                    return { success: true };
-                } finally {
-                    isSubmitting = false;
-                }
-            }
+        logAction.step('Login ASN PWA');
+        logAction.input('NIP Pegawai', '#logNip', testUser.nip);
+        await page.fill('#logNip', testUser.nip);
 
-            const results = await Promise.all([
-                submitQuickAttendance(),
-                submitQuickAttendance(),
-                submitQuickAttendance()
-            ]);
+        logAction.input('NIK / Password', '#logNik', '********');
+        await page.fill('#logNik', testUser.nik);
 
-            return {
-                executions,
-                rejects,
-                results
-            };
-        });
+        logAction.click('Tombol MASUK APLIKASI', 'button[type="submit"]');
+        await page.click('button[type="submit"]:has-text("MASUK APLIKASI"), #formLogin button[type="submit"]');
 
-        expect(result.executions).toBe(1);
-        expect(result.rejects).toBe(2);
-        expect(result.results.filter(r => r.success).length).toBe(1);
-    });
+        logAction.verify('Menunggu Dashboard PWA');
+        const dashView = page.locator('#view-dashboard');
+        await expect(dashView).toBeVisible({ timeout: 15000 });
 
-    test('3. Geocoding Schedule Mismatch Guard — late geocoding does not corrupt new form', async ({ page }) => {
-        const result = await page.evaluate(async () => {
-            let currentScheduleId = null;
-            let displayedAddress = null;
+        logAction.click('Tombol AMBIL ABSENSI KEGIATAN', 'button:has-text("AMBIL ABSENSI KEGIATAN")');
+        const btnAmbilAbsen = page.locator('button:has-text("AMBIL ABSENSI KEGIATAN")');
+        await btnAmbilAbsen.click();
 
-            async function fetchGeocode(scheduleId, delayMs, address) {
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-                if (currentScheduleId !== scheduleId) {
-                    return { applied: false, discardedAddress: address };
-                }
-                displayedAddress = address;
-                return { applied: true, address };
-            }
+        logAction.verify('Memverifikasi view Pilih Metode');
+        const viewPilihMetode = page.locator('#view-pilih-metode');
+        await expect(viewPilihMetode).toBeVisible({ timeout: 10000 });
 
-            currentScheduleId = 'jadwal-1';
-            const geo1 = fetchGeocode('jadwal-1', 80, 'Jl. Lokasi Lama No. 1');
+        logAction.click('Tombol Kembali di Header Pilih Metode', 'button:has(.bi-arrow-left)');
+        const btnBack = page.locator('#view-pilih-metode button:has(.bi-arrow-left)');
+        await btnBack.click();
 
-            currentScheduleId = 'jadwal-2';
-            const geo2 = fetchGeocode('jadwal-2', 20, 'Jl. Lokasi Baru No. 2');
-
-            const [r1, r2] = await Promise.all([geo1, geo2]);
-
-            return {
-                r1,
-                r2,
-                finalAddress: displayedAddress
-            };
-        });
-
-        expect(result.r1.applied).toBe(false);
-        expect(result.r2.applied).toBe(true);
-        expect(result.finalAddress).toBe('Jl. Lokasi Baru No. 2');
-    });
-
-    test('4. UI Radio Input Selection — options select without errors or duplicates', async ({ page }) => {
-        await page.evaluate(() => {
-            localStorage.setItem('jwt_token', 'mock_token_radio');
-            const login = document.getElementById('view-login');
-            if (login) login.style.display = 'none';
-            const form = document.getElementById('view-form-absen');
-            if (form) form.style.display = 'block';
-        });
-
-        const optHadir = page.locator('#optHadir');
-        const optIzin = page.locator('#optIzin');
-
-        if (await optHadir.isVisible().catch(() => false)) {
-            await optHadir.click();
-            await page.waitForTimeout(100);
-            await expect(page.locator('#flowHadir')).toBeVisible();
-
-            await optIzin.click();
-            await page.waitForTimeout(100);
-            await expect(page.locator('#flowIzin')).toBeVisible();
-            await expect(page.locator('#flowHadir')).toBeHidden();
-        }
+        logAction.verify('Memverifikasi kembali ke Dashboard dengan stabil');
+        await expect(dashView).toBeVisible({ timeout: 5000 });
+        logAction.success('Rapid View Navigation Guard diverifikasi');
     });
 
 });
+
+

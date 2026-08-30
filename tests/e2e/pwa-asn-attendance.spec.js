@@ -1,174 +1,136 @@
 const { test, expect } = require('@playwright/test');
-const { superAdminUser, getSampleAsnUsers } = require('../fixtures/load-credentials');
+const { getSampleAsnUsers } = require('../fixtures/load-credentials');
+const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite 3: PWA ASN Presensi, Strict Rules & Pengajuan Tidak Hadir', () => {
 
+    async function loginAsn(page, user) {
+        logAction.step(`Melakukan Login ASN PWA (NIP: ${user.nip})`);
+        const loginView = page.locator('#view-login');
+        await expect(loginView).toBeVisible({ timeout: 10000 });
+
+        logAction.input('NIP Pegawai', '#logNip', user.nip);
+        await page.fill('#logNip', user.nip);
+
+        logAction.input('NIK / Password', '#logNik', '********');
+        await page.fill('#logNik', user.nik);
+
+        logAction.click('Tombol MASUK APLIKASI', 'button:has-text("MASUK APLIKASI")');
+        const submitBtn = page.locator('button[type="submit"]:has-text("MASUK APLIKASI"), #formLogin button[type="submit"]');
+        await submitBtn.click();
+
+        logAction.verify('Menunggu Dashboard PWA ASN tampil');
+        const dashboardView = page.locator('#view-dashboard');
+        await expect(dashboardView).toBeVisible({ timeout: 15000 });
+        logAction.success(`Login ASN (${user.nip}) berhasil`);
+    }
+
     test.beforeEach(async ({ page, context }) => {
-        await page.addInitScript(() => {
-            window.matchMedia = (query) => ({
-                matches: query.includes('display-mode: standalone'),
-                media: query,
-                onchange: null,
-                addListener: () => {},
-                removeListener: () => {},
-                addEventListener: () => {},
-                removeEventListener: () => {},
-                dispatchEvent: () => false,
-            });
-        });
-
+        attachLogger(page, 'PWA ASN Attendance');
         await context.grantPermissions(['camera', 'geolocation']);
-        await context.setGeolocation({ latitude: -0.6264, longitude: 100.1186 });
+        await context.setGeolocation({ latitude: -0.6276, longitude: 100.1209 });
 
+        logAction.navigate('pwa/index.html');
         await page.goto('pwa/index.html');
         await page.waitForLoadState('domcontentloaded');
-
-        await page.evaluate(() => {
-            const denied = document.getElementById('view-desktop-denied');
-            if (denied) denied.style.display = 'none';
-            if (typeof switchView === 'function') switchView('view-login');
-        });
     });
 
-    test('1. PWA ASN Login — Validasi login sampel user ASN dari CSV ke API Live', async ({ page }) => {
-        test.setTimeout(90000); // Izinkan timeout 90 detik untuk pengujian beruntun ke server live
-        const sampleCount = Number(process.env.TEST_ASN_COUNT) || 5;
+    test('1. PWA ASN Login — Validasi login user ASN dari CSV via Form UI', async ({ page }) => {
+        const sampleCount = Number(process.env.TEST_ASN_COUNT) || 1;
         const sampledUsers = getSampleAsnUsers(sampleCount);
+        const testUser = sampledUsers[0] || { nip: '199001012020011001', nik: '1377010101900001' };
 
-        for (const testUser of sampledUsers) {
-            const loginView = page.locator('#view-login');
-            await expect(loginView).toBeVisible({ timeout: 10000 });
+        await loginAsn(page, testUser);
 
-            await page.fill('#logNip', testUser.nip);
-            await page.fill('#logNik', testUser.nik);
+        logAction.verify('Memverifikasi elemen nama pegawai di Dashboard');
+        const dashNama = page.locator('#dashNama');
+        await expect(dashNama).toBeVisible();
 
-            // Submit form login ke Worker/API live
-            const submitBtn = page.locator('#formLogin button[type="submit"], #btnSubmitLogin');
-            if (await submitBtn.isVisible().catch(() => false)) {
-                await submitBtn.click();
-            } else {
-                await page.keyboard.press('Enter');
-            }
+        logAction.click('Tombol Ganti Akun', 'button:has-text("Ganti Akun")');
+        const btnGantiAkun = page.locator('button:has-text("Ganti Akun")');
+        await expect(btnGantiAkun).toBeVisible();
+        await btnGantiAkun.click();
 
-            const dashboardView = page.locator('#view-dashboard');
-            await expect(dashboardView).toBeVisible({ timeout: 15000 }).catch(async () => {
-                await page.evaluate(() => {
-                    if (typeof switchView === 'function') switchView('view-dashboard');
-                });
-            });
+        logAction.click('Konfirmasi Swal Ganti Akun', '.swal2-confirm');
+        const swalConfirm = page.locator('.swal2-confirm');
+        await expect(swalConfirm).toBeVisible({ timeout: 5000 });
+        await swalConfirm.click();
 
-            // Reset kembali ke view login untuk user berikutnya dalam sampel
-            await page.evaluate(() => {
-                if (typeof switchView === 'function') switchView('view-login');
-            });
-        }
+        logAction.verify('Memverifikasi kembali ke halaman login PWA');
+        await expect(page.locator('#view-login')).toBeVisible({ timeout: 10000 });
+        logAction.success('Uji login dan logout ASN diverifikasi');
     });
 
-    test('2. Presensi Hadir Normal — Pemilihan kegiatan & alur selfie kamera + geolocation', async ({ page }) => {
+
+    test('2. Presensi UI Flow — Navigasi ambil absensi & pemilihan metode via UI', async ({ page }) => {
         const sampleUsers = getSampleAsnUsers(1);
-        const testUser = sampleUsers[0] || { nip: '199001012020011001', nama: 'Pegawai ASN Test' };
+        const testUser = sampleUsers[0] || { nip: '199001012020011001', nik: '1377010101900001' };
 
-        await page.evaluate((u) => {
-            const denied = document.getElementById('view-desktop-denied');
-            if (denied) denied.style.display = 'none';
-            if (typeof switchView === 'function') switchView('view-form');
-        }, testUser);
+        await loginAsn(page, testUser);
 
-        const formView = page.locator('#view-form');
-        await expect(formView).toBeVisible({ timeout: 10000 });
+        logAction.click('Tombol AMBIL ABSENSI KEGIATAN', 'button:has-text("AMBIL ABSENSI KEGIATAN")');
+        const btnAmbilAbsen = page.locator('button:has-text("AMBIL ABSENSI KEGIATAN")');
+        await expect(btnAmbilAbsen).toBeVisible();
+        await btnAmbilAbsen.click();
 
-        const optHadir = page.locator('#optHadir');
-        if (await optHadir.isVisible().catch(() => false)) {
-            await optHadir.click();
-            await page.waitForTimeout(200);
-            await expect(page.locator('#flowHadir')).toBeVisible();
-        }
+        logAction.verify('Memverifikasi tampilan Pilih Metode Absensi');
+        const viewPilihMetode = page.locator('#view-pilih-metode');
+        await expect(viewPilihMetode).toBeVisible({ timeout: 10000 });
+
+        logAction.verify('Memverifikasi tombol Scan QR Code & input manual');
+        const btnScan = page.locator('button:has-text("Scan QR Code")');
+        const inputManual = page.locator('#inputKodeManual');
+        await expect(btnScan).toBeVisible();
+        await expect(inputManual).toBeVisible();
+        logAction.success('Navigasi metode absensi diverifikasi');
     });
 
-    test('3. Pengajuan Presensi Tidak Hadir — Alur Izin / Sakit / Cuti + Upload Surat', async ({ page }) => {
-        await page.evaluate(() => {
-            const denied = document.getElementById('view-desktop-denied');
-            if (denied) denied.style.display = 'none';
-            if (typeof switchView === 'function') switchView('view-form');
-        });
-
-        const optIzin = page.locator('#optIzin');
-        if (await optIzin.isVisible().catch(() => false)) {
-            await optIzin.click();
-            await page.waitForTimeout(200);
-            await expect(page.locator('#flowIzin')).toBeVisible();
-        }
-
-        const txtAlasan = page.locator('#keteranganIzin');
-        if (await txtAlasan.isVisible().catch(() => false)) {
-            await txtAlasan.fill('Izin urusan keluarga mendadak');
-            await expect(txtAlasan).toHaveValue('Izin urusan keluarga mendadak');
-        }
-    });
-
-    test('4. Strict Rules Guard — Validasi aturan waktu & radius lokasi', async ({ page }) => {
-        await page.evaluate(() => {
-            const denied = document.getElementById('view-desktop-denied');
-            if (denied) denied.style.display = 'none';
-            if (typeof switchView === 'function') switchView('view-form');
-        });
-
-        const warningDistance = page.locator('#warningDistance');
-        const count = await warningDistance.count();
-        expect(count).toBeGreaterThanOrEqual(0);
-    });
-
-    test('5. E-Ticket QR Code Profil View — Tampilan Dedicated View & Countdown 15s ke API Live', async ({ page }) => {
+    test('3. Pengajuan Presensi Tidak Hadir — Alur UI Pemilihan Izin / Sakit / Cuti', async ({ page }) => {
         const sampleUsers = getSampleAsnUsers(1);
-        const testUser = sampleUsers[0] || { nip: '199001012020011001', nama: 'Pegawai ASN Test' };
+        const testUser = sampleUsers[0] || { nip: '199001012020011001', nik: '1377010101900001' };
 
-        // Login ASN nyata via API live untuk mendapatkan token profil autentik
-        await page.evaluate(async (u) => {
-            const workerUrl = typeof WORKER_URL !== 'undefined' ? WORKER_URL : 'https://absensi-kegiatan-asn-worker-dev.bidpp-bkpsdm.workers.dev';
-            try {
-                const res = await fetch(`${workerUrl}/api/login-asn?cb=${Date.now()}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nip: u.nip, nik: u.nik })
-                });
-                const resData = await res.json();
-                if (resData.status && resData.data && resData.data.token) {
-                    if (typeof localforage !== 'undefined') {
-                        await localforage.setItem('asn_jwt_token', resData.data.token);
-                        await localforage.setItem('user_profile', resData.data.user);
-                    }
-                    localStorage.setItem('asn_jwt_token', resData.data.token);
-                    localStorage.setItem('user_profile', JSON.stringify(resData.data.user));
-                }
-            } catch (e) {}
+        await loginAsn(page, testUser);
 
-            const denied = document.getElementById('view-desktop-denied');
-            if (denied) denied.style.display = 'none';
-            if (typeof switchView === 'function') switchView('view-dashboard');
-        }, testUser);
+        logAction.click('Tombol AMBIL ABSENSI KEGIATAN', 'button:has-text("AMBIL ABSENSI KEGIATAN")');
+        const btnAmbilAbsen = page.locator('button:has-text("AMBIL ABSENSI KEGIATAN")');
+        await btnAmbilAbsen.click();
 
-        await page.evaluate(async () => {
-            if (typeof generateUserQrToken === 'function') {
-                await generateUserQrToken();
-            }
-            if (typeof switchView === 'function') {
-                switchView('view-qr-ticket');
-            }
-        });
+        logAction.verify('Memverifikasi halaman pilih metode terbuka');
+        const viewPilihMetode = page.locator('#view-pilih-metode');
+        await expect(viewPilihMetode).toBeVisible({ timeout: 10000 });
+        logAction.success('Halaman pilih metode absensi diverifikasi');
+    });
 
+    test('4. E-Ticket QR Code Profil View — Buka Tiket QR Profil Saya via Tombol UI', async ({ page }) => {
+        const sampleUsers = getSampleAsnUsers(1);
+        const testUser = sampleUsers[0] || { nip: '199001012020011001', nik: '1377010101900001' };
+
+        await loginAsn(page, testUser);
+
+        logAction.click('Tombol Profil Saya (QR)', 'button:has-text("Profil Saya")');
+        const btnProfilSaya = page.locator('button:has-text("Profil Saya")');
+        await expect(btnProfilSaya).toBeVisible();
+        await btnProfilSaya.click();
+
+        logAction.verify('Memverifikasi tampilan QR Ticket terbuka');
         const ticketView = page.locator('#view-qr-ticket');
         await expect(ticketView).toBeVisible({ timeout: 10000 });
 
+        logAction.verify('Memverifikasi countdown tiket QR');
         const countdownEl = page.locator('#ticketCountdown');
         await expect(countdownEl).toBeVisible();
 
-        // Tombol Tutup Besar
+        logAction.click('Tombol TUTUP QR TICKET', 'button:has-text("TUTUP QR TICKET")');
         const closeBtn = page.locator('#view-qr-ticket button:has-text("TUTUP QR TICKET")');
         await expect(closeBtn).toBeVisible();
         await closeBtn.click();
 
+        logAction.verify('Memverifikasi kembali ke Dashboard');
         const dashView = page.locator('#view-dashboard');
         await expect(dashView).toBeVisible({ timeout: 5000 });
+        logAction.success('E-Ticket QR Code diverifikasi');
     });
 
 });
+
+

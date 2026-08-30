@@ -2,9 +2,9 @@
  * Helper logger universal untuk pengujian Playwright E2E.
  * Menampilkan seluruh aktivitas browser secara detail di terminal:
  * - Akses URL / Navigasi
- * - Network Request & Response Fetch API (Status HTTP, Body JSON)
- * - Browser Console logs & Dialogs
- * - Aksi interaksi UI (Input, Klik, Select, Pindah Menu)
+ * - Network Request & Response Fetch API (Status HTTP, Body JSON, Failed requests)
+ * - Browser Console logs & Uncaught Page Errors
+ * - Aksi interaksi UI (Input, Klik, Select, Pindah Menu, Verifikasi)
  */
 
 function attachLogger(page, moduleName = 'E2E') {
@@ -20,7 +20,7 @@ function attachLogger(page, moduleName = 'E2E') {
     const resourceType = request.resourceType();
     if (['fetch', 'xhr'].includes(resourceType)) {
       const postData = request.postData();
-      const bodySnippet = postData ? ` | Payload: ${postData.slice(0, 150)}${postData.length > 150 ? '...' : ''}` : '';
+      const bodySnippet = postData ? ` | Payload: ${postData.slice(0, 300)}${postData.length > 300 ? '...' : ''}` : '';
       console.log(`  🚀 [FETCH REQUEST] ${request.method()} ${request.url()}${bodySnippet}`);
     }
   });
@@ -35,14 +35,31 @@ function attachLogger(page, moduleName = 'E2E') {
       try {
         const text = await response.text();
         if (text) {
-          bodySnippet = ` | Respon: ${text.replace(/\s+/g, ' ').slice(0, 180)}${text.length > 180 ? '...' : ''}`;
+          bodySnippet = ` | Respon (${status}): ${text.replace(/\s+/g, ' ').slice(0, 400)}${text.length > 400 ? '...' : ''}`;
         }
-      } catch (e) {}
+      } catch (e) {
+        bodySnippet = ` | Respon (${status}): [Gagal membaca body]`;
+      }
       console.log(`  📥 [FETCH RESPONSE] HTTP ${status} <- ${url}${bodySnippet}`);
     }
   });
 
-  // 4. Log Browser Console
+  // 4. Log Network Request Failed (Connection Refused / Failed to Fetch / Timeout)
+  page.on('requestfailed', request => {
+    const resourceType = request.resourceType();
+    if (['fetch', 'xhr'].includes(resourceType)) {
+      const failure = request.failure();
+      const errorText = failure ? failure.errorText : 'Unknown Error';
+      console.log(`  ❌ [FETCH FAILED] ${request.method()} ${request.url()} -> ERROR: ${errorText}`);
+    }
+  });
+
+  // 5. Log Uncaught Page JS Error
+  page.on('pageerror', err => {
+    console.log(`  💥 [PAGE JS ERROR] ${err.stack || err.message}`);
+  });
+
+  // 6. Log Browser Console (Error / Warning / Log)
   page.on('console', msg => {
     const type = msg.type();
     if (['error', 'warning'].includes(type)) {
@@ -50,7 +67,7 @@ function attachLogger(page, moduleName = 'E2E') {
     }
   });
 
-  // 5. Log Browser Dialogs (Alert / Confirm / Prompt)
+  // 7. Log Browser Dialogs (Alert / Confirm / Prompt)
   page.on('dialog', async dialog => {
     console.log(`  💬 [BROWSER DIALOG] Tipe: "${dialog.type()}", Pesan: "${dialog.message()}"`);
   });
@@ -68,7 +85,9 @@ const logAction = {
   step: (deskripsi) => console.log(`\n📌 [LANGKAH] ${deskripsi}`),
   info: (deskripsi) => console.log(`  ℹ️  ${deskripsi}`),
   verify: (deskripsi) => console.log(`  🔍 [VERIFIKASI] ${deskripsi}`),
-  success: (deskripsi) => console.log(`  ✨ [BERHASIL] ${deskripsi}\n`)
+  success: (deskripsi) => console.log(`  ✨ [BERHASIL] ${deskripsi}\n`),
+  error: (deskripsi) => console.log(`  🚨 [ERROR DETECTED] ${deskripsi}\n`)
 };
 
 module.exports = { attachLogger, logAction };
+

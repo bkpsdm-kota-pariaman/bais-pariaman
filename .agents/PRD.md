@@ -1,40 +1,127 @@
 # PRD — BAIS Pariaman
 
-> File ini berfokus pada "Apa" yang akan dibuat dan "Untuk Siapa".
+> Dokumen kebutuhan produk: apa yang dibuat dan untuk siapa.
 
-> **Version:** v1.0.0
+> **Version:** v2.0.0
 
 ---
 
 ## 1. Executive Summary
 
-**BAIS Pariaman** adalah aplikasi absensi modern yang dirancang untuk memfasilitasi pencatatan kehadiran Aparatur Sipil Negara (ASN) di lingkungan Pemerintah Kota Pariaman, mencakup PWA untuk user dan Dashboard untuk Admin.
+**BAIS Pariaman** adalah aplikasi absensi modern untuk pencatatan kehadiran Aparatur Sipil Negara (ASN) di lingkungan Pemerintah Kota Pariaman.
 
-- **Vision Statement:** Menjadi aplikasi pencatatan kehadiran yang handal, cepat, dan memanfaatkan teknologi PWA untuk proses loading aplikasi yang lebih instan.
+Aplikasi mencakup:
 
-## 2. Target Users & Personas
+- PWA untuk ASN
+- Dashboard untuk Admin
 
-- **ASN (Aparatur Sipil Negara):**
-  - Menggunakan PWA di smartphone.
-  - Melakukan scan QR atau absensi jarak.
-  - Membutuhkan sistem yang responsif dan waktu muat (loading) yang cepat berkat PWA.
-- **Admin Instansi/BKPSDM:**
-  - Mengakses Admin Dashboard (Web).
-  - Mengelola jadwal kegiatan.
-  - Memantau rekapitulasi kehadiran ASN.
+---
 
-## 3. Feature Specifications
+## 2. Vision Statement
 
-### 3.1 PWA (Progressive Web App) Absensi
-- **Deskripsi:** Aplikasi ringan berbasis browser smartphone. ASN bisa absen melalui scan QR kegiatan atau input kode akses kegiatan, menggunakan autentikasi token JWT.
+Menjadi aplikasi pencatatan kehadiran yang handal, cepat, dan memanfaatkan teknologi PWA untuk proses loading aplikasi yang lebih instan.
 
-### 3.2 Caching PWA
-- **Deskripsi:** Memanfaatkan caching PWA untuk mempercepat loading aset aplikasi sehingga tampilan awal dapat dimuat secara instan.
+---
 
-### 3.3 Admin Dashboard
-- **Deskripsi:** Panel kontrol untuk mengelola data jadwal kegiatan, rekap absensi dengan rentang waktu, statistik kehadiran rentang waktu,  dan mengekstrak laporan rekapitulasi per kegiatan.
+## 3. Target Users
 
-## 4. Non-Functional Requirements
+### ASN
 
-- **Performance:** Aplikasi frontend ringan (dikompilasi dengan Terser), backend merespon < 200ms dengan FastRoute.
-- **Reliability:** Mendukung penyimpanan lokal sementara (IndexedDB/LocalStorage) untuk mode Offline PWA untuk mempercepat loading tampilan aplikasi.
+ASN menggunakan PWA melalui smartphone.
+
+Kebutuhan utama:
+
+- melakukan absensi
+- scan QR kegiatan
+- absensi jarak sesuai fitur aplikasi
+- proses cepat
+- UI responsif
+- loading cepat
+
+### Admin Instansi / BKPSDM
+
+Admin menggunakan Admin Dashboard melalui web.
+
+Kebutuhan utama:
+
+- mengelola jadwal kegiatan
+- memantau kehadiran
+- melihat rekapitulasi
+- melihat statistik
+- mengekstrak laporan
+
+---
+
+## 4. Feature Specifications
+
+### 4.1 PWA Absensi
+
+Aplikasi ringan berbasis browser smartphone.
+
+ASN dapat melakukan absensi melalui:
+
+- scan QR kegiatan
+- input kode akses kegiatan
+
+Authentication menggunakan token JWT.
+
+---
+
+### 4.2 PWA Caching
+
+PWA menggunakan caching untuk mempercepat loading aset aplikasi.
+
+Tujuan:
+
+- loading awal cepat
+- pengalaman user lebih baik
+- mendukung behavior offline sesuai implementasi aplikasi
+
+---
+
+### 4.3 Admin Dashboard
+
+Admin Dashboard digunakan untuk:
+
+- mengelola data jadwal kegiatan
+- melihat rekap absensi berdasarkan rentang waktu
+- melihat statistik kehadiran
+- mengekstrak laporan rekapitulasi per kegiatan
+
+---
+
+## 5. Non-Functional Requirements
+
+### Performance
+
+Frontend harus ringan dan dioptimalkan melalui build/minification.
+
+Backend ditargetkan memiliki response cepat.
+
+Target yang tercantum pada requirement awal:
+
+```text
+backend response < 200ms
+```
+
+Target ini adalah target performa, bukan jaminan setiap request selalu berada di bawah angka tersebut.
+
+### Reliability
+
+Aplikasi mendukung penyimpanan lokal sementara untuk behavior offline PWA sesuai implementasi.
+
+Teknologi yang dapat digunakan sesuai implementation:
+
+```text
+IndexedDB
+LocalStorage
+```
+
+---
+
+## 6. Product Rules
+
+- Jangan menambahkan fitur besar tanpa kebutuhan produk.
+- Jangan mengubah flow utama user tanpa kebutuhan.
+- Jangan menganggap detail implementation sebagai requirement jika belum ditentukan.
+- Jika requirement baru muncul, evaluasi impact terhadap architecture, security, design, dan testing.

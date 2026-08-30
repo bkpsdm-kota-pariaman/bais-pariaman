@@ -414,7 +414,7 @@ async function fetchAdmin(url, options = {}) {
             throw new Error('Respons dari server tidak valid (Bukan JSON).');
         }
 
-        if (!resp.ok && resp.status >= 500) {
+        if (!resp.ok) {
             const errMsg = result.message ? result.message : ('HTTP ' + resp.status);
             throw new Error(errMsg);
         }
@@ -552,32 +552,11 @@ function renderJadwalTable(jadwalList) {
  */
 async function bukaModalBuatKegiatan() {
     document.getElementById('formKegiatanBaru').reset();
-
-    // Auto-fill: Tanggal = Hari Ini, Jam Mulai = Sekarang - 10 Menit, Jam Selesai = Sekarang + 1 Jam
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const tanggalHariIni = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-
-    const timeStart = new Date(now.getTime() - 10 * 60 * 1000);
-    const jamMulaiAuto = `${pad(timeStart.getHours())}:${pad(timeStart.getMinutes())}`;
-
-    const timeEnd = new Date(now.getTime() + 60 * 60 * 1000);
-    const jamSelesaiAuto = `${pad(timeEnd.getHours())}:${pad(timeEnd.getMinutes())}`;
-
-    const inputTanggal = document.getElementById('newTanggal');
-    if (inputTanggal) {
-        inputTanggal.value = tanggalHariIni;
-        if (inputTanggal._flatpickr) inputTanggal._flatpickr.setDate(tanggalHariIni);
-    }
-    const inputJamMulai = document.getElementById('newJamMulai');
-    if (inputJamMulai) inputJamMulai.value = jamMulaiAuto;
-    const inputJamSelesai = document.getElementById('newJamSelesai');
-    if (inputJamSelesai) inputJamSelesai.value = jamSelesaiAuto;
-
     // Sembunyikan dan reset pengaturan lanjutan
     document.getElementById('advancedSettingsAdd').classList.add('d-none');
-    document.getElementById('newAktifkanAntrian').value = '';
+    if (document.getElementById('newAktifkanAntrian')) document.getElementById('newAktifkanAntrian').value = '1';
     // Reset map state jika sudah ada
+
     if (mapAdd) {
         const pariamanCoords = [-0.6276, 100.1209];
         document.getElementById('geoLatLang').value = '';
@@ -640,8 +619,9 @@ async function submitKegiatanBaru(event) {
         target_opd: opdState.add.selected,
         is_strict_time: document.getElementById('addStrictTime').checked ? 1 : 0,
         is_strict_location: document.getElementById('addStrictLocation').checked ? 1 : 0,
-        aktifkan_antrian: document.getElementById('newAktifkanAntrian').value
+        aktifkan_antrian: (document.getElementById('newAktifkanAntrian') && document.getElementById('newAktifkanAntrian').value !== '') ? document.getElementById('newAktifkanAntrian').value : 0
     };
+
 
     try {
         const result = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal`, {
@@ -956,8 +936,9 @@ async function submitEditKegiatan(event) {
         target_opd: opdState.edit.selected,
         is_strict_time: document.getElementById('editStrictTime').checked ? 1 : 0,
         is_strict_location: document.getElementById('editStrictLocation').checked ? 1 : 0,
-        aktifkan_antrian: document.getElementById('editAktifkanAntrian').value
+        aktifkan_antrian: document.getElementById('editAktifkanAntrian') ? document.getElementById('editAktifkanAntrian').value : 0
     };
+
 
     try {
         const result = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal/${kodeAkses}`, {
@@ -1258,7 +1239,7 @@ async function lihatRekap(kodeAkses) {
     currentRekapData = { jadwal: null, filtered_pegawai: [] }; // Reset data cache
     resetRekapFilters();
     document.getElementById('rekapFilterView').value = 'table';
-    
+
     // Reset checkbox massal & tombol hapus massal
     const selectAll = document.getElementById('rekapPilihSemua');
     if (selectAll) selectAll.checked = false;
@@ -3399,7 +3380,11 @@ function exportOpdToExcel() {
     exportRawDataToExcel(currentOpdData, 'Data_OPD');
 }
 
-// exportStatistikToExcel didefinisikan secara lengkap di fungsi utama statistik
+// exportRekapKeseluruhanToExcel didefinisikan secara lengkap di fungsi utama rekap
+
+function exportStatistikToExcel() {
+    exportRawDataToExcel(currentStatistikData, 'Statistik_Kehadiran');
+}
 
 /**
  * =================================================
@@ -3424,20 +3409,13 @@ function bukaModalImportAbsen() {
     modalImportAbsen.show();
 }
 
-const modalImportAbsenEl = document.getElementById('modalImportAbsen');
-if (modalImportAbsenEl) {
-    modalImportAbsenEl.addEventListener('hidden.bs.modal', function () {
-        const formEl = document.getElementById('formImportAbsen');
-        if (formEl) formEl.reset();
-        parsedImportData = [];
-        const previewEl = document.getElementById('previewImportBody');
-        if (previewEl) previewEl.innerHTML = '';
-        const previewContainer = document.getElementById('previewImportContainer');
-        if (previewContainer) previewContainer.classList.add('d-none');
-        const btnProses = document.getElementById('btnProsesImport');
-        if (btnProses) btnProses.classList.add('d-none');
-    });
-}
+document.getElementById('modalImportAbsen').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('formImportAbsen').reset();
+    parsedImportData = [];
+    document.getElementById('previewImportBody').innerHTML = '';
+    document.getElementById('previewImportContainer').classList.add('d-none');
+    document.getElementById('btnProsesImport').classList.add('d-none');
+});
 
 let parsedImportData = [];
 
@@ -3672,13 +3650,13 @@ function isSuperAdmin() {
 function checkSuperAdminUI() {
     const isSuper = isSuperAdmin();
     const divider = document.getElementById('menuDividerLogAbsensi');
-    const itemLog = document.getElementById('menuItemLogAbsensi');
+    const item = document.getElementById('menuItemLogAbsensi');
     if (isSuper) {
         if (divider) divider.classList.remove('d-none');
-        if (itemLog) itemLog.classList.remove('d-none');
+        if (item) item.classList.remove('d-none');
     } else {
         if (divider) divider.classList.add('d-none');
-        if (itemLog) itemLog.classList.add('d-none');
+        if (item) item.classList.add('d-none');
     }
 }
 

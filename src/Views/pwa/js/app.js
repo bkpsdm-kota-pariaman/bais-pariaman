@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.213'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.220'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -529,7 +529,10 @@ function switchView(viewId) {
     if (viewToShow) {
         viewToShow.classList.remove('hidden-view'); // Tampilkan view yang diminta
     }
-    window.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+
 
     // CLEANUP KAMERA: Cegah memory leak!
     // Matikan scanner QR jika bukan di view-scanner atau view-admin-cepat

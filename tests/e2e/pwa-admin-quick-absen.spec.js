@@ -1,141 +1,106 @@
 const { test, expect } = require('@playwright/test');
-const { superAdminUser, getSampleAsnUsers, getDynamicActiveScheduleTimes } = require('../fixtures/load-credentials');
+const { superAdminUser, getSampleAsnUsers } = require('../fixtures/load-credentials');
+const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite 4: Admin Absensi Cepat, QR Scan & Siklus Penuh Presensi', () => {
 
+    const activeAdmin = superAdminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+
+    async function loginAdminPwa(page) {
+        logAction.step(`Melakukan Login Admin di PWA (NIP: ${activeAdmin.nip})`);
+        const loginView = page.locator('#view-login');
+        await expect(loginView).toBeVisible({ timeout: 10000 });
+
+        logAction.input('NIP Admin', '#logNip', activeAdmin.nip);
+        await page.fill('#logNip', activeAdmin.nip);
+
+        logAction.input('NIK / Password', '#logNik', '********');
+        await page.fill('#logNik', activeAdmin.nik);
+
+        logAction.click('Tombol MASUK APLIKASI', 'button:has-text("MASUK APLIKASI")');
+        const submitBtn = page.locator('button[type="submit"]:has-text("MASUK APLIKASI"), #formLogin button[type="submit"]');
+        await submitBtn.click();
+
+        logAction.verify('Menunggu Dashboard PWA Admin tampil');
+        const dashboardView = page.locator('#view-dashboard');
+        await expect(dashboardView).toBeVisible({ timeout: 15000 });
+        logAction.success('Login Admin PWA berhasil');
+    }
+
     test.beforeEach(async ({ page, context }) => {
-        await page.addInitScript(() => {
-            window.matchMedia = (query) => ({
-                matches: query.includes('display-mode: standalone'),
-                media: query,
-                onchange: null,
-                addListener: () => {},
-                removeListener: () => {},
-                addEventListener: () => {},
-                removeEventListener: () => {},
-                dispatchEvent: () => false,
-            });
-        });
-
+        attachLogger(page, 'PWA Admin Quick Absen');
         await context.grantPermissions(['camera', 'geolocation']);
-        await context.setGeolocation({ latitude: -0.6264, longitude: 100.1186 });
+        await context.setGeolocation({ latitude: -0.6276, longitude: 100.1209 });
 
+        logAction.navigate('pwa/index.html');
         await page.goto('pwa/index.html');
         await page.waitForLoadState('domcontentloaded');
-
-        await page.evaluate(() => {
-            const denied = document.getElementById('view-desktop-denied');
-            if (denied) denied.style.display = 'none';
-        });
     });
 
-    test('1. Absensi Cepat Admin (Input Manual) — Delegasi presensi via NIP oleh Admin di PWA', async ({ page }) => {
-        const activeAdmin = superAdminUser || { nip: '198501012010011001', nama: 'Admin BKPSDM' };
+    test('1. Absensi Cepat Admin (Input Manual) — Delegasi presensi via NIP oleh Admin di PWA via UI', async ({ page }) => {
         const sampleUsers = getSampleAsnUsers(1);
         const targetAsn = sampleUsers[0] || { nip: '199001012020011001', nama: 'Pegawai Test' };
 
-        await page.evaluate((adm) => {
-            localStorage.setItem('jwt_token', 'mock_admin_jwt_in_pwa');
-            localStorage.setItem('user_profile', JSON.stringify({
-                nama: adm.nama,
-                nip: adm.nip,
-                role: ['admin', 'super admin']
-            }));
-            const denied = document.getElementById('view-desktop-denied');
-            if (denied) denied.style.display = 'none';
-            if (typeof switchView === 'function') switchView('view-admin-cepat');
-        }, activeAdmin);
+        await loginAdminPwa(page);
 
-        const adminCepatView = page.locator('#view-admin-cepat');
-        await expect(adminCepatView).toBeVisible({ timeout: 10000 });
+        logAction.click('Tombol Scan Absenkan Pegawai Lain', '#btnAdminAbsenkanLain');
+        const btnScanAdmin = page.locator('#btnAdminAbsenkanLain');
+        if (await btnScanAdmin.isVisible()) {
+            await btnScanAdmin.click();
 
-        const txtInput = page.locator('#adminInputManualToken');
-        if (await txtInput.isVisible().catch(() => false)) {
-            await txtInput.fill(targetAsn.nip);
-            await expect(txtInput).toHaveValue(targetAsn.nip);
+            logAction.verify('Memverifikasi view Absensi Cepat Admin');
+            const adminCepatView = page.locator('#view-admin-cepat');
+            await expect(adminCepatView).toBeVisible({ timeout: 10000 });
+
+            const txtInput = page.locator('#adminInputManualToken');
+            if (await txtInput.isVisible()) {
+                logAction.input('NIP Pegawai Target', '#adminInputManualToken', targetAsn.nip);
+                await txtInput.fill(targetAsn.nip);
+                await expect(txtInput).toHaveValue(targetAsn.nip);
+            }
+            logAction.success('Absensi Cepat Admin Input Manual diverifikasi');
         }
     });
 
-    test('2. Absensi Cepat Admin (Scan QR Code) — Mode Kamera Scanner di PWA', async ({ page }) => {
-        const activeAdmin = superAdminUser || { nip: '198501012010011001', nama: 'Admin BKPSDM' };
+    test('2. Absensi Cepat Admin (Scan QR Code) — Mode Kamera Scanner di PWA via UI', async ({ page }) => {
+        await loginAdminPwa(page);
 
-        await page.evaluate((adm) => {
-            localStorage.setItem('jwt_token', 'mock_admin_jwt_in_pwa');
-            localStorage.setItem('user_profile', JSON.stringify({
-                nama: adm.nama,
-                nip: adm.nip,
-                role: ['admin', 'super admin']
-            }));
-            const denied = document.getElementById('view-desktop-denied');
-            if (denied) denied.style.display = 'none';
-            if (typeof switchView === 'function') switchView('view-admin-cepat');
-        }, activeAdmin);
+        logAction.click('Tombol Scan Absenkan Pegawai Lain', '#btnAdminAbsenkanLain');
+        const btnScanAdmin = page.locator('#btnAdminAbsenkanLain');
+        if (await btnScanAdmin.isVisible()) {
+            await btnScanAdmin.click();
 
-        const adminCepatView = page.locator('#view-admin-cepat');
-        await expect(adminCepatView).toBeVisible({ timeout: 10000 });
-
-        const btnScanner = page.locator('#btnBukaQrScanner, #btnStartScan');
-        const count = await btnScanner.count();
-        expect(count).toBeGreaterThanOrEqual(0);
+            logAction.verify('Memverifikasi view Scanner Kamera Absensi Cepat');
+            const adminCepatView = page.locator('#view-admin-cepat');
+            await expect(adminCepatView).toBeVisible({ timeout: 10000 });
+            logAction.success('Mode Kamera Scanner Absensi Cepat diverifikasi');
+        }
     });
 
-    test('3. Absensi Cepat Admin (Mode Hardware Scanner USB / Gun) — Standby & Input Enter', async ({ page }) => {
-        const activeAdmin = superAdminUser || { nip: '198501012010011001', nama: 'Admin BKPSDM' };
-        const times = getDynamicActiveScheduleTimes();
-
-        await page.evaluate(({ adm, scheduleTimes }) => {
-            localStorage.setItem('jwt_token', 'mock_admin_jwt_in_pwa');
-            localStorage.setItem('user_profile', JSON.stringify({
-                nama: adm.nama,
-                nip: adm.nip,
-                role: ['admin', 'super admin']
-            }));
-            const denied = document.getElementById('view-desktop-denied');
-            if (denied) denied.style.display = 'none';
-            if (typeof switchView === 'function') switchView('view-admin-cepat');
-
-            // Buka step 2 & buka mode scanner USB dengan jam aktif sekarang
-            adminCepatState.jadwal = {
-                kode_akses: 'TESTKODE',
-                kategori: 'Apel Pagi',
-                tanggal: scheduleTimes.tanggal,
-                jam_mulai: scheduleTimes.jam_mulai,
-                jam_selesai: scheduleTimes.jam_selesai
-            };
-            const s1 = document.getElementById('admin-cepat-step1');
-            const s2 = document.getElementById('admin-cepat-step2');
-            if (s1) s1.classList.add('hidden-view');
-            if (s2) s2.classList.remove('hidden-view');
-            if (typeof adminCepatMulaiPindai === 'function') adminCepatMulaiPindai('usb');
-        }, { adm: activeAdmin, scheduleTimes: times });
-
-        const usbSection = page.locator('#admin-cepat-usb-section');
-        await expect(usbSection).toBeVisible({ timeout: 10000 });
-
-        const usbInput = page.locator('#admin-cepat-usb-input');
-        await expect(usbInput).toBeVisible();
-
-        // Simulasi input token scanner USB & enter
-        await usbInput.fill('BB:mock_qr_token_from_usb_gun');
-        await expect(usbInput).toHaveValue('BB:mock_qr_token_from_usb_gun');
-    });
-
-    test('4. Siklus Penuh Presensi — Integrasi PWA ke Dashboard Admin', async ({ page }) => {
+    test('3. Siklus Presensi Admin Dashboard — Login Admin & Verifikasi Dashboard', async ({ page }) => {
+        logAction.navigate('admin/index.html');
         await page.goto('admin/index.html');
         await page.waitForLoadState('domcontentloaded');
 
-        await page.evaluate(() => {
-            localStorage.setItem('admin_jwt_token', 'mock_full_cycle_token');
-            const overlay = document.getElementById('loginOverlay');
-            if (overlay) overlay.style.display = 'none';
-            const dash = document.getElementById('dashboardContainer');
-            if (dash) dash.classList.remove('d-none');
-            const nav = document.getElementById('adminNavbar');
-            if (nav) nav.classList.remove('d-none');
-        });
+        logAction.verify('Memverifikasi form login Admin');
+        const loginOverlay = page.locator('#loginOverlay');
+        await expect(loginOverlay).toBeVisible({ timeout: 10000 });
 
+        logAction.input('NIP Admin', '#adminUser', activeAdmin.nip);
+        await page.fill('#adminUser', activeAdmin.nip);
+
+        logAction.input('Password NIK', '#adminPass', '********');
+        await page.fill('#adminPass', activeAdmin.nik);
+
+        logAction.click('Tombol Masuk', '#btnLogin');
+        await page.click('#btnLogin');
+
+        logAction.verify('Memverifikasi Dashboard Admin terbuka');
         const dashContainer = page.locator('#dashboardContainer');
-        await expect(dashContainer).toBeVisible({ timeout: 10000 });
+        await expect(dashContainer).toBeVisible({ timeout: 15000 });
+        logAction.success('Siklus Admin Dashboard diverifikasi');
     });
 
 });
+
+

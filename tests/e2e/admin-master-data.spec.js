@@ -1,14 +1,40 @@
 const { test, expect } = require('@playwright/test');
 const { adminUser } = require('../fixtures/load-credentials');
+const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () => {
 
+    const activeAdmin = adminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+
+    async function doAdminLogin(page) {
+        logAction.step('Memeriksa status login Admin');
+        const loginOverlay = page.locator('#loginOverlay');
+        if (await loginOverlay.isVisible()) {
+            logAction.input('Username/NIP Admin', '#adminUser', activeAdmin.nip);
+            await page.fill('#adminUser', activeAdmin.nip);
+
+            logAction.input('Password/NIK Admin', '#adminPass', '********');
+            await page.fill('#adminPass', activeAdmin.nik);
+
+            logAction.click('Tombol Masuk', '#btnLogin');
+            await page.click('#btnLogin');
+
+            logAction.verify('Menunggu Dashboard Admin terbuka');
+            await expect(page.locator('#dashboardContainer')).toBeVisible({ timeout: 15000 });
+            await expect(loginOverlay).toBeHidden();
+            logAction.success('Login Admin berhasil, Dashboard terbuka');
+        }
+    }
+
     test.beforeEach(async ({ page }) => {
+        attachLogger(page, 'Admin Master Data');
+        logAction.navigate('admin/index.html');
         await page.goto('admin/index.html');
         await page.waitForLoadState('domcontentloaded');
     });
 
     test('1. Admin Login — Otentikasi Sesi Nyata ke API Backend', async ({ page }) => {
+        logAction.step('Uji Coba 1.1: Login Kredensial Salah');
         const loginOverlay = page.locator('#loginOverlay');
         await expect(loginOverlay).toBeVisible({ timeout: 10000 });
 
@@ -19,84 +45,130 @@ test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () =
         await expect(userInput).toBeVisible();
         await expect(passInput).toBeVisible();
 
-        // 1.1 Uji login dengan kredensial salah ke API nyata
+        logAction.input('NIP Salah', '#adminUser', 'wrong_admin_nip');
         await userInput.fill('wrong_admin_nip');
+
+        logAction.input('Password Salah', '#adminPass', 'wrong_password');
         await passInput.fill('wrong_password');
+
+        logAction.click('Tombol Masuk', '#btnLogin');
         await loginBtn.click();
 
+        logAction.verify('Memverifikasi popup pesan error otentikasi muncul');
         const swalPopup = page.locator('.swal2-popup');
         await expect(swalPopup).toBeVisible({ timeout: 10000 });
+
+        logAction.click('Tombol OK Dialog', '.swal2-confirm');
         await page.click('.swal2-confirm');
         await expect(swalPopup).toBeHidden({ timeout: 5000 });
 
-        // 1.2 Uji login nyata dengan kredensial Super Admin dari CSV
-        const activeAdmin = adminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+        logAction.step('Uji Coba 1.2: Login Nyata Kredensial Super Admin dari CSV');
+        logAction.input('NIP Admin Nyata', '#adminUser', activeAdmin.nip);
         await userInput.fill(activeAdmin.nip);
+
+        logAction.input('Password NIK Nyata', '#adminPass', '********');
         await passInput.fill(activeAdmin.nik);
+
+        logAction.click('Tombol Masuk', '#btnLogin');
         await loginBtn.click();
 
-        // Tunggu respons otentikasi nyata dari server
+        logAction.verify('Menunggu respons server backend & Dashboard ditampilkan');
         await expect(page.locator('#dashboardContainer')).toBeVisible({ timeout: 15000 });
         await expect(loginOverlay).toBeHidden();
+        logAction.success('Login Admin berhasil diverifikasi');
     });
 
-    test('2. Master Data OPD — Memuat daftar perangkat daerah & modal tambah OPD', async ({ page }) => {
-        const activeAdmin = adminUser;
-        if (activeAdmin) {
-            await page.fill('#adminUser', activeAdmin.nip);
-            await page.fill('#adminPass', activeAdmin.nik);
-            await page.click('#btnLogin');
-            await expect(page.locator('#dashboardContainer')).toBeVisible({ timeout: 15000 });
-        }
+    test('2. Master Data OPD — Memuat daftar perangkat daerah & modal tambah OPD via UI Navbar', async ({ page }) => {
+        await doAdminLogin(page);
 
-        await page.evaluate(() => {
-            const nav = document.getElementById('adminNavbar');
-            if (nav) nav.classList.remove('d-none');
-            const dash = document.getElementById('dashboardContainer');
-            if (dash) dash.classList.add('d-none');
-            if (typeof bukaHalamanOpd === 'function') bukaHalamanOpd();
-            const opd = document.getElementById('opdContainer');
-            if (opd) opd.classList.remove('d-none');
-        });
+        logAction.menu('Data -> Perangkat Daerah (OPD)');
+        logAction.click('Dropdown Menu Data', '#navbarDropdownData');
+        await page.click('#navbarDropdownData');
 
+        logAction.click('Menu Perangkat Daerah (OPD)', 'a:has-text("Perangkat Daerah (OPD)")');
+        await page.click('a.dropdown-item:has-text("Perangkat Daerah (OPD)")');
+
+        logAction.verify('Memverifikasi kontainer OPD tampil');
         const opdContainer = page.locator('#opdContainer');
         await expect(opdContainer).toBeVisible({ timeout: 10000 });
+
+        logAction.click('Tombol Tambah OPD Baru', 'button:has-text("Tambah OPD Baru")');
+        const btnTambahOpd = page.locator('button:has-text("Tambah OPD Baru")');
+        await expect(btnTambahOpd).toBeVisible();
+        await btnTambahOpd.click();
+
+        logAction.verify('Memverifikasi modal form Tambah OPD terbuka');
+        const modalOpd = page.locator('#modalOpd');
+        await expect(modalOpd).toBeVisible({ timeout: 5000 });
+
+        logAction.click('Tutup Modal Tambah OPD', '#modalOpd .btn-close');
+        await page.click('#modalOpd button[data-bs-dismiss="modal"], #modalOpd .btn-close');
+        await expect(modalOpd).toBeHidden({ timeout: 5000 });
+        logAction.success('Master Data OPD berhasil diverifikasi');
     });
 
-    test('3. Master Data Pegawai — Memuat tabel pegawai & daftar pegawai', async ({ page }) => {
-        const activeAdmin = adminUser;
-        if (activeAdmin) {
-            await page.fill('#adminUser', activeAdmin.nip);
-            await page.fill('#adminPass', activeAdmin.nik);
-            await page.click('#btnLogin');
-            await expect(page.locator('#dashboardContainer')).toBeVisible({ timeout: 15000 });
-        }
+    test('3. Master Data Pegawai — Memuat tabel pegawai & modal tambah pegawai via UI Navbar', async ({ page }) => {
+        await doAdminLogin(page);
 
-        await page.evaluate(() => {
-            const nav = document.getElementById('adminNavbar');
-            if (nav) nav.classList.remove('d-none');
-            const dash = document.getElementById('dashboardContainer');
-            if (dash) dash.classList.add('d-none');
-            if (typeof bukaHalamanPegawai === 'function') bukaHalamanPegawai();
-            const peg = document.getElementById('pegawaiContainer');
-            if (peg) peg.classList.remove('d-none');
-        });
+        logAction.menu('Data -> Pegawai');
+        logAction.click('Dropdown Menu Data', '#navbarDropdownData');
+        await page.click('#navbarDropdownData');
 
+        logAction.click('Menu Pegawai', 'a:has-text("Pegawai")');
+        await page.click('a.dropdown-item:has-text("Pegawai")');
+
+        logAction.verify('Memverifikasi kontainer Manajemen Pegawai tampil');
         const pegawaiContainer = page.locator('#pegawaiContainer');
         await expect(pegawaiContainer).toBeVisible({ timeout: 10000 });
+
+        logAction.click('Tombol Tambah Pegawai', 'button:has-text("Tambah Pegawai")');
+        const btnTambahPegawai = page.locator('button:has-text("Tambah Pegawai")');
+        await expect(btnTambahPegawai).toBeVisible();
+        await btnTambahPegawai.click();
+
+        logAction.verify('Memverifikasi modal form Tambah Pegawai terbuka');
+        const modalPegawai = page.locator('#modalPegawai');
+        await expect(modalPegawai).toBeVisible({ timeout: 5000 });
+
+        logAction.click('Tutup Modal Tambah Pegawai', '#modalPegawai .btn-close');
+        await page.click('#modalPegawai button[data-bs-dismiss="modal"], #modalPegawai .btn-close');
+        await expect(modalPegawai).toBeHidden({ timeout: 5000 });
+        logAction.success('Master Data Pegawai berhasil diverifikasi');
     });
 
-    test('4. Master Data Jadwal Kegiatan — Memuat daftar jadwal & modal buat kegiatan', async ({ page }) => {
-        const activeAdmin = adminUser;
-        if (activeAdmin) {
-            await page.fill('#adminUser', activeAdmin.nip);
-            await page.fill('#adminPass', activeAdmin.nik);
-            await page.click('#btnLogin');
-            await expect(page.locator('#dashboardContainer')).toBeVisible({ timeout: 15000 });
-        }
 
+    test('4. Master Data Jadwal Kegiatan — Memuat daftar jadwal & modal buat kegiatan via UI Navbar', async ({ page }) => {
+        await doAdminLogin(page);
+
+        logAction.menu('Data -> Kegiatan');
+        logAction.click('Dropdown Menu Data', '#navbarDropdownData');
+        await page.click('#navbarDropdownData');
+
+        logAction.click('Menu Kegiatan', 'a:has-text("Kegiatan")');
+        await page.click('a.dropdown-item:has-text("Kegiatan")');
+
+        logAction.verify('Memverifikasi kontainer Daftar Jadwal tampil');
         const dashContainer = page.locator('#dashboardContainer');
         await expect(dashContainer).toBeVisible({ timeout: 10000 });
+
+        logAction.click('Tombol Buat Jadwal Baru', 'button:has-text("Buat Jadwal Baru")');
+        const btnBuatJadwal = page.locator('button:has-text("Buat Jadwal Baru")');
+        await expect(btnBuatJadwal).toBeVisible();
+        await btnBuatJadwal.click();
+
+        logAction.verify('Memverifikasi modal form Buat Jadwal terbuka');
+        const modalBuatKegiatan = page.locator('#modalBuatKegiatan');
+        await expect(modalBuatKegiatan).toHaveClass(/show/, { timeout: 10000 });
+
+        logAction.click('Tutup Modal Buat Jadwal', '#modalBuatKegiatan .btn-close');
+        await page.locator('#modalBuatKegiatan .btn-close').click();
+        await expect(modalBuatKegiatan).toBeHidden({ timeout: 10000 });
+        logAction.success('Master Data Jadwal Kegiatan berhasil diverifikasi');
     });
 
+
+
+
 });
+
+

@@ -5,9 +5,11 @@ const isRemote = Boolean(process.env.BASE_URL);
 module.exports = defineConfig({
   testDir: './tests/e2e',
   timeout: 30000,
+  maxFailures: 1,
   expect: {
     timeout: 10000
   },
+
   fullyParallel: true,
   reporter: [['list']],
   use: {
@@ -27,12 +29,13 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'Admin Desktop',
-      testMatch: /admin-(?!full-cycle).*\.spec\.js$/,
+      testMatch: '**/admin-*.spec.js',
+      testIgnore: '**/admin-full-cycle*.spec.js',
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'PWA Mobile',
-      testMatch: /pwa-(?!admin).*\.spec\.js$/,
+      testMatch: '**/pwa-*.spec.js',
       use: {
         ...devices['Pixel 5'],
         contextOptions: {
@@ -43,7 +46,7 @@ module.exports = defineConfig({
     },
     {
       name: 'Full Cycle E2E',
-      testMatch: /.*full-cycle.*\.spec\.js$/,
+      testMatch: '**/admin-full-cycle*.spec.js',
       use: {
         ...devices['Pixel 5'],
         permissions: ['geolocation', 'camera'],

@@ -1,54 +1,200 @@
 # ARCHITECTURE — BAIS Pariaman
 
-> File ini berfokus pada topologi sistem aplikasi BAIS Pariaman.
+> Dokumen arsitektur dan topologi sistem BAIS Pariaman.
 
-> **Version:** v1.0.0
+> **Version:** v2.0.0
 
 ---
 
 ## 1. System Overview
 
-Aplikasi BAIS Pariaman adalah arsitektur berbasis Client-Server (RESTful API & Static Frontend PWA).
-Backend memproses request menggunakan PHP murni tanpa heavy framework, menggunakan FastRoute.
-Frontend merupakan aplikasi Single Page Application (SPA) / Progressive Web App (PWA) yang dibuild dari native JS/HTML/CSS menjadi aset statis.
+BAIS Pariaman menggunakan arsitektur Client-Server:
+
+```text
+Frontend Static PWA
+        ↓
+RESTful API
+        ↓
+MySQL / MariaDB
+```
+
+Komponen background menggunakan Node.js worker untuk proses asinkron.
+
+Backend menggunakan PHP native tanpa heavy framework, dengan FastRoute sebagai routing.
+
+Frontend menggunakan Native JS/HTML/CSS dan dibuild menjadi aset statis.
+
+---
 
 ## 2. Architecture Layers
 
-- **Presentation Layer (Frontend):** PWA berbasis Native JS/HTML/CSS, dibuild oleh ESBuild & Terser.
-- **Application Layer (Backend):** RESTful API dengan PHP, FastRoute untuk routing, dan Firebase PHP-JWT untuk autentikasi token.
-- **Background Layer:** Node.js script di folder `worker/` untuk proses antrean asinkron.
-- **Data Access Layer:** PHP PDO Murni ke database MySQL/MariaDB.
+### Presentation Layer
+
+Frontend PWA berbasis:
+
+```text
+Native JavaScript
+HTML
+CSS
+```
+
+Build menggunakan tooling Node.js seperti:
+
+```text
+ESBuild
+Tailwind CSS
+html-minifier-terser
+```
+
+### Application Layer
+
+Backend menggunakan:
+
+```text
+PHP Native
+FastRoute
+firebase/php-jwt
+```
+
+Backend menyediakan RESTful API.
+
+### Background Layer
+
+Node.js worker berada di:
+
+```text
+worker/
+```
+
+Worker menangani proses background, cache, dan queue sesuai implementasi aplikasi.
+
+### Data Access Layer
+
+Backend menggunakan:
+
+```text
+PDO
+MySQL / MariaDB
+```
+
+---
 
 ## 3. Directory Structure
 
 ```text
 bais-balad/
-  config/              # Konfigurasi sistem (DB, JWT secret)
+  config/              # Konfigurasi sistem
   database/            # Struktur SQL
-  docs/                # Compiled static assets (Web Root Frontend)
-  public_html/api/     # Web Root Backend API (Entry point index.php)
-  src/                 # Source kode utama
+  docs/                # Generated static assets / Web Root Frontend
+  public_html/api/     # Web Root Backend API
+  src/                 # Source code utama
     Controllers/       # PHP Controllers
-    Helpers/           # PHP Utility classes/functions
+    Helpers/           # PHP utility classes/functions
     Views/             # Native JS, CSS, HTML sumber PWA/Admin
     routes.php         # FastRoute definitions
-  worker/              # Worker script (Node.js)
+  worker/              # Node.js worker
 ```
 
-## 4. Database Schema
+---
 
-- Berbasis MySQL/MariaDB.
-- Struktur tabel tersedia pada file `database/structure.sql`.
-- Tabel utama mengatur ASN, Jadwal, Absensi, dan Admin.
+## 4. Source vs Generated Files
 
-## 5. API Design
+Source frontend:
 
-- **Method**: GET, POST, PUT, DELETE
-- **Auth**: JWT (Authorization: Bearer <token>)
-- **Format**: JSON Payload & JSON Response
+```text
+src/Views/
+```
 
-## 6. Key Design Decisions
+Generated frontend:
 
-- **FastRoute & PHP Native**: Dipilih untuk performa maksimal dan kebutuhan memori minimal di server.
-- **Native JS & ESBuild**: PWA ringan dan cepat, tidak memerlukan payload React/Vue yang besar.
-- **Background Worker**: Node.js worker menangani antrean proses di belakang layar untuk mencegah beban berlebih di server utama PHP.
+```text
+docs/
+```
+
+`src/Views/` adalah source of truth untuk frontend.
+
+Jangan melakukan edit manual pada file generated di `docs/`.
+
+Build digunakan untuk menghasilkan output terbaru.
+
+---
+
+## 5. Database
+
+Database menggunakan:
+
+```text
+MySQL / MariaDB
+```
+
+Struktur tabel tersedia pada:
+
+```text
+database/structure.sql
+```
+
+Tabel utama mengatur data seperti:
+
+```text
+ASN
+Jadwal
+Absensi
+Admin
+```
+
+Detail mengikuti schema actual pada database dan source code.
+
+---
+
+## 6. API Design
+
+Method yang digunakan:
+
+```text
+GET
+POST
+PUT
+DELETE
+```
+
+Authentication menggunakan JWT:
+
+```text
+Authorization: Bearer <token>
+```
+
+Format request/response utama:
+
+```text
+JSON
+```
+
+---
+
+## 7. Key Design Decisions
+
+### PHP Native + FastRoute
+
+Digunakan untuk kebutuhan backend ringan dan penggunaan resource minimal.
+
+### Native JS + Build Tools
+
+Digunakan untuk menghasilkan PWA ringan tanpa framework frontend besar.
+
+### Static Frontend
+
+Frontend hasil build disajikan sebagai aset statis.
+
+### Node.js Worker
+
+Worker digunakan untuk proses background seperti cache dan queue sesuai implementasi aplikasi.
+
+---
+
+## 8. Architecture Rules
+
+- Jangan mengganti arsitektur tanpa kebutuhan jelas.
+- Jangan memperkenalkan framework besar hanya untuk fitur kecil.
+- Jangan memindahkan source frontend ke `docs/`.
+- Jangan menganggap `docs/` sebagai source code utama.
+- Periksa implementasi existing sebelum menambah komponen baru.

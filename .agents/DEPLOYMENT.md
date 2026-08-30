@@ -2,38 +2,208 @@
 
 > Panduan infrastruktur dan rilis aplikasi ke Production.
 
-> **Version:** v1.0.0
+> **Version:** v2.0.0
 
 ---
 
 ## 1. Deployment Architecture
 
-- **Frontend/Web PWA:** Hosting statis (Nginx/Apache), web root menunjuk ke folder `docs/`.
-- **Backend/API:** PHP Server (Apache/Nginx + PHP-FPM >= 7.2), web root menunjuk ke folder `public_html/api/`.
-- **Database:** Server MySQL / MariaDB terpisah atau lokal.
-- **Worker:** PM2 / Systemd Node.js daemon menjalankan `worker/index.js` (atau sejenisnya).
+### Frontend / Web PWA
 
-## 2. Environment Setup
+Hosting statis menggunakan Nginx/Apache.
 
-- Variabel konfigurasi Backend diatur dalam file `config/config.php` (DB User, DB Password, JWT Secret).
-- Variabel Frontend (jika ada) di-inject melalui `esbuild` dalam proses Node build.
+Web root:
 
-## 3. Deployment Steps
+```text
+docs/
+```
 
-- **Prerequisites:** PHP >= 7.2, Composer, Node.js >= 22, NPM, MySQL.
-- **Commands Frontend:**
-  ```bash
-  npm install
-  npm run build
-  ```
-- **Commands Backend:**
-  ```bash
-  composer install --no-dev --optimize-autoloader
-  ```
-- Arahkan VirtualHost/Server Block ke `docs/` untuk domain PWA.
-- Arahkan VirtualHost/Server Block ke `public_html/api/` untuk domain API.
+### Backend / API
 
-## 4. Database Migrations
+PHP Server menggunakan Apache/Nginx + PHP-FPM.
 
-- Tidak menggunakan sistem migrasi otomatis framework (seperti Laravel/Prisma).
-- Dump SQL baru ditambahkan/dimodifikasi dari `database/structure.sql` ke database Production secara manual atau melalui script khusus/phpMyAdmin.
+Web root:
+
+```text
+public_html/api/
+```
+
+### Database
+
+```text
+MySQL / MariaDB
+```
+
+Database dapat berada pada server terpisah atau server yang sama sesuai deployment.
+
+### Worker
+
+Node.js worker dijalankan sebagai daemon menggunakan:
+
+```text
+PM2
+Systemd
+```
+
+Entry point mengikuti implementation existing, misalnya:
+
+```text
+worker/index.js
+```
+
+---
+
+## 2. Environment
+
+Backend configuration berada pada:
+
+```text
+config/config.php
+```
+
+Contoh konfigurasi:
+
+```text
+DB User
+DB Password
+JWT Secret
+```
+
+Credential production tidak boleh diekspos melalui web root atau frontend.
+
+Frontend configuration yang memang diperlukan dapat diproses melalui build Node.js.
+
+Jangan memasukkan secret backend ke frontend.
+
+---
+
+## 3. Requirements
+
+Production/deployment membutuhkan:
+
+```text
+PHP >= 7.2
+Composer
+Node.js >= 22
+NPM >= 10
+MySQL / MariaDB
+```
+
+---
+
+## 4. Frontend Deployment
+
+Install dependency:
+
+```bash
+npm install
+```
+
+Build:
+
+```bash
+npm run build
+```
+
+Hasil build berada pada:
+
+```text
+docs/
+```
+
+Arahkan VirtualHost/Server Block ke:
+
+```text
+docs/
+```
+
+---
+
+## 5. Backend Deployment
+
+Install production dependency:
+
+```bash
+composer install --no-dev --optimize-autoloader
+```
+
+Arahkan VirtualHost/Server Block API ke:
+
+```text
+public_html/api/
+```
+
+---
+
+## 6. Worker Deployment
+
+Worker berada pada:
+
+```text
+worker/
+```
+
+Gunakan process manager seperti:
+
+```text
+PM2
+Systemd
+```
+
+Pastikan worker berjalan sesuai konfigurasi production.
+
+---
+
+## 7. Database
+
+Project tidak menggunakan migration framework otomatis.
+
+Schema utama berada pada:
+
+```text
+database/structure.sql
+```
+
+Perubahan database production dilakukan secara terkontrol melalui:
+
+```text
+SQL
+phpMyAdmin
+script khusus
+```
+
+Jangan menjalankan perubahan database production tanpa memastikan impact.
+
+---
+
+## 8. Release Rules
+
+Sebelum release:
+
+1. Pastikan source code benar.
+2. Jalankan test relevan.
+3. Jalankan build frontend.
+4. Pastikan `docs/` sesuai hasil build.
+5. Pastikan konfigurasi production benar.
+6. Pastikan database schema sesuai.
+7. Pastikan worker berjalan jika diperlukan.
+
+Jangan mengubah production code hanya untuk membuat test PASS.
+
+---
+
+## 9. Generated Files
+
+`docs/` adalah hasil build frontend.
+
+Jangan melakukan perubahan manual pada generated files untuk memperbaiki behavior.
+
+Jika terdapat masalah:
+
+```text
+Perbaiki source
+↓
+Build ulang
+↓
+Deploy hasil build
+```
