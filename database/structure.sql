@@ -185,3 +185,19 @@ CREATE TABLE `app_absensi_log_absensi` (
 
 ALTER TABLE app_absensi_jadwal_kegiatan ADD COLUMN is_strict_location TINYINT(1) DEFAULT 0;
 ALTER TABLE app_absensi_jadwal_kegiatan ADD COLUMN is_strict_time TINYINT(1) DEFAULT 0;
+
+--
+-- Struktur dari tabel `app_absensi_pengaturan_aplikasi`
+--
+CREATE TABLE IF NOT EXISTS `app_absensi_pengaturan_aplikasi` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `nama_pengaturan` varchar(100) NOT NULL UNIQUE,
+  `nilai_pengaturan` text DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_nama_pengaturan` (`nama_pengaturan`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `app_absensi_pengaturan_aplikasi` (`nama_pengaturan`, `nilai_pengaturan`) 
+VALUES ('link_absensi_cadangan', 'https://script.google.com/macros/s/AKfycbxGeScmNpeAOHnBd_s39KxtZPhgL5nwvoR6pO8-uXpXl8RSi0YgUTupTeDJR4AErx2Z/exec')
+ON DUPLICATE KEY UPDATE `nama_pengaturan` = `nama_pengaturan`;
+

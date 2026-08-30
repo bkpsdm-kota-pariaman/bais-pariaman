@@ -153,3 +153,37 @@ Hindari perubahan UI yang menambah:
 - script tidak perlu
 
 Pertahankan prinsip PWA ringan dan cepat.
+
+---
+
+## 9. Model & Arsitektur UI Absensi Cadangan
+
+Fitur Absensi Cadangan dirancang sebagai jalur darurat saat ASN mengalami kendala teknis (kamera/GPS/aplikasi utama).
+
+### 1. Struktur File & Redirect Dinamis
+- **`src/Views/absensi-cadangan/index.html` (Dynamic Redirector)**:
+  - Halaman gerbang ringan berkecepatan tinggi.
+  - Mengambil URL target dari API backend `/pengaturan/link-absensi-cadangan` dan melakukan pengalihan instan (`window.location.replace`).
+  - Menyediakan fallback manual link jika timeout/offline.
+- **`src/Views/absensi-cadangan/cadangan.html` (Standalone Fallback Form)**:
+  - Salinan formulir lengkap mandiri yang di-hosting langsung pada server BAIS.
+  - Dapat difungsikan sebagai target internal URL cadangan.
+- **Pengaturan URL Admin (`app_absensi_pengaturan_aplikasi`)**:
+  - Super Admin dapat mengubah URL tujuan absensi cadangan kapan saja (ke GAS eksternal maupun ke `cadangan.html` internal) melalui menu **Pengaturan Aplikasi** di Admin Dashboard.
+
+### 2. User Flow & Komponen UI Absensi Cadangan
+1. **View Login Pegawai**:
+   - Autentikasi menggunakan NIP (18 digit) dan NIK (16 digit).
+   - Fitur toggle sembunyikan/tampilkan NIK.
+2. **View Identitas & GPS**:
+   - Kartu profil pegawai teridentifikasi (Nama, NIP, Jabatan, Perangkat Daerah).
+   - Status deteksi lokasi GPS otomatis + reverse geocoding alamat.
+   - Pilihan "Lanjutkan Tanpa Lokasi" jika perangkat/browser bermasalah dengan GPS.
+3. **Validasi Kode Akses**:
+   - Input kode akses kegiatan dengan verifikasi live ke Worker/Backend PHP.
+4. **Form Alasan & Swafoto (Selfie)**:
+   - Pilihan alasan kendala terstruktur (12 opsi + opsi "Lainnya" dengan input teks detail).
+   - Swafoto kamera real-time dengan tombol ambil dan foto ulang.
+5. **View Struk Bukti Kehadiran**:
+   - Tampilan sukses dengan rincian waktu, nama, NIP, dan QR Code bukti kehadiran digital untuk di-screenshot pengguna.
+

@@ -3651,14 +3651,92 @@ function checkSuperAdminUI() {
     const isSuper = isSuperAdmin();
     const divider = document.getElementById('menuDividerLogAbsensi');
     const item = document.getElementById('menuItemLogAbsensi');
+    const itemPengaturan = document.getElementById('menuItemPengaturanAplikasi');
     if (isSuper) {
         if (divider) divider.classList.remove('d-none');
         if (item) item.classList.remove('d-none');
+        if (itemPengaturan) itemPengaturan.classList.remove('d-none');
     } else {
         if (divider) divider.classList.add('d-none');
         if (item) item.classList.add('d-none');
+        if (itemPengaturan) itemPengaturan.classList.add('d-none');
     }
 }
+
+async function bukaModalPengaturanAplikasi() {
+    if (!isSuperAdmin()) {
+        Swal.fire('Akses Ditolak', 'Hanya super admin yang dapat mengelola pengaturan aplikasi.', 'error');
+        return;
+    }
+
+    const modalEl = document.getElementById('modalPengaturanAplikasi');
+    const modalInst = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+    showAdminLoading(true, 'Memuat pengaturan aplikasi...');
+    try {
+        const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
+        showAdminLoading(false);
+        if (res.status && res.data) {
+            const linkInput = document.getElementById('inpLinkAbsensiCadangan');
+            if (linkInput) linkInput.value = res.data.link_absensi_cadangan || '';
+            modalInst.show();
+        } else {
+            Swal.fire('Gagal', res.message || 'Gagal memuat pengaturan.', 'error');
+        }
+    } catch (e) {
+        showAdminLoading(false);
+        Swal.fire('Error', 'Gagal terhubung ke server.', 'error');
+    }
+}
+
+async function submitPengaturanAplikasi(event) {
+    if (event) event.preventDefault();
+    if (!isSuperAdmin()) {
+        Swal.fire('Akses Ditolak', 'Hanya super admin yang dapat mengubah pengaturan.', 'error');
+        return;
+    }
+
+    const linkVal = document.getElementById('inpLinkAbsensiCadangan').value.trim();
+    if (!linkVal) {
+        Swal.fire('Peringatan', 'URL Link Absensi Cadangan tidak boleh kosong.', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btnSimpanPengaturan');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
+
+    try {
+        const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                link_absensi_cadangan: linkVal
+            })
+        });
+
+        if (res.status) {
+            const modalEl = document.getElementById('modalPengaturanAplikasi');
+            const modalInst = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+            if (modalInst) modalInst.hide();
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Pengaturan berhasil disimpan!',
+                showConfirmButton: false,
+                timer: 2000
+            });
+        } else {
+            Swal.fire('Gagal', res.message || 'Gagal menyimpan pengaturan.', 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error', 'Gagal menyimpan pengaturan ke server.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Simpan Pengaturan';
+    }
+}
+
 
 let currentLogAbsensiData = [];
 

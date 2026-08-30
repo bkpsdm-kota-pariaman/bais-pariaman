@@ -94,4 +94,10 @@ return function(RouteCollector $r) {
 
     // Rute untuk menghapus data absensi pegawai tertentu dari sebuah kegiatan
     $r->addRoute('DELETE', '/admin/rekap/entry/{kode_akses}/{nip}', ['App\Controllers\AdminRekapController', 'deleteAbsensiEntry']);
-};
+
+    // 6. KELOMPOK RUTE PENGATURAN APLIKASI
+    $r->addRoute('GET', '/pengaturan/link-absensi-cadangan', ['App\Controllers\PengaturanController', 'getLinkAbsensiCadangan']);
+    $r->addRoute('GET', '/absensi-cadangan-redirect', ['App\Controllers\PengaturanController', 'redirectAbsensiCadangan']);
+    $r->addRoute('GET', '/admin/pengaturan', ['App\Controllers\PengaturanController', 'getPengaturanList']);
+    $r->addRoute('PUT', '/admin/pengaturan', ['App\Controllers\PengaturanController', 'updatePengaturan']);
+};

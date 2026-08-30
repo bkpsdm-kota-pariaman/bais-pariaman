@@ -3,10 +3,10 @@ const FOLDER_ID = "1mPos1bPu9g__245mvGBM3WouTGFM5eRk";
 function copyAndRenameKeepFormat() {
     // ====== CONFIG ======
     const sheetName = 'data_absensi';
-    const linkColumn = 10;       // kolom link foto (H = 8)
-    const kodeAksesColumn = 2;  // kolom G
-    const nipColumn = 3;        // kolom D
-    const statusColumn = 11;    // kolom J untuk status
+    const linkColumn = 11;      // kolom K (link foto Drive)
+    const kodeAksesColumn = 2;  // kolom B (kode akses)
+    const nipColumn = 4;        // kolom D (NIP)
+    const statusColumn = 13;    // kolom M untuk status
     const startRow = 2;         // baris pertama data
     const TARGET_FOLDER_ID = '1Z1Kg_El5gnFEdu8d6h-PfRFq5KPMAJoG'; // <-- ganti dengan folder ID Anda
     const MAX_ROWS_PER_RUN = 1000; // batasi per run untuk menghindari timeout
@@ -391,7 +391,7 @@ function prosesAbsen(data) {
 
         // 1. Tolak jika tidak ada token sama sekali
         if (!clientTs || !clientToken) {
-            return { status: false, message: 'Akses ditolak: Permintaan tidak sah (Gunakan Form Resmi). Debug Action: ' + data.action + ' | Payload: ' + JSON.stringify(data) };
+            return { status: false, message: 'Akses ditolak: Permintaan tidak sah (Gunakan Form Resmi).' };
         }
 
         // 2. Verifikasi kesesuaian Token dengan format Secret Key dari Frontend
@@ -401,23 +401,40 @@ function prosesAbsen(data) {
             return { status: false, message: 'Akses ditolak: Token keamanan tidak valid.' };
         }
 
-        // 3. Verifikasi Kadaluarsa Waktu (Maksimal 5 Menit dari waktu buka aplikasi)
+        // 3. Verifikasi Kadaluarsa Waktu (Maksimal 15 Menit dari waktu buka aplikasi)
         const nowMs = new Date().getTime();
         const timeDiffMs = nowMs - parseInt(clientTs);
 
-        // 300000 ms = 5 Menit
-        if (timeDiffMs > 300000 || timeDiffMs < -60000) {
+        // 900000 ms = 15 Menit
+        if (timeDiffMs > 900000 || timeDiffMs < -60000) {
             return { status: false, message: 'Akses ditolak: Sesi permintaan Anda kedaluwarsa. Silakan muat ulang (refresh) halaman aplikasi.' };
         }
         // ==========================================
 
+        const kode = (data.kode || '').toString().trim().toUpperCase();
+        const namaKegiatan = (data.nama_kegiatan || '').toString().trim();
+        const nip = (data.nip || '').toString().replace(/\s+/g, '').trim();
+        const nama = (data.nama || '').toString().trim();
+        const jabatan = (data.jabatan || '').toString().trim();
+        const opd = (data.opd || '').toString().trim();
+        const lokasi = (data.lokasi || 'Lokasi GPS tidak terdeteksi').toString().trim();
+        const lat = (data.lat || '0').toString().trim();
+        const lng = (data.lng || '0').toString().trim();
+        const rawFoto = (data.fotoData || data.foto || '').toString();
+        const keterangan = (data.keterangan || '').toString().trim();
+
+        if (!kode || !namaKegiatan || !nip || !nama || !jabatan || !opd || !keterangan || !rawFoto) {
+            return { status: false, message: 'Semua kolom formulir, alasan kendala, dan foto wajib diisi.' };
+        }
+
         // 1. Dekode dan simpan gambar ke Google Drive
-        const imageString = data.fotoData.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
+        const imageString = rawFoto.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
         const imageBlob = Utilities.base64Decode(imageString);
 
         // Format nama file: NIP_Nama_Tanggal_Jam.jpg
         const timestamp = Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd_HHmmss");
-        const fileName = `${data.nip}_${data.nama}_${timestamp}.jpg`;
+        const cleanNama = nama.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const fileName = `${nip}_${cleanNama}_${timestamp}.jpg`;
 
         const blob = Utilities.newBlob(imageBlob, 'image/jpeg', fileName);
         const folder = DriveApp.getFolderById(FOLDER_ID);
@@ -435,19 +452,21 @@ function prosesAbsen(data) {
         // Format waktu Asia/Jakarta: 2026-12-01 10:30:60
         const waktu = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
 
-        // Susunan Kolom disesuaikan dengan struktur Spreadsheet
+        // Susunan 12 Kolom Google Sheet:
+        // A=waktu, B=kode_akses, C=nama_kegiatan, D=nip, E=nama, F=jabatan, G=opd, H=lokasi, I=lat, J=lng, K=nama_file_foto, L=keterangan
         sheet.appendRow([
-            waktu,
-            data.kode,
-            data.nip,
-            data.nama,
-            data.jabatan,
-            data.opd,
-            data.lokasi,
-            data.lat,
-            data.lng,
-            fileUrl,
-            data.keterangan
+            waktu,        // Kolom A (1)
+            kode,         // Kolom B (2)
+            namaKegiatan, // Kolom C (3)
+            nip,          // Kolom D (4)
+            nama,         // Kolom E (5)
+            jabatan,      // Kolom F (6)
+            opd,          // Kolom G (7)
+            lokasi,       // Kolom H (8)
+            lat,          // Kolom I (9)
+            lng,          // Kolom J (10)
+            fileUrl,      // Kolom K (11)
+            keterangan    // Kolom L (12)
         ]);
 
         return { 
@@ -455,11 +474,17 @@ function prosesAbsen(data) {
             message: 'Data Absensi Cadangan berhasil dikirim!',
             data: {
                 waktu: waktu,
-                nip: data.nip,
-                nama: data.nama,
+                kode: kode,
+                nama_kegiatan: namaKegiatan,
+                nip: nip,
+                nama: nama,
+                jabatan: jabatan,
+                opd: opd,
+                keterangan: keterangan,
                 fileUrl: fileUrl
             }
         };
+
 
     } catch (error) {
         return { status: false, message: error.toString() };
