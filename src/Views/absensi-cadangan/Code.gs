@@ -496,16 +496,26 @@ function getOpdList() {
         const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
         const sheet = spreadsheet.getSheetByName("list_opd");
 
-        if (!sheet) return [];
+        if (!sheet) {
+            Logger.log("Sheet 'list_opd' tidak ditemukan di Spreadsheet.");
+            return [];
+        }
 
         const lastRow = sheet.getLastRow();
-        if (lastRow < 2) return [];
+        if (lastRow < 2) {
+            Logger.log("Sheet 'list_opd' kosong atau hanya memiliki header.");
+            return [];
+        }
 
+        // Ambil data nama OPD di Kolom A (kolom 1), mulai dari baris ke-2 kebawah
         const data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-        const opdList = data.map(row => row[0]).filter(val => val.toString().trim() !== "");
+        const opdList = data
+            .map(row => (row[0] || '').toString().trim())
+            .filter(val => val !== "");
 
         return opdList;
     } catch (error) {
+        Logger.log("getOpdList Error: " + error.toString());
         return [];
     }
 }

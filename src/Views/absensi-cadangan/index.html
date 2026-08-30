@@ -9,52 +9,164 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 
-    <script>
-        (async function () {
-            const DEFAULT_LINK = "https://script.google.com/macros/s/AKfycbxGeScmNpeAOHnBd_s39KxtZPhgL5nwvoR6pO8-uXpXl8RSi0YgUTupTeDJR4AErx2Z/exec";
-            try {
-                const isBeta = window.location.href.includes('beta') || window.location.hostname === 'localhost' || window.location.port !== '';
-                const apiBase = isBeta ? "https://api-esdm.pariamankota.go.id/beta-bais-pariaman/api" : "https://bais-pariaman.pariamankota.go.id/api";
+    <style>
+        .hidden-view {
+            display: none !important;
+        }
 
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3500);
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
 
-                const response = await fetch(apiBase + "/pengaturan/link-absensi-cadangan", {
-                    signal: controller.signal
-                }).then(r => r.json()).catch(() => null);
-
-                clearTimeout(timeoutId);
-
-                if (response && response.status && response.data && response.data.link_absensi_cadangan) {
-                    const targetLink = response.data.link_absensi_cadangan;
-                    const manualEl = document.getElementById('manualLink');
-                    if (manualEl) manualEl.href = targetLink;
-                    window.location.replace(targetLink);
-                    return;
-                }
-            } catch (e) {
-                console.error("Gagal mengambil link pengaturan:", e);
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
             }
-            window.location.replace(DEFAULT_LINK);
-        })();
-    </script>
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
 </head>
 
 <body class="bg-gray-50 flex items-center justify-center min-h-screen p-4 font-sans text-gray-800">
+
     <div class="max-w-sm w-full bg-white rounded-3xl p-6 shadow-xl border border-gray-100 text-center">
-        <div
-            class="w-16 h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
-            <div class="animate-spin rounded-full h-8 w-8 border-4 border-red-200 border-t-red-600"></div>
+
+        <!-- STATE 1: LOADING (Sedang Mengecek ke Server PHP) -->
+        <div id="stateLoading" class="fade-in">
+            <div class="w-16 h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
+                <div class="animate-spin rounded-full h-8 w-8 border-4 border-red-200 border-t-red-600"></div>
+            </div>
+            <h4 class="font-extrabold text-base text-gray-900 mb-1">Memeriksa Link Absensi</h4>
+            <p class="text-xs text-gray-500 leading-relaxed">
+                Sedang mengambil pengaturan link absensi cadangan dari server...
+            </p>
         </div>
-        <h4 class="font-extrabold text-base text-gray-900 mb-1">Mengalihkan ke Absensi Cadangan</h4>
-        <p class="text-xs text-gray-500 mb-5 leading-relaxed">Mohon tunggu sebentar, Anda sedang dialihkan ke sistem absensi cadangan resmi Pemerintah Kota Pariaman...</p>
-        <a id="manualLink"
-            href="https://script.google.com/macros/s/AKfycbxGeScmNpeAOHnBd_s39KxtZPhgL5nwvoR6pO8-uXpXl8RSi0YgUTupTeDJR4AErx2Z/exec"
-            class="inline-flex items-center gap-1.5 text-xs font-bold text-red-700 hover:text-red-800 transition py-2 px-4 rounded-xl bg-red-50 hover:bg-red-100">
-            <span>Buka Langsung</span>
-            <i class="bi bi-box-arrow-up-right"></i>
-        </a>
+
+        <!-- STATE 2: REDIRECTING (Link Ditemukan & Mengalihkan) -->
+        <div id="stateRedirecting" class="hidden-view fade-in">
+            <div class="w-16 h-16 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
+                <i class="bi bi-box-arrow-up-right animate-pulse"></i>
+            </div>
+            <h4 class="font-extrabold text-base text-gray-900 mb-1">Mengalihkan ke Absensi Cadangan</h4>
+            <p class="text-xs text-gray-500 mb-5 leading-relaxed">
+                Mohon tunggu sebentar, Anda sedang dialihkan ke sistem absensi cadangan resmi...
+            </p>
+            <a id="manualLink" href="#"
+                class="inline-flex items-center gap-1.5 text-xs font-bold text-red-700 hover:text-red-800 transition py-2.5 px-4 rounded-xl bg-red-50 hover:bg-red-100">
+                <span>Buka Manual Jika Tidak Otomatis</span>
+                <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+
+        <!-- STATE 3: ERROR / TIDAK DITEMUKAN -->
+        <div id="stateError" class="hidden-view fade-in">
+            <div class="w-16 h-16 rounded-2xl bg-yellow-50 text-yellow-600 flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
+                <i class="bi bi-exclamation-triangle-fill text-2xl"></i>
+            </div>
+            <h4 class="font-extrabold text-base text-gray-900 mb-1">Link Tidak Ditemukan</h4>
+            <p id="errorDesc" class="text-xs text-gray-600 mb-5 leading-relaxed">
+                Link absensi cadangan belum diatur oleh administrator atau gagal dimuat dari server.
+            </p>
+            <div class="space-y-2">
+                <button type="button" onclick="prosesRedirect()"
+                    class="w-full bg-red-700 hover:bg-red-800 active:scale-95 text-white font-bold py-3 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md">
+                    <i class="bi bi-arrow-repeat text-sm"></i> Muat Ulang
+                </button>
+            </div>
+        </div>
+
     </div>
+
+    <script>
+        async function prosesRedirect() {
+            const stLoading = document.getElementById('stateLoading');
+            const stRedirect = document.getElementById('stateRedirecting');
+            const stError = document.getElementById('stateError');
+            const manualLink = document.getElementById('manualLink');
+
+            stLoading.classList.remove('hidden-view');
+            stRedirect.classList.add('hidden-view');
+            stError.classList.add('hidden-view');
+
+            const isBeta = window.location.href.includes('beta') || window.location.hostname === 'localhost' || window.location.port !== '';
+            const workerBase = isBeta 
+                ? "https://absensi-kegiatan-asn-worker-dev.bidpp-bkpsdm.workers.dev" 
+                : "https://absensi-kegiatan-asn-worker.bidpp-bkpsdm.workers.dev";
+            const phpApiBase = isBeta 
+                ? "https://api-esdm.pariamankota.go.id/beta-bais-pariaman/api" 
+                : "https://bais-pariaman.pariamankota.go.id/api";
+
+            // 1. Prioritas Utama: Tarik link pengaturan dari Cloudflare Worker KV (Cache Seumur Hidup)
+            try {
+                const ctrlWorker = new AbortController();
+                const timeoutWorker = setTimeout(() => ctrlWorker.abort(), 3500);
+
+                const resWorker = await fetch(workerBase + "/api/pengaturan/link-absensi-cadangan?cb=" + Date.now(), {
+                    signal: ctrlWorker.signal
+                }).then(r => r.json()).catch(() => null);
+
+                clearTimeout(timeoutWorker);
+
+                if (resWorker && resWorker.status && resWorker.data && resWorker.data.link_absensi_cadangan) {
+                    const targetLink = resWorker.data.link_absensi_cadangan.trim();
+                    if (targetLink) {
+                        stLoading.classList.add('hidden-view');
+                        stRedirect.classList.remove('hidden-view');
+                        if (manualLink) manualLink.href = targetLink;
+                        window.location.replace(targetLink);
+                        return;
+                    }
+                }
+            } catch (errWorker) {
+                console.warn("[Absensi Cadangan] Gagal load dari Worker KV, mencoba fallback ke PHP...", errWorker);
+            }
+
+            // 2. Fallback: Tarik link pengaturan dari Server PHP jika Worker gagal/offline
+            try {
+                const ctrlPhp = new AbortController();
+                const timeoutPhp = setTimeout(() => ctrlPhp.abort(), 4500);
+
+                const resPhp = await fetch(phpApiBase + "/pengaturan/link-absensi-cadangan?cb=" + Date.now(), {
+                    signal: ctrlPhp.signal
+                }).then(r => r.json()).catch(() => null);
+
+                clearTimeout(timeoutPhp);
+
+                if (resPhp && resPhp.status && resPhp.data && resPhp.data.link_absensi_cadangan) {
+                    const targetLink = resPhp.data.link_absensi_cadangan.trim();
+                    if (targetLink) {
+                        stLoading.classList.add('hidden-view');
+                        stRedirect.classList.remove('hidden-view');
+                        if (manualLink) manualLink.href = targetLink;
+                        window.location.replace(targetLink);
+                        return;
+                    }
+                }
+
+                tampilkanError("Pengaturan link absensi cadangan belum dikonfigurasi atau sedang kosong.");
+
+            } catch (errPhp) {
+                tampilkanError("Gagal terhubung ke server untuk mengambil link absensi cadangan. Periksa koneksi internet Anda.");
+            }
+        }
+
+        function tampilkanError(pesan) {
+            document.getElementById('stateLoading').classList.add('hidden-view');
+            document.getElementById('stateRedirecting').classList.add('hidden-view');
+            const stError = document.getElementById('stateError');
+            stError.classList.remove('hidden-view');
+            if (pesan) {
+                document.getElementById('errorDesc').innerText = pesan;
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', prosesRedirect);
+    </script>
 </body>
 
 </html>

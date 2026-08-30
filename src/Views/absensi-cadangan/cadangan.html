@@ -435,105 +435,88 @@
         // =========================================================================
         // KONFIGURASI URL & ENDPOINT
         // =========================================================================
-        const GAS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw-9l5eNIFFnaW4Q4bfrOWSKF36ZW6WWAIYrTNopWh0m-rElY25RP6vL4BFkWRQVrG4/exec";
-        let SCRIPT_URL = GAS_SCRIPT_URL;
+        var GAS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyomeSnc8N3TWt5PQ8pXbokq1-ovObR5I-7BLcWzvUBGfJl9m4sGRxEKYRoGOAfwfqC/exec";
+        var SCRIPT_URL = GAS_SCRIPT_URL;
 
-        // Deteksi dinamis jika halaman di-host langsung di Google Apps Script
         if (typeof google !== 'undefined' && google.script && google.script.run) {
-            google.script.run.withSuccessHandler(function (url) {
-                if (url) SCRIPT_URL = url;
-            }).getScriptUrl();
+            try {
+                google.script.run.withSuccessHandler(function (url) {
+                    if (url) SCRIPT_URL = url;
+                }).getScriptUrl();
+            } catch (eGasUrl) { }
         }
 
         // =========================================================================
-        // DAFTAR PERANGKAT DAERAH (OPD) STANDAR PEMKO PARIAMAN
+        // INISIALISASI OPD SELECT (DITARIK DINAMIS DARI GOOGLE SHEET list_opd)
         // =========================================================================
-        const DEFAULT_OPD_LIST = [
-            "BADAN KEPEGAWAIAN DAN PENGEMBANGAN SUMBER DAYA MANUSIA",
-            "BADAN PENANGGULANGAN BENCANA DAERAH",
-            "BADAN PENGELOLAAN KEUANGAN DAN PENDAPATAN DAERAH",
-            "BADAN PERENCANAAN, PENELITIAN DAN PENGEMBANGAN DAERAH",
-            "BAGIAN ADMINISTRASI PEMBANGUNAN - SEKRETARIAT DAERAH",
-            "BAGIAN HUKUM - SEKRETARIAT DAERAH",
-            "BAGIAN KESEJAHTERAAN RAKYAT - SEKRETARIAT DAERAH",
-            "BAGIAN ORGANISASI - SEKRETARIAT DAERAH",
-            "BAGIAN PENGADAAN BARANG DAN JASA - SEKRETARIAT DAERAH",
-            "BAGIAN PEREKONOMIAN DAN SUMBER DAYA ALAM - SEKRETARIAT DAERAH",
-            "BAGIAN PROTOKOL DAN KOMUNIKASI PIMPINAN - SEKRETARIAT DAERAH",
-            "BAGIAN TATA PEMERINTAHAN - SEKRETARIAT DAERAH",
-            "BAGIAN UMUM - SEKRETARIAT DAERAH",
-            "DINAS KEPENDUDUKAN DAN PENCATATAN SIPIL",
-            "DINAS KESEHATAN",
-            "DINAS KOMUNIKASI DAN INFORMATIKA",
-            "DINAS KOPERASI, USAHA KECIL DAN MENENGAH DAN PERDAGANGAN",
-            "DINAS LINGKUNGAN HIDUP",
-            "DINAS PARIWISATA DAN KEBUDAYAAN",
-            "DINAS PEKERJAAN UMUM, PENATAAN RUANG DAN PERTANAHAN",
-            "DINAS PEMBERDAYAAN MASYARAKAT DAN DESA",
-            "DINAS PEMBERDAYAAN PEREMPUAN, PERLINDUNGAN ANAK DAN KELUARGA BERENCANA",
-            "DINAS PENANAMAN MODAL, PELAYANAN TERPADU SATU PINTU DAN TENAGA KERJA",
-            "DINAS PENDIDIKAN, PEMUDA DAN OLAHRAGA",
-            "DINAS PERHUBUNGAN",
-            "DINAS PERIKANAN",
-            "DINAS PERTANIAN, PANGAN DAN PERIKANAN",
-            "DINAS PERUMAHAN RAKYAT, KAWASAN PERMUKIMAN DAN LINGKUNGAN HIDUP",
-            "DINAS SOSIAL",
-            "INSPEKTORAT DAERAH",
-            "KECAMATAN PARIAMAN SELATAN",
-            "KECAMATAN PARIAMAN TENGAH",
-            "KECAMATAN PARIAMAN TIMUR",
-            "KECAMATAN PARIAMAN UTARA",
-            "RSUD dr. SADIKIN",
-            "SATUAN POLISI PAMONG PRAJA DAN PEMADAM KEBAKARAN",
-            "SEKRETARIAT DEWAN PERWAKILAN RAKYAT DAERAH",
-            "SEKRETARIAT DAERAH"
-        ];
+        function initOpdSelect(opdArray) {
+            var selectEl = document.getElementById('inpOpd');
+            if (!selectEl) return;
 
-        // =========================================================================
-        // INIT PADA SAAT HALAMAN DIMUAT
-        // =========================================================================
-        window.addEventListener('DOMContentLoaded', () => {
-            initOpdSelect();
-            fetchOpdFromGas();
-            initKeteranganListener();
-            deteksiGpsOtomatisDibelakangLayar();
-        });
+            if (!Array.isArray(opdArray) || opdArray.length === 0) {
+                selectEl.innerHTML = '<option value="" disabled selected>-- Gagal Memuat Perangkat Daerah dari Google Sheet --</option>';
+                return;
+            }
 
-        function initOpdSelect(opdArray = DEFAULT_OPD_LIST) {
-            const selectEl = document.getElementById('inpOpd');
             selectEl.innerHTML = '<option value="" disabled selected>-- Pilih Perangkat Daerah --</option>';
-            const sorted = Array.from(new Set(opdArray)).sort((a, b) => a.localeCompare(b));
-            sorted.forEach(opd => {
-                const opt = document.createElement('option');
+            var sorted = Array.from(new Set(opdArray)).sort(function (a, b) {
+                return a.localeCompare(b);
+            });
+            sorted.forEach(function (opd) {
+                var opt = document.createElement('option');
                 opt.value = opd;
                 opt.textContent = opd;
                 selectEl.appendChild(opt);
             });
         }
 
-        async function fetchOpdFromGas() {
-            try {
-                const res = await fetch(`${SCRIPT_URL}?action=getOpd&_t=${Date.now()}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.status && Array.isArray(data.data) && data.data.length > 0) {
-                        initOpdSelect(data.data);
-                    }
-                }
-            } catch (e) {
-                // Default list digunakan jika offline
+        function fetchOpdFromGas() {
+            var selectEl = document.getElementById('inpOpd');
+            if (selectEl) {
+                selectEl.innerHTML = '<option value="" disabled selected>-- Memuat Perangkat Daerah dari Google Sheet... --</option>';
             }
+
+            // Priority 1: Panggilan langsung dari dalam Google Apps Script HtmlService
+            if (typeof google !== 'undefined' && google.script && google.script.run) {
+                google.script.run
+                    .withSuccessHandler(function (data) {
+                        initOpdSelect(data);
+                    })
+                    .withFailureHandler(function (err) {
+                        console.warn('Gagal fetch OPD via google.script.run:', err);
+                        initOpdSelect([]);
+                    })
+                    .getOpdList();
+                return;
+            }
+
+            // Priority 2: Request HTTP GET ke Web App GAS Web Script URL
+            fetch(SCRIPT_URL + '?action=getOpd&_t=' + Date.now())
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data && (Array.isArray(data.data) || Array.isArray(data))) {
+                        var opdItems = Array.isArray(data.data) ? data.data : data;
+                        initOpdSelect(opdItems);
+                    } else {
+                        initOpdSelect([]);
+                    }
+                })
+                .catch(function (errFetch) {
+                    console.warn('Gagal fetch API OPD dari Google Sheet:', errFetch);
+                    initOpdSelect([]);
+                });
         }
 
         function initKeteranganListener() {
-            document.querySelectorAll('input[name="inpKeterangan"]').forEach(radio => {
-                radio.addEventListener('change', function () {
-                    const boxLainnya = document.getElementById('boxKeteranganLainnya');
+            var radios = document.querySelectorAll('input[name="inpKeterangan"]');
+            for (var i = 0; i < radios.length; i++) {
+                radios[i].addEventListener('change', function () {
+                    var boxLainnya = document.getElementById('boxKeteranganLainnya');
                     if (boxLainnya) {
                         boxLainnya.classList.toggle('hidden-view', this.value !== 'Lainnya');
                     }
                 });
-            });
+            }
         }
 
         // =========================================================================
@@ -542,50 +525,60 @@
         function deteksiGpsOtomatisDibelakangLayar() {
             if (!navigator.geolocation) return;
 
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                const rLat = pos.coords.latitude;
-                const rLng = pos.coords.longitude;
-                document.getElementById('lat').value = rLat;
-                document.getElementById('lng').value = rLng;
+            navigator.geolocation.getCurrentPosition(
+                function (pos) {
+                    var rLat = pos.coords.latitude;
+                    var rLng = pos.coords.longitude;
+                    var elLat = document.getElementById('lat');
+                    var elLng = document.getElementById('lng');
+                    var elLokasi = document.getElementById('lokasi');
 
-                try {
-                    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${rLat}&lon=${rLng}&_t=${Date.now()}`);
-                    if (r.ok) {
-                        const d = await r.json();
-                        if (d && d.display_name) {
-                            document.getElementById('lokasi').value = d.display_name;
-                            return;
-                        }
-                    }
-                } catch (errGeo) {
-                    // Fallback
-                }
-                document.getElementById('lokasi').value = `${rLat}, ${rLng}`;
-            }, () => {
-                // Biarkan default "Lokasi GPS tidak terdeteksi"
-            }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+                    if (elLat) elLat.value = rLat;
+                    if (elLng) elLng.value = rLng;
+
+                    fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + rLat + '&lon=' + rLng + '&_t=' + Date.now())
+                        .then(function (res) { return res.json(); })
+                        .then(function (d) {
+                            if (d && d.display_name && elLokasi) {
+                                elLokasi.value = d.display_name;
+                            } else if (elLokasi) {
+                                elLokasi.value = rLat + ', ' + rLng;
+                            }
+                        })
+                        .catch(function () {
+                            if (elLokasi) elLokasi.value = rLat + ', ' + rLng;
+                        });
+                },
+                function (err) {
+                    // Tetap gunakan default "Lokasi GPS tidak terdeteksi"
+                },
+                { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+            );
         }
 
         // =========================================================================
         // LOADING OVERLAY
         // =========================================================================
-        function showLoading(show, text = "Memproses...") {
-            const el = document.getElementById('loadingOverlay');
-            document.getElementById('loadingText').innerText = text;
-            el.classList.toggle('hidden', !show);
-            el.classList.toggle('flex', show);
+        function showLoading(show, text) {
+            var el = document.getElementById('loadingOverlay');
+            var txt = document.getElementById('loadingText');
+            if (txt && text) txt.innerText = text;
+            if (el) {
+                el.classList.toggle('hidden', !show);
+                el.classList.toggle('flex', show);
+            }
         }
 
         // =========================================================================
         // RESIZE & VALIDASI INPUT FOTO
         // =========================================================================
-        let fotoTerkonfirmasi = false;
+        var fotoTerkonfirmasi = false;
 
         function handleFotoSelected(event) {
-            const file = event.target.files && event.target.files[0];
+            var file = event.target.files && event.target.files[0];
             if (!file) return;
 
-            const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+            var validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
             if (!validTypes.includes(file.type.toLowerCase())) {
                 event.target.value = '';
                 document.getElementById('fotoBase64').value = '';
@@ -604,13 +597,13 @@
 
             showLoading(true, 'Mengoptimasi ukuran foto...');
 
-            const reader = new FileReader();
+            var reader = new FileReader();
             reader.onload = function (e) {
-                const img = new Image();
+                var img = new Image();
                 img.onload = function () {
-                    const MAX_SIZE = 800;
-                    let width = img.width;
-                    let height = img.height;
+                    var MAX_SIZE = 800;
+                    var width = img.width;
+                    var height = img.height;
 
                     if (width > height) {
                         if (width > MAX_SIZE) {
@@ -624,13 +617,13 @@
                         }
                     }
 
-                    const canvas = document.createElement('canvas');
+                    var canvas = document.createElement('canvas');
                     canvas.width = width;
                     canvas.height = height;
-                    const ctx = canvas.getContext('2d');
+                    var ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    const resizedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+                    var resizedBase64 = canvas.toDataURL('image/jpeg', 0.75);
 
                     // Set preview foto
                     document.getElementById('imgPreview').src = resizedBase64;
@@ -652,7 +645,7 @@
         }
 
         function konfirmasiPakaiFoto() {
-            const b64 = document.getElementById('fotoBase64').value;
+            var b64 = document.getElementById('fotoBase64').value;
             if (!b64) {
                 Swal.fire('Peringatan', 'Silakan pilih file foto terlebih dahulu.', 'warning');
                 return;
@@ -673,59 +666,60 @@
         // =========================================================================
         // KOMUNIKASI API GAS
         // =========================================================================
-        async function callGasApi(action, payload) {
+        function callGasApi(action, payload) {
             if (typeof google !== 'undefined' && google.script && google.script.run) {
-                return new Promise((resolve, reject) => {
+                return new Promise(function (resolve, reject) {
                     if (action === 'submitAbsen') {
                         google.script.run
-                            .withSuccessHandler((res) => resolve(res))
-                            .withFailureHandler((err) => reject(err))
+                            .withSuccessHandler(function (res) { resolve(res); })
+                            .withFailureHandler(function (err) { reject(err); })
                             .prosesAbsen(payload);
                     } else {
                         google.script.run
-                            .withSuccessHandler((res) => resolve(res))
-                            .withFailureHandler((err) => reject(err))
-                            .doPost({ parameter: { action }, postData: { contents: JSON.stringify(payload) } });
+                            .withSuccessHandler(function (res) { resolve(res); })
+                            .withFailureHandler(function (err) { reject(err); })
+                            .doPost({ parameter: { action: action }, postData: { contents: JSON.stringify(payload) } });
                     }
                 });
             }
 
-            const urlTarget = `${SCRIPT_URL}?action=${encodeURIComponent(action)}&_t=${Date.now()}`;
-            const response = await fetch(urlTarget, {
+            var urlTarget = SCRIPT_URL + '?action=' + encodeURIComponent(action) + '&_t=' + Date.now();
+            return fetch(urlTarget, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload)
+            }).then(function (response) {
+                return response.json();
             });
-            return await response.json();
         }
 
         // =========================================================================
         // SUBMIT FORM ABSENSI MANUAL
         // =========================================================================
-        async function submitFormAbsensi(event) {
+        function submitFormAbsensi(event) {
             event.preventDefault();
 
-            const kode = document.getElementById('inpKode').value.trim().toUpperCase();
-            const namaKegiatan = document.getElementById('inpNamaKegiatan').value.trim();
-            const nip = document.getElementById('inpNip').value.trim().replace(/\s+/g, '');
-            const nama = document.getElementById('inpNama').value.trim();
-            const jabatan = document.getElementById('inpJabatan').value.trim();
-            const opd = document.getElementById('inpOpd').value.trim();
-            const lat = document.getElementById('lat').value;
-            const lng = document.getElementById('lng').value;
-            const lokasi = document.getElementById('lokasi').value;
-            const fotoData = document.getElementById('fotoBase64').value;
+            var kode = document.getElementById('inpKode').value.trim().toUpperCase();
+            var namaKegiatan = document.getElementById('inpNamaKegiatan').value.trim();
+            var nip = document.getElementById('inpNip').value.trim().replace(/\s+/g, '');
+            var nama = document.getElementById('inpNama').value.trim();
+            var jabatan = document.getElementById('inpJabatan').value.trim();
+            var opd = document.getElementById('inpOpd').value.trim();
+            var lat = document.getElementById('lat').value;
+            var lng = document.getElementById('lng').value;
+            var lokasi = document.getElementById('lokasi').value;
+            var fotoData = document.getElementById('fotoBase64').value;
 
             // Validasi Keterangan Alasan
-            const radioKeterangan = document.querySelector('input[name="inpKeterangan"]:checked');
+            var radioKeterangan = document.querySelector('input[name="inpKeterangan"]:checked');
             if (!radioKeterangan) {
                 Swal.fire('Peringatan', 'Mohon pilih alasan memakai absensi cadangan terlebih dahulu.', 'warning');
                 return;
             }
 
-            let nilaiKeterangan = radioKeterangan.value;
+            var nilaiKeterangan = radioKeterangan.value;
             if (nilaiKeterangan === 'Lainnya') {
-                const ketLain = document.getElementById('inpKeteranganLainnya').value.trim();
+                var ketLain = document.getElementById('inpKeteranganLainnya').value.trim();
                 if (!ketLain) {
                     Swal.fire('Peringatan', 'Mohon tuliskan detail alasan kendala Anda pada kolom Lainnya.', 'warning');
                     return;
@@ -741,10 +735,10 @@
             if (!opd) { Swal.fire('Peringatan', 'Mohon pilih Perangkat Daerah (OPD).', 'warning'); return; }
             if (!fotoData) { Swal.fire('Peringatan', 'Mohon unggah foto bukti kehadiran terlebih dahulu.', 'warning'); return; }
 
-            const ts = Date.now().toString();
-            const tokenKeamanan = btoa(ts + "_BAIS_PARIAMAN_SECRET_KEY_2026");
+            var ts = Date.now().toString();
+            var tokenKeamanan = btoa(ts + "_BAIS_PARIAMAN_SECRET_KEY_2026");
 
-            const payload = {
+            var payload = {
                 action: 'submitAbsen',
                 kode: kode,
                 nama_kegiatan: namaKegiatan,
@@ -763,50 +757,51 @@
 
             showLoading(true, 'Mengirim data absensi cadangan...');
 
-            try {
-                const res = await callGasApi('submitAbsen', payload);
-                showLoading(false);
+            callGasApi('submitAbsen', payload)
+                .then(function (res) {
+                    showLoading(false);
 
-                if (res && res.status) {
-                    const dataRes = res.data || {};
+                    if (res && res.status) {
+                        var dataRes = res.data || {};
 
-                    // Tampilkan Data ke Receipt
-                    document.getElementById('rcpWaktu').innerText = dataRes.waktu || new Date().toLocaleString('id-ID');
-                    document.getElementById('rcpKode').innerText = dataRes.kode || kode;
-                    document.getElementById('rcpNamaKegiatan').innerText = dataRes.nama_kegiatan || namaKegiatan;
-                    document.getElementById('rcpNama').innerText = dataRes.nama || nama;
-                    document.getElementById('rcpNip').innerText = dataRes.nip || nip;
-                    document.getElementById('rcpJabatan').innerText = dataRes.jabatan || jabatan;
-                    document.getElementById('rcpOpd').innerText = dataRes.opd || opd;
-                    document.getElementById('rcpKeterangan').innerText = dataRes.keterangan || nilaiKeterangan;
+                        // Tampilkan Data ke Receipt
+                        document.getElementById('rcpWaktu').innerText = dataRes.waktu || new Date().toLocaleString('id-ID');
+                        document.getElementById('rcpKode').innerText = dataRes.kode || kode;
+                        document.getElementById('rcpNamaKegiatan').innerText = dataRes.nama_kegiatan || namaKegiatan;
+                        document.getElementById('rcpNama').innerText = dataRes.nama || nama;
+                        document.getElementById('rcpNip').innerText = dataRes.nip || nip;
+                        document.getElementById('rcpJabatan').innerText = dataRes.jabatan || jabatan;
+                        document.getElementById('rcpOpd').innerText = dataRes.opd || opd;
+                        document.getElementById('rcpKeterangan').innerText = dataRes.keterangan || nilaiKeterangan;
 
-                    // Buat QR Code yang berisi Link Google Drive fileUrl
-                    const qrContainer = document.getElementById('receiptQrContainer');
-                    qrContainer.innerHTML = '';
-                    const targetQrContent = dataRes.fileUrl || `BAIS_CADANGAN_${nip}_${kode}_${Date.now()}`;
+                        // Buat QR Code yang berisi Link Google Drive fileUrl
+                        var qrContainer = document.getElementById('receiptQrContainer');
+                        qrContainer.innerHTML = '';
+                        var targetQrContent = dataRes.fileUrl || ("BAIS_CADANGAN_" + nip + "_" + kode + "_" + Date.now());
 
-                    new QRCode(qrContainer, {
-                        text: targetQrContent,
-                        width: 170,
-                        height: 170,
-                        colorDark: "#000000",
-                        colorLight: "#ffffff",
-                        correctLevel: QRCode.CorrectLevel.M
-                    });
+                        new QRCode(qrContainer, {
+                            text: targetQrContent,
+                            width: 170,
+                            height: 170,
+                            colorDark: "#000000",
+                            colorLight: "#ffffff",
+                            correctLevel: QRCode.CorrectLevel.M
+                        });
 
-                    // Pindah Tampilan ke Receipt
-                    document.getElementById('viewForm').classList.add('hidden-view');
-                    document.getElementById('receiptView').classList.remove('hidden-view');
-                    window.scrollTo(0, 0);
+                        // Pindah Tampilan ke Receipt
+                        document.getElementById('viewForm').classList.add('hidden-view');
+                        document.getElementById('receiptView').classList.remove('hidden-view');
+                        window.scrollTo(0, 0);
 
-                } else {
-                    Swal.fire('Gagal Menyimpan', (res && res.message) ? res.message : 'Terjadi kesalahan saat menyimpan data.', 'error');
-                }
-            } catch (err) {
-                showLoading(false);
-                Swal.fire('Error Koneksi', 'Gagal terhubung ke server. Periksa koneksi internet Anda.', 'error');
-                console.error("Submit Absensi Cadangan Error:", err);
-            }
+                    } else {
+                        Swal.fire('Gagal Menyimpan', (res && res.message) ? res.message : 'Terjadi kesalahan saat menyimpan data.', 'error');
+                    }
+                })
+                .catch(function (err) {
+                    showLoading(false);
+                    Swal.fire('Error Koneksi', 'Gagal terhubung ke server. Periksa koneksi internet Anda.', 'error');
+                    console.error("Submit Absensi Cadangan Error:", err);
+                });
         }
 
         // =========================================================================
@@ -824,6 +819,16 @@
             document.getElementById('viewForm').classList.remove('hidden-view');
             window.scrollTo(0, 0);
         }
+
+        // =========================================================================
+        // RUN ON LOAD
+        // =========================================================================
+        initOpdSelect(); // Langsung render default list seketika
+        window.addEventListener('DOMContentLoaded', function () {
+            fetchOpdFromGas();
+            initKeteranganListener();
+            deteksiGpsOtomatisDibelakangLayar();
+        });
     </script>
 
 </body>

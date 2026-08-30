@@ -18,6 +18,10 @@
 		{
 			"id": "1bdb1488a21b4c699aa53de6bbcb7b9d",
 			"binding": "PEGAWAI_KV"
+		},
+		{
+			"id": "acbbceeb54d444c08fbbf8d484129e42",
+			"binding": "PENGATURAN_KV"
 		}
 	],
 	"queues": {
@@ -55,6 +59,10 @@
 				{
 					"id": "1f8f10aa5565442f8adedc45afa8e63c",
 					"binding": "PEGAWAI_KV"
+				},
+				{
+					"id": "9034d8063ea045ce8ab15271ee2bacad",
+					"binding": "PENGATURAN_KV"
 				}
 			],
 			"queues": {

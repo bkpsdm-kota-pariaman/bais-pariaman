@@ -100,4 +100,5 @@ return function(RouteCollector $r) {
     $r->addRoute('GET', '/absensi-cadangan-redirect', ['App\Controllers\PengaturanController', 'redirectAbsensiCadangan']);
     $r->addRoute('GET', '/admin/pengaturan', ['App\Controllers\PengaturanController', 'getPengaturanList']);
     $r->addRoute('PUT', '/admin/pengaturan', ['App\Controllers\PengaturanController', 'updatePengaturan']);
+    $r->addRoute('POST', '/admin/pengaturan/sync-kv', ['App\Controllers\PengaturanController', 'syncKvCache']);
 };

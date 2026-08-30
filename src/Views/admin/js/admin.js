@@ -336,9 +336,27 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
+ * Helper untuk menambahkan query parameter cache buster agar browser tidak mengecash respon API
+ */
+function appendCacheBuster(url) {
+    if (!url) return url;
+    try {
+        const urlObj = new URL(url, window.location.origin);
+        if (!urlObj.searchParams.has('_t') && !urlObj.searchParams.has('cb') && !urlObj.searchParams.has('_')) {
+            urlObj.searchParams.append('_t', Date.now());
+        }
+        return urlObj.toString();
+    } catch (e) {
+        const sep = url.includes('?') ? '&' : '?';
+        return (url.includes('_t=') || url.includes('cb=') || url.includes('_=')) ? url : (url + sep + '_t=' + Date.now());
+    }
+}
+
+/**
  * Helper untuk melakukan fetch request dengan token admin.
  */
 async function fetchWithAuth(url, options = {}) {
+    const finalUrl = appendCacheBuster(url);
     const token = localStorage.getItem('admin_jwt_token');
     const headers = {
         'Authorization': `Bearer ${token}`,
@@ -367,7 +385,7 @@ async function fetchWithAuth(url, options = {}) {
     }, 10000);
 
     try {
-        const response = await fetch(url, fetchOptions);
+        const response = await fetch(finalUrl, fetchOptions);
         clearTimeout(abortTimeout);
 
         let result = null;
@@ -392,6 +410,7 @@ async function fetchWithAuth(url, options = {}) {
 
 // Helper fetch dengan timeout + loading + SweetAlert error
 async function fetchAdmin(url, options = {}) {
+    const finalUrl = appendCacheBuster(url);
     const overlay = document.getElementById('adminLoadingOverlay');
     let abortTimeout;
     const controller = new AbortController();
@@ -400,7 +419,7 @@ async function fetchAdmin(url, options = {}) {
     let timedOut = false;
     abortTimeout = setTimeout(() => { timedOut = true; controller.abort(); }, 10000);
     try {
-        const resp = await fetch(url, options);
+        const resp = await fetch(finalUrl, options);
         clearTimeout(abortTimeout);
 
         let result = null;
@@ -3649,19 +3668,24 @@ function isSuperAdmin() {
 
 function checkSuperAdminUI() {
     const isSuper = isSuperAdmin();
-    const divider = document.getElementById('menuDividerLogAbsensi');
-    const item = document.getElementById('menuItemLogAbsensi');
+    const dividerLog = document.getElementById('menuDividerLogAbsensi');
+    const itemLog = document.getElementById('menuItemLogAbsensi');
+    const dividerPengaturan = document.getElementById('menuDividerPengaturanAplikasi');
     const itemPengaturan = document.getElementById('menuItemPengaturanAplikasi');
     if (isSuper) {
-        if (divider) divider.classList.remove('d-none');
-        if (item) item.classList.remove('d-none');
+        if (dividerLog) dividerLog.classList.remove('d-none');
+        if (itemLog) itemLog.classList.remove('d-none');
+        if (dividerPengaturan) dividerPengaturan.classList.remove('d-none');
         if (itemPengaturan) itemPengaturan.classList.remove('d-none');
     } else {
-        if (divider) divider.classList.add('d-none');
-        if (item) item.classList.add('d-none');
+        if (dividerLog) dividerLog.classList.add('d-none');
+        if (itemLog) itemLog.classList.add('d-none');
+        if (dividerPengaturan) dividerPengaturan.classList.add('d-none');
         if (itemPengaturan) itemPengaturan.classList.add('d-none');
     }
 }
+
+let listPengaturanCache = [];
 
 async function bukaModalPengaturanAplikasi() {
     if (!isSuperAdmin()) {
@@ -3677,8 +3701,8 @@ async function bukaModalPengaturanAplikasi() {
         const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
         showAdminLoading(false);
         if (res.status && res.data) {
-            const linkInput = document.getElementById('inpLinkAbsensiCadangan');
-            if (linkInput) linkInput.value = res.data.link_absensi_cadangan || '';
+            listPengaturanCache = Array.isArray(res.data.list) ? res.data.list : [];
+            renderTabelPengaturanAplikasi(listPengaturanCache);
             modalInst.show();
         } else {
             Swal.fire('Gagal', res.message || 'Gagal memuat pengaturan.', 'error');
@@ -3689,20 +3713,109 @@ async function bukaModalPengaturanAplikasi() {
     }
 }
 
-async function submitPengaturanAplikasi(event) {
+function renderTabelPengaturanAplikasi(dataList) {
+    const tbody = document.getElementById('tbodyPengaturanAplikasi');
+    if (!tbody) return;
+
+    if (!Array.isArray(dataList) || dataList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Belum ada data pengaturan aplikasi.</td></tr>';
+        return;
+    }
+
+    let html = '';
+    dataList.forEach((item, index) => {
+        const kode = escapeHtml(item.kode_pengaturan || '');
+        const nama = escapeHtml(item.nama_pengaturan || '');
+        const nilai = escapeHtml(item.nilai_pengaturan || '');
+        const kodeJson = JSON.stringify(item.kode_pengaturan || '').replace(/"/g, '&quot;');
+        const namaJson = JSON.stringify(item.nama_pengaturan || '').replace(/"/g, '&quot;');
+        const nilaiJson = JSON.stringify(item.nilai_pengaturan || '').replace(/"/g, '&quot;');
+
+        html += `
+            <tr>
+                <td class="text-center fw-bold text-secondary">${index + 1}</td>
+                <td>
+                    <span class="fw-bold text-dark">${nama}</span>
+                </td>
+                <td>
+                    <code class="bg-light text-danger px-2 py-1 rounded small border">${kode}</code>
+                </td>
+                <td>
+                    <div class="text-break font-monospace small" style="max-height: 80px; overflow-y: auto;">${nilai}</div>
+                </td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-primary fw-bold px-2 py-1 shadow-sm"
+                        onclick="bukaModalFormPengaturan('edit', ${kodeJson}, ${namaJson}, ${nilaiJson})">
+                        <i class="bi bi-pencil-square me-1"></i> Edit
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+}
+
+function bukaModalFormPengaturan(mode, kode = '', nama = '', nilai = '') {
+    if (!isSuperAdmin()) {
+        Swal.fire('Akses Ditolak', 'Hanya super admin yang dapat mengakses form pengaturan.', 'error');
+        return;
+    }
+
+    const titleEl = document.getElementById('modalFormPengaturanTitle');
+    const modeEl = document.getElementById('formPengaturanMode');
+    const inpKode = document.getElementById('inpKodePengaturan');
+    const inpNama = document.getElementById('inpNamaPengaturan');
+    const inpNilai = document.getElementById('inpNilaiPengaturan');
+
+    if (mode === 'edit') {
+        if (titleEl) titleEl.innerHTML = '<i class="bi bi-pencil-square me-2"></i> Edit Pengaturan';
+        if (modeEl) modeEl.value = 'edit';
+        if (inpKode) {
+            inpKode.value = kode;
+            inpKode.disabled = true;
+        }
+        if (inpNama) inpNama.value = nama;
+        if (inpNilai) inpNilai.value = nilai;
+    } else {
+        if (titleEl) titleEl.innerHTML = '<i class="bi bi-plus-circle me-2"></i> Tambah Pengaturan Baru';
+        if (modeEl) modeEl.value = 'tambah';
+        if (inpKode) {
+            inpKode.value = '';
+            inpKode.disabled = false;
+        }
+        if (inpNama) inpNama.value = '';
+        if (inpNilai) inpNilai.value = '';
+    }
+
+    const modalFormEl = document.getElementById('modalFormPengaturanItem');
+    const modalFormInst = bootstrap.Modal.getOrCreateInstance(modalFormEl);
+    modalFormInst.show();
+}
+
+async function submitFormPengaturanItem(event) {
     if (event) event.preventDefault();
     if (!isSuperAdmin()) {
-        Swal.fire('Akses Ditolak', 'Hanya super admin yang dapat mengubah pengaturan.', 'error');
+        Swal.fire('Akses Ditolak', 'Hanya super admin yang dapat menyimpan pengaturan.', 'error');
         return;
     }
 
-    const linkVal = document.getElementById('inpLinkAbsensiCadangan').value.trim();
-    if (!linkVal) {
-        Swal.fire('Peringatan', 'URL Link Absensi Cadangan tidak boleh kosong.', 'warning');
+    const mode = document.getElementById('formPengaturanMode').value;
+    const inpKode = document.getElementById('inpKodePengaturan');
+    const namaVal = document.getElementById('inpNamaPengaturan').value.trim();
+    const kodeVal = inpKode.value.trim();
+    const nilaiVal = document.getElementById('inpNilaiPengaturan').value.trim();
+
+    if (!namaVal) {
+        Swal.fire('Peringatan', 'Nama Pengaturan (Caption) wajib diisi.', 'warning');
+        return;
+    }
+    if (!kodeVal) {
+        Swal.fire('Peringatan', 'Kode Pengaturan (Kunci Unik) wajib diisi.', 'warning');
         return;
     }
 
-    const btn = document.getElementById('btnSimpanPengaturan');
+    const btn = document.getElementById('btnSimpanFormPengaturan');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
 
@@ -3710,30 +3823,79 @@ async function submitPengaturanAplikasi(event) {
         const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`, {
             method: 'PUT',
             body: JSON.stringify({
-                link_absensi_cadangan: linkVal
+                kode_pengaturan: kodeVal,
+                nama_pengaturan: namaVal,
+                nilai_pengaturan: nilaiVal
             })
         });
 
         if (res.status) {
-            const modalEl = document.getElementById('modalPengaturanAplikasi');
-            const modalInst = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
-            if (modalInst) modalInst.hide();
+            const modalFormEl = document.getElementById('modalFormPengaturanItem');
+            const modalFormInst = bootstrap.Modal.getInstance(modalFormEl);
+            if (modalFormInst) modalFormInst.hide();
+
+            // Refresh daftar pengaturan di modal utama
+            const refreshRes = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
+            if (refreshRes.status && refreshRes.data) {
+                listPengaturanCache = Array.isArray(refreshRes.data.list) ? refreshRes.data.list : [];
+                renderTabelPengaturanAplikasi(listPengaturanCache);
+            }
+
             Swal.fire({
                 toast: true,
                 position: 'top-end',
                 icon: 'success',
-                title: 'Pengaturan berhasil disimpan!',
+                title: 'Pengaturan berhasil disimpan & tersinkron ke KV!',
                 showConfirmButton: false,
-                timer: 2000
+                timer: 2200
             });
         } else {
             Swal.fire('Gagal', res.message || 'Gagal menyimpan pengaturan.', 'error');
         }
     } catch (e) {
-        Swal.fire('Error', 'Gagal menyimpan pengaturan ke server.', 'error');
+        Swal.fire('Error', 'Gagal terhubung ke server untuk menyimpan pengaturan.', 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Simpan Pengaturan';
+    }
+}
+
+async function syncPengaturanKv() {
+    if (!isSuperAdmin()) {
+        Swal.fire('Akses Ditolak', 'Hanya super admin yang dapat menyinkronkan KV.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btnSyncPengaturanKv');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyinkronkan...';
+    }
+
+    try {
+        const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan/sync-kv`, {
+            method: 'POST'
+        });
+
+        if (res.status) {
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Sinkronisasi KV berhasil!',
+                showConfirmButton: false,
+                timer: 2000
+            });
+        } else {
+            Swal.fire('Gagal Sinkronisasi', res.message || 'Gagal menyinkronkan data ke Worker KV.', 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error', 'Gagal terhubung ke server untuk sinkronisasi KV.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-cloud-upload me-1"></i> Sinkronkan ke Worker KV';
+        }
     }
 }
 

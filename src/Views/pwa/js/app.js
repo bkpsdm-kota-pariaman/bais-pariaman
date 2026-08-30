@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.229'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.239'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -975,6 +975,23 @@ async function forceLogout() { // Dipanggil saat token expired
 }
 
 /**
+ * Helper untuk menambahkan query parameter cache buster agar browser tidak mengecash respon API
+ */
+function appendCacheBuster(url) {
+    if (!url) return url;
+    try {
+        const urlObj = new URL(url, window.location.origin);
+        if (!urlObj.searchParams.has('cb') && !urlObj.searchParams.has('_t') && !urlObj.searchParams.has('_')) {
+            urlObj.searchParams.append('cb', Date.now());
+        }
+        return urlObj.toString();
+    } catch (e) {
+        const sep = url.includes('?') ? '&' : '?';
+        return (url.includes('cb=') || url.includes('_t=') || url.includes('_=')) ? url : (url + sep + 'cb=' + Date.now());
+    }
+}
+
+/**
  * Wrapper untuk fetch yang menyertakan token otorisasi
  * dan menangani error 401 (Unauthorized) secara otomatis.
  * @param {string} url - URL API endpoint.
@@ -995,9 +1012,8 @@ async function fetchWithAuth(url, options = {}) {
 
     const fetchOptions = { ...options, headers: { 'Authorization': `Bearer ${token}`, ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }), ...options.headers, }, };
 
-    const urlObj = new URL(url);
-    urlObj.searchParams.append('cb', Date.now());
-    const response = await fetch(urlObj.toString(), fetchOptions);
+    const finalUrl = appendCacheBuster(url);
+    const response = await fetch(finalUrl, fetchOptions);
 
     if (response.status === 401) {
         // Jika server mengembalikan 401 (Unauthorized), berarti token

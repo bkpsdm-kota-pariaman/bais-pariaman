@@ -153,6 +153,9 @@
                     class="bi bi-people me-2"></i> Pegawai</a></li>
               <li><a class="dropdown-item fw-semibold" href="#" onclick="bukaHalamanOpd(); return false;"><i
                     class="bi bi-building me-2"></i> Perangkat Daerah (OPD)</a></li>
+              <li id="menuDividerPengaturanAplikasi" class="dropdown-divider d-none"></li>
+              <li id="menuItemPengaturanAplikasi" class="d-none"><a class="dropdown-item fw-semibold text-danger" href="#"
+                  onclick="bukaModalPengaturanAplikasi(); return false;"><i class="bi bi-gear-fill me-2"></i> Pengaturan Aplikasi</a></li>
             </ul>
           </li>
 
@@ -173,8 +176,6 @@
               <li id="menuItemLogAbsensi" class="d-none"><a class="dropdown-item fw-semibold text-danger" href="#"
                   onclick="bukaHalamanLogAbsensi(); return false;"><i class="bi bi-journal-text me-2"></i> Log
                   Absensi</a></li>
-              <li id="menuItemPengaturanAplikasi" class="d-none"><a class="dropdown-item fw-semibold text-danger" href="#"
-                  onclick="bukaModalPengaturanAplikasi(); return false;"><i class="bi bi-gear-fill me-2"></i> Pengaturan Aplikasi</a></li>
             </ul>
           </li>
 
@@ -1626,25 +1627,93 @@
 
   <!-- MODAL PENGATURAN APLIKASI (SUPER ADMIN ONLY) -->
   <div class="modal fade" id="modalPengaturanAplikasi" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content border-0 shadow-lg">
         <div class="modal-header bg-danger text-white">
           <h5 class="modal-title fw-bold"><i class="bi bi-gear-fill me-2"></i> Pengaturan Aplikasi</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4">
-          <form onsubmit="submitPengaturanAplikasi(event)">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <button type="button" class="btn btn-sm btn-danger fw-bold shadow-sm" onclick="bukaModalFormPengaturan('tambah')">
+              <i class="bi bi-plus-circle me-1"></i> Tambah Pengaturan
+            </button>
+            <button type="button" id="btnSyncPengaturanKv" onclick="syncPengaturanKv()" class="btn btn-sm btn-outline-danger fw-bold shadow-sm">
+              <i class="bi bi-cloud-upload me-1"></i> Sinkronkan ke Worker KV
+            </button>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-hover table-bordered align-middle mb-0" style="font-size: 0.875rem;">
+              <thead class="table-light text-secondary">
+                <tr>
+                  <th style="width: 50px;" class="text-center">No</th>
+                  <th style="min-width: 170px;">Nama Pengaturan</th>
+                  <th style="min-width: 170px;">Kode Pengaturan</th>
+                  <th style="min-width: 220px;">Nilai Pengaturan</th>
+                  <th style="width: 80px;" class="text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyPengaturanAplikasi">
+                <tr>
+                  <td colspan="5" class="text-center text-muted py-4">Memuat data pengaturan...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer bg-light p-2">
+          <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Tutup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL FORM TAMBAH / EDIT PENGATURAN (SUPER ADMIN ONLY) -->
+  <div class="modal fade" id="modalFormPengaturanItem" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title fw-bold" id="modalFormPengaturanTitle">
+            <i class="bi bi-sliders me-2"></i> Form Pengaturan
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <form onsubmit="submitFormPengaturanItem(event)">
+            <input type="hidden" id="formPengaturanMode" value="tambah">
+            
             <div class="mb-3">
-              <label for="inpLinkAbsensiCadangan" class="form-label fw-bold small text-secondary">
-                URL / Link Absensi Cadangan <span class="text-danger">*</span>
+              <label for="inpNamaPengaturan" class="form-label fw-bold small text-secondary">
+                Nama Pengaturan (Caption) <span class="text-danger">*</span>
               </label>
-              <textarea id="inpLinkAbsensiCadangan" class="form-control font-mono small" rows="3" 
-                placeholder="https://script.google.com/macros/s/.../exec" required></textarea>
-              <small class="text-muted d-block mt-1" style="font-size: 0.8rem;">
-                Pengguna yang mengakses <code>/absensi-cadangan/</code> akan otomatis diredirect ke URL ini.
+              <input type="text" id="inpNamaPengaturan" class="form-control" 
+                placeholder="Contoh: Link Absensi Cadangan" required>
+              <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                Nama atau judul pengaturan yang akan muncul di antarmuka sistem.
               </small>
             </div>
-            <button type="submit" id="btnSimpanPengaturan" class="btn btn-danger w-100 fw-bold py-2 shadow-sm">
+
+            <div class="mb-3">
+              <label for="inpKodePengaturan" class="form-label fw-bold small text-secondary">
+                Kode Pengaturan (Kunci Unik) <span class="text-danger">*</span>
+              </label>
+              <input type="text" id="inpKodePengaturan" class="form-control font-monospace" 
+                placeholder="Contoh: link_absensi_cadangan" required>
+              <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                Kunci unik sistem (hanya huruf, angka, underscore). Tidak dapat diubah saat mode edit.
+              </small>
+            </div>
+
+            <div class="mb-3">
+              <label for="inpNilaiPengaturan" class="form-label fw-bold small text-secondary">
+                Nilai Pengaturan <span class="text-danger">*</span>
+              </label>
+              <textarea id="inpNilaiPengaturan" class="form-control font-monospace small" rows="3" 
+                placeholder="Masukkan nilai pengaturan..." required></textarea>
+            </div>
+
+            <button type="submit" id="btnSimpanFormPengaturan" class="btn btn-danger w-100 fw-bold py-2 shadow-sm">
               <i class="bi bi-check-circle me-1"></i> Simpan Pengaturan
             </button>
           </form>
