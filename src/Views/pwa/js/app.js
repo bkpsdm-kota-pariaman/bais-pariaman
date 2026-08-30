@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.241'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.244'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -1179,8 +1179,7 @@ async function generateUserQrToken() {
         }
     } catch (finalError) {
         console.error("Gagal membuat QR Code.", finalError);
-        const errorMsg = finalError.message || "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
-        Swal.fire("Gagal Membuat QR", errorMsg, "error");
+        Swal.fire("Gagal Membuat QR", "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.", "error");
     } finally {
         showLoading(false);
     }
@@ -1333,8 +1332,8 @@ async function adminCepatCekJadwal(event) {
         document.getElementById('admin-cepat-step2').classList.remove('hidden-view');
 
     } catch (error) {
-        // Jika terjadi error (misal: jadwal tidak ditemukan), tampilkan pesan.
-        Swal.fire("Gagal", error.message || "Terjadi kesalahan saat memeriksa jadwal.", "error");
+        console.error("Error saat memeriksa jadwal admin cepat:", error);
+        Swal.fire("Gagal", "Terjadi kesalahan saat memeriksa jadwal.", "error");
     } finally {
         // Pastikan overlay loading selalu disembunyikan setelah proses selesai.
         showLoading(false);
@@ -1811,7 +1810,7 @@ async function prosesQrCode(kodeOrJwt) {
     } catch (error) {
         showLoading(false);
         console.error("Error processing QR/Code:", error);
-        Swal.fire("Gagal", error.message || "Terjadi kesalahan saat memvalidasi jadwal.", "error").then(() => {
+        Swal.fire("Gagal", "Terjadi kesalahan saat memvalidasi jadwal.", "error").then(() => {
             batalAbsen();
         });
     }
@@ -2313,8 +2312,7 @@ async function kirimAbsensi() {
         }
     } catch (finalError) {
         console.error("Error saat kirim absensi:", finalError);
-        const errMsg = finalError.message || "Tidak dapat mengirim data absensi. Periksa koneksi internet Anda dan coba lagi.";
-        Swal.fire("Gagal Mengirim", errMsg, "error");
+        Swal.fire("Gagal Mengirim", "Tidak dapat mengirim data absensi. Periksa koneksi internet Anda dan coba lagi.", "error");
     } finally {
         window._isSubmittingAbsen = false;
         showLoading(false);
@@ -2407,7 +2405,7 @@ async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
         }
     } catch (e) {
         console.error("Error saat kirim absensi cepat:", e);
-        Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Gagal: ${e.message || 'Error Koneksi'}`, showConfirmButton: false, timer: 2000 });
+        Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: 'Gagal mengirim absensi cepat. Periksa koneksi.', showConfirmButton: false, timer: 2000 });
         // Lemparkan kembali error agar bisa ditangkap oleh pemanggil jika perlu.
         throw e;
     } finally {
@@ -3053,7 +3051,7 @@ async function handleScanSuccess(decodedText) {
                 }
             } catch (e) {
                 console.error("Terjadi kesalahan saat mengirim absensi cepat:", e);
-                Swal.fire("Kesalahan", e.message || "Terjadi kesalahan tidak terduga.", "error");
+                Swal.fire("Kesalahan", "Terjadi kesalahan saat memproses absensi cepat.", "error");
             } finally {
                 showLoading(false);
                 setTimeout(() => {

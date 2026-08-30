@@ -233,7 +233,8 @@ async function prosesLogin() {
         }
 
     } catch (error) {
-        Swal.fire('Gagal', `Login Gagal: ${error.message}`, 'error');
+        console.error('Error proses login:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat login.', 'error');
     } finally {
         // Aktifkan kembali tombol login
         loginButton.disabled = false;
@@ -478,6 +479,7 @@ async function loadJadwalKegiatan(isFromPagination = false) {
         }
     } catch (error) {
         console.error('Error loading jadwal:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat memuat data jadwal.', 'error');
     } finally {
         loading.classList.add('d-none');
         container.classList.remove('d-none');
@@ -657,6 +659,7 @@ async function submitKegiatanBaru(event) {
         }
     } catch (error) {
         console.error('Error creating schedule:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan jadwal.', 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = 'Simpan Jadwal';
@@ -684,6 +687,7 @@ async function hapusKegiatan(kodeAkses) {
         }
     } catch (error) {
         console.error('Error deleting schedule:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus jadwal.', 'error');
     }
 }
 
@@ -930,6 +934,7 @@ async function bukaModalEdit(kodeAkses) {
 
     } catch (error) {
         console.error('Error opening edit modal:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat membuka data jadwal.', 'error');
     }
 }
 
@@ -974,6 +979,7 @@ async function submitEditKegiatan(event) {
         }
     } catch (error) {
         console.error('Error updating schedule:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat memperbarui jadwal.', 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = 'Perbarui Jadwal';
@@ -1587,7 +1593,10 @@ async function submitOpd(event) {
         } else {
             Swal.fire('Gagal', result.message, 'error');
         }
-    } catch (error) { } finally {
+    } catch (error) {
+        console.error('Error submitting OPD:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan data OPD.', 'error');
+    } finally {
         btn.disabled = false;
         btn.innerHTML = (currentOpdMode === 'add') ? '<i class="bi bi-plus-circle"></i> Tambah OPD' : '<i class="bi bi-floppy"></i> Simpan Perubahan';
     }
@@ -1614,7 +1623,10 @@ async function hapusOpd(id, nama) {
             } else {
                 Swal.fire('Gagal', result.message, 'error');
             }
-        } catch (error) { }
+        } catch (error) {
+            console.error('Error deleting OPD:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus OPD.', 'error');
+        }
     }
 }
 
@@ -1642,6 +1654,8 @@ async function syncOpdList() {
             }
         } catch (error) {
             showAdminLoading(false);
+            console.error('Error syncing OPD list:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat sinkronisasi cache OPD.', 'error');
         }
     }
 }
@@ -1917,7 +1931,10 @@ async function hapusDataAbsensi(nip, nama, kodeAkses) {
             } else {
                 Swal.fire('Gagal', result.message, 'error');
             }
-        } catch (error) { }
+        } catch (error) {
+            console.error('Error deleting absensi data:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus data absensi.', 'error');
+        }
     }
 }
 
@@ -2034,6 +2051,7 @@ async function submitVerifikasi(event) {
         }
     } catch (error) {
         console.error('Error submitting verification:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan verifikasi absensi.', 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-floppy"></i> Simpan Status';
@@ -2270,7 +2288,8 @@ async function submitTambahPesertaBulk(event) {
             Swal.fire('Gagal', result.message, 'error');
         }
     } catch (error) {
-        console.error('Error adding participant:', error);
+        console.error('Error adding participant bulk:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat menambahkan peserta massal.', 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-floppy"></i> Simpan Pilihan & Kehadiran';
@@ -2588,6 +2607,8 @@ async function syncPegawaiKv(nip, nama) {
             }
         } catch (error) {
             showAdminLoading(false);
+            console.error('Error syncing pegawai KV:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat sinkronisasi pegawai ke KV.', 'error');
         }
     }
 }
@@ -2617,6 +2638,8 @@ async function syncJadwalKv(kodeAkses, judul) {
             }
         } catch (error) {
             showAdminLoading(false);
+            console.error('Error syncing single pegawai KV:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat sinkronisasi pegawai ke KV.', 'error');
         }
     }
 }
@@ -2808,7 +2831,10 @@ async function submitPegawai(event) {
         } else {
             Swal.fire('Gagal', result.message, 'error');
         }
-    } catch (error) { } finally {
+    } catch (error) {
+        console.error('Error submitting pegawai:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan data pegawai.', 'error');
+    } finally {
         btn.disabled = false;
         btn.innerHTML = (currentPegawaiMode === 'add') ? '<i class="bi bi-plus-circle"></i> Tambah Pegawai' : '<i class="bi bi-floppy"></i> Simpan Perubahan';
     }
@@ -2835,7 +2861,10 @@ async function hapusPegawai(nip, nama) {
             } else {
                 Swal.fire('Gagal', result.message, 'error');
             }
-        } catch (error) { }
+        } catch (error) {
+            console.error('Error deleting pegawai:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus data pegawai.', 'error');
+        }
     }
 }
 
@@ -3080,7 +3109,10 @@ async function hapusDataAbsensiKeseluruhan(nip, nama, kodeAkses) {
             } else {
                 Swal.fire('Gagal', result.message, 'error');
             }
-        } catch (error) { }
+        } catch (error) {
+            console.error('Error deleting absensi data keseluruhan:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus data absensi.', 'error');
+        }
     }
 }
 
@@ -3724,7 +3756,7 @@ async function bukaModalPengaturanAplikasi() {
     } catch (e) {
         showAdminLoading(false);
         console.error('Error membuka modal pengaturan:', e);
-        Swal.fire('Error', e.message || 'Gagal terhubung ke server.', 'error');
+        Swal.fire('Gagal', 'Terjadi kesalahan saat memuat pengaturan aplikasi.', 'error');
     }
 }
 
@@ -3877,7 +3909,8 @@ async function submitFormPengaturanItem(event) {
             Swal.fire('Gagal', res.message || 'Gagal menyimpan pengaturan.', 'error');
         }
     } catch (e) {
-        Swal.fire('Error', 'Gagal terhubung ke server untuk menyimpan pengaturan.', 'error');
+        console.error('Error menyimpan pengaturan:', e);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan pengaturan aplikasi.', 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Simpan Pengaturan';
@@ -3914,7 +3947,8 @@ async function syncPengaturanKv() {
             Swal.fire('Gagal Sinkronisasi', res.message || 'Gagal menyinkronkan data ke Worker KV.', 'error');
         }
     } catch (e) {
-        Swal.fire('Error', 'Gagal terhubung ke server untuk sinkronisasi KV.', 'error');
+        console.error('Error sinkronisasi KV pengaturan:', e);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat sinkronisasi pengaturan ke Worker KV.', 'error');
     } finally {
         if (btn) {
             btn.disabled = false;
