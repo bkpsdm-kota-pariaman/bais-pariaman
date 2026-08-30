@@ -3685,6 +3685,19 @@ function checkSuperAdminUI() {
     }
 }
 
+/**
+ * Helper untuk sanitasi string HTML agar terhindar dari XSS dan syntax error
+ */
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 let listPengaturanCache = [];
 
 async function bukaModalPengaturanAplikasi() {
@@ -3694,22 +3707,24 @@ async function bukaModalPengaturanAplikasi() {
     }
 
     const modalEl = document.getElementById('modalPengaturanAplikasi');
+    if (!modalEl) return;
     const modalInst = bootstrap.Modal.getOrCreateInstance(modalEl);
 
     showAdminLoading(true, 'Memuat pengaturan aplikasi...');
     try {
         const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
         showAdminLoading(false);
-        if (res.status && res.data) {
+        if (res && res.status && res.data) {
             listPengaturanCache = Array.isArray(res.data.list) ? res.data.list : [];
             renderTabelPengaturanAplikasi(listPengaturanCache);
             modalInst.show();
         } else {
-            Swal.fire('Gagal', res.message || 'Gagal memuat pengaturan.', 'error');
+            Swal.fire('Gagal', (res && res.message) ? res.message : 'Gagal memuat pengaturan.', 'error');
         }
     } catch (e) {
         showAdminLoading(false);
-        Swal.fire('Error', 'Gagal terhubung ke server.', 'error');
+        console.error('Error membuka modal pengaturan:', e);
+        Swal.fire('Error', e.message || 'Gagal terhubung ke server.', 'error');
     }
 }
 
@@ -3727,9 +3742,9 @@ function renderTabelPengaturanAplikasi(dataList) {
         const kode = escapeHtml(item.kode_pengaturan || '');
         const nama = escapeHtml(item.nama_pengaturan || '');
         const nilai = escapeHtml(item.nilai_pengaturan || '');
-        const kodeJson = JSON.stringify(item.kode_pengaturan || '').replace(/"/g, '&quot;');
-        const namaJson = JSON.stringify(item.nama_pengaturan || '').replace(/"/g, '&quot;');
-        const nilaiJson = JSON.stringify(item.nilai_pengaturan || '').replace(/"/g, '&quot;');
+        const kodeAttr = encodeURIComponent(item.kode_pengaturan || '');
+        const namaAttr = encodeURIComponent(item.nama_pengaturan || '');
+        const nilaiAttr = encodeURIComponent(item.nilai_pengaturan || '');
 
         html += `
             <tr>
@@ -3745,7 +3760,7 @@ function renderTabelPengaturanAplikasi(dataList) {
                 </td>
                 <td class="text-center">
                     <button class="btn btn-sm btn-outline-primary fw-bold px-2 py-1 shadow-sm"
-                        onclick="bukaModalFormPengaturan('edit', ${kodeJson}, ${namaJson}, ${nilaiJson})">
+                        onclick="bukaModalFormPengaturanFromTable('${kodeAttr}', '${namaAttr}', '${nilaiAttr}')">
                         <i class="bi bi-pencil-square me-1"></i> Edit
                     </button>
                 </td>
@@ -3754,6 +3769,13 @@ function renderTabelPengaturanAplikasi(dataList) {
     });
 
     tbody.innerHTML = html;
+}
+
+function bukaModalFormPengaturanFromTable(kodeEnc, namaEnc, nilaiEnc) {
+    const kode = decodeURIComponent(kodeEnc || '');
+    const nama = decodeURIComponent(namaEnc || '');
+    const nilai = decodeURIComponent(nilaiEnc || '');
+    bukaModalFormPengaturan('edit', kode, nama, nilai);
 }
 
 function bukaModalFormPengaturan(mode, kode = '', nama = '', nilai = '') {
@@ -3789,8 +3811,10 @@ function bukaModalFormPengaturan(mode, kode = '', nama = '', nilai = '') {
     }
 
     const modalFormEl = document.getElementById('modalFormPengaturanItem');
-    const modalFormInst = bootstrap.Modal.getOrCreateInstance(modalFormEl);
-    modalFormInst.show();
+    if (modalFormEl) {
+        const modalFormInst = bootstrap.Modal.getOrCreateInstance(modalFormEl);
+        modalFormInst.show();
+    }
 }
 
 async function submitFormPengaturanItem(event) {
