@@ -423,6 +423,13 @@ function prosesAbsen(data) {
         const rawFoto = (data.fotoData || data.foto || '').toString();
         const keterangan = (data.keterangan || '').toString().trim();
 
+        // Tambahkan tanda kutip satu di depan agar Google Sheet menyimpan secara presisi sebagai Plain Text
+        // (mencegah koma/titik desimal dianggap pemisah ribuan oleh lokal bahasa di Google Sheet)
+        const latText = lat.startsWith("'") ? lat : ("'" + lat);
+        const lngText = lng.startsWith("'") ? lng : ("'" + lng);
+        const nipText = nip.startsWith("'") ? nip : ("'" + nip);
+        const kodeText = kode.startsWith("'") ? kode : ("'" + kode);
+
         if (!kode || !namaKegiatan || !nip || !nama || !jabatan || !opd || !keterangan || !rawFoto) {
             return { status: false, message: 'Semua kolom formulir, alasan kendala, dan foto wajib diisi.' };
         }
@@ -456,15 +463,15 @@ function prosesAbsen(data) {
         // A=waktu, B=kode_akses, C=nama_kegiatan, D=nip, E=nama, F=jabatan, G=opd, H=lokasi, I=lat, J=lng, K=nama_file_foto, L=keterangan
         sheet.appendRow([
             waktu,        // Kolom A (1)
-            kode,         // Kolom B (2)
+            kodeText,     // Kolom B (2)
             namaKegiatan, // Kolom C (3)
-            nip,          // Kolom D (4)
+            nipText,      // Kolom D (4)
             nama,         // Kolom E (5)
             jabatan,      // Kolom F (6)
             opd,          // Kolom G (7)
             lokasi,       // Kolom H (8)
-            lat,          // Kolom I (9)
-            lng,          // Kolom J (10)
+            latText,      // Kolom I (9)
+            lngText,      // Kolom J (10)
             fileUrl,      // Kolom K (11)
             keterangan    // Kolom L (12)
         ]);

@@ -373,13 +373,13 @@ export default {
 			// =================================================================
 			// RUTE PENGATURAN APLIKASI (DIPANGGIL OLEH PWA / ABSENSI CADANGAN)
 			// =================================================================
-			if (pathname.endsWith('/api/pengaturan/link-absensi-cadangan')) {
+			if (pathname.endsWith('/api/pengaturan/link-absensi-cadangan') || pathname.endsWith('/pengaturan/link-absensi-cadangan')) {
 				const kvKey = 'pengaturan:link_absensi_cadangan';
 				if (env.PENGATURAN_KV) {
 					const cachedLink = await env.PENGATURAN_KV.get(kvKey);
-					if (cachedLink) {
+					if (cachedLink && cachedLink.trim() !== '') {
 						console.log('[Pengaturan Cache] Cache HIT for link_absensi_cadangan:', cachedLink);
-						return jsonResponse(true, 200, 'Link absensi cadangan dari cache Worker KV.', { link_absensi_cadangan: cachedLink });
+						return jsonResponse(true, 200, 'Link absensi cadangan dari cache Worker KV.', { link_absensi_cadangan: cachedLink.trim() });
 					}
 				}
 
@@ -391,8 +391,8 @@ export default {
 						if (phpRes.ok) {
 							const phpData = await phpRes.json();
 							if (phpData && phpData.status && phpData.data && phpData.data.link_absensi_cadangan) {
-								const linkVal = phpData.data.link_absensi_cadangan;
-								if (env.PENGATURAN_KV) {
+								const linkVal = phpData.data.link_absensi_cadangan.trim();
+								if (linkVal !== '' && env.PENGATURAN_KV) {
 									// Simpan permanen seumur hidup tanpa batas waktu (no TTL)
 									ctx.waitUntil(env.PENGATURAN_KV.put(kvKey, linkVal));
 								}
@@ -404,7 +404,7 @@ export default {
 					}
 				}
 
-				return jsonResponse(false, 404, 'Pengaturan link absensi cadangan tidak ditemukan.');
+				return jsonResponse(false, 404, 'Pengaturan link absensi cadangan tidak ditemukan di database.');
 			}
 
 			// =================================================================

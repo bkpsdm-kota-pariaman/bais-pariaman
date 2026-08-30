@@ -435,7 +435,7 @@
         // =========================================================================
         // KONFIGURASI URL & ENDPOINT
         // =========================================================================
-        var GAS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyomeSnc8N3TWt5PQ8pXbokq1-ovObR5I-7BLcWzvUBGfJl9m4sGRxEKYRoGOAfwfqC/exec";
+        var GAS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNNznBszjXlNI0UW2NHxWcTWSRpwUiZwbflqoIVgVJTvVW1_9_9BocCgsoU8kW-4wo/exec";
         var SCRIPT_URL = GAS_SCRIPT_URL;
 
         if (typeof google !== 'undefined' && google.script && google.script.run) {
@@ -738,17 +738,22 @@
             var ts = Date.now().toString();
             var tokenKeamanan = btoa(ts + "_BAIS_PARIAMAN_SECRET_KEY_2026");
 
+            var safeLat = lat ? (lat.toString().startsWith("'") ? lat : "'" + lat) : "'0";
+            var safeLng = lng ? (lng.toString().startsWith("'") ? lng : "'" + lng) : "'0";
+            var safeNip = nip ? (nip.toString().startsWith("'") ? nip : "'" + nip) : "''";
+            var safeKode = kode ? (kode.toString().startsWith("'") ? kode : "'" + kode) : "''";
+
             var payload = {
                 action: 'submitAbsen',
-                kode: kode,
+                kode: safeKode,
                 nama_kegiatan: namaKegiatan,
-                nip: nip,
+                nip: safeNip,
                 nama: nama,
                 jabatan: jabatan,
                 opd: opd,
                 lokasi: lokasi,
-                lat: lat,
-                lng: lng,
+                lat: safeLat,
+                lng: safeLng,
                 keterangan: nilaiKeterangan,
                 fotoData: fotoData,
                 _ts: ts,

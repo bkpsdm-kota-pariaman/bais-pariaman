@@ -53,14 +53,7 @@ class SystemController {
             // Ignore error jika migrasi sudah berhasil dijalankan sebelumnya
         }
 
-        // Pastikan setting default link_absensi_cadangan ada di database
-        $stmtDefault = $db->prepare("SELECT id FROM app_absensi_pengaturan_aplikasi WHERE kode_pengaturan = 'link_absensi_cadangan' LIMIT 1");
-        $stmtDefault->execute();
-        if (!$stmtDefault->fetch()) {
-            $defaultLink = 'https://script.google.com/macros/s/AKfycbxGeScmNpeAOHnBd_s39KxtZPhgL5nwvoR6pO8-uXpXl8RSi0YgUTupTeDJR4AErx2Z/exec';
-            $insStmt = $db->prepare("INSERT INTO app_absensi_pengaturan_aplikasi (kode_pengaturan, nama_pengaturan, nilai_pengaturan) VALUES ('link_absensi_cadangan', 'Link Absensi Cadangan', :nilai)");
-            $insStmt->execute([':nilai' => $defaultLink]);
-        }
+        // Tabel app_absensi_pengaturan_aplikasi siap digunakan
     }
 
     /**
@@ -74,8 +67,12 @@ class SystemController {
         $stmt->execute();
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $defaultLink = 'https://script.google.com/macros/s/AKfycbxGeScmNpeAOHnBd_s39KxtZPhgL5nwvoR6pO8-uXpXl8RSi0YgUTupTeDJR4AErx2Z/exec';
-        $link = (!empty($row) && !empty($row['nilai_pengaturan'])) ? trim($row['nilai_pengaturan']) : $defaultLink;
+        $link = (!empty($row) && isset($row['nilai_pengaturan']) && trim($row['nilai_pengaturan']) !== '') ? trim($row['nilai_pengaturan']) : null;
+
+        if (!$link) {
+            Response::json(false, 404, "Pengaturan link absensi cadangan tidak ditemukan di database.", null);
+            return;
+        }
 
         Response::json(true, 200, "OK", [
             'link_absensi_cadangan' => $link
@@ -92,10 +89,14 @@ class SystemController {
             $stmt = $db->prepare("SELECT nilai_pengaturan FROM app_absensi_pengaturan_aplikasi WHERE kode_pengaturan = 'link_absensi_cadangan' LIMIT 1");
             $stmt->execute();
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            $defaultLink = 'https://script.google.com/macros/s/AKfycbxGeScmNpeAOHnBd_s39KxtZPhgL5nwvoR6pO8-uXpXl8RSi0YgUTupTeDJR4AErx2Z/exec';
-            $link = (!empty($row) && !empty($row['nilai_pengaturan'])) ? trim($row['nilai_pengaturan']) : $defaultLink;
+            $link = (!empty($row) && isset($row['nilai_pengaturan']) && trim($row['nilai_pengaturan']) !== '') ? trim($row['nilai_pengaturan']) : null;
         } catch (\Exception $e) {
-            $link = 'https://script.google.com/macros/s/AKfycbxGeScmNpeAOHnBd_s39KxtZPhgL5nwvoR6pO8-uXpXl8RSi0YgUTupTeDJR4AErx2Z/exec';
+            $link = null;
+        }
+
+        if (!$link) {
+            Response::json(false, 404, "Pengaturan link absensi cadangan tidak ditemukan di database.", null);
+            return;
         }
 
         header("Location: " . $link, true, 302);

@@ -84,8 +84,13 @@ test.describe('E2E Suite: Simulasi User Link Absensi Cadangan saat Kamera / GPS 
         const gpsText = await statusGps.textContent();
         expect(cameraText.includes('Belum Aktif') || gpsText.includes('Belum Aktif')).toBeTruthy();
 
-        logAction.click('Tombol Aktifkan Kamera & Lokasi', '#btn-perm-retry');
         const btnAktifkan = page.locator('#btn-perm-retry');
+        await expect(btnAktifkan).toBeVisible();
+
+        logAction.click('Tombol Aktifkan Kamera & Lokasi (Penekanan Ke-1)', '#btn-perm-retry');
+        await btnAktifkan.click();
+
+        logAction.click('Tombol Aktifkan Kamera & Lokasi (Penekanan Ke-2)', '#btn-perm-retry');
         await btnAktifkan.click();
 
         logAction.step('4. Memverifikasi Tampilan Tombol Fallback ke BAIS Pariaman & Absensi Cadangan');
@@ -142,12 +147,18 @@ test.describe('E2E Suite: Simulasi User Link Absensi Cadangan saat Kamera / GPS 
         logAction.click('Tombol BUKA APLIKASI', 'a:has-text("BUKA APLIKASI")');
         await btnBuka.click();
 
-        logAction.step('3. Pengecekan Hak Akses & Klik Tombol Aktifkan');
+        logAction.step('3. Pengecekan Hak Akses & Klik Tombol Aktifkan 2 Kali');
         const viewPermCheck = page.locator('#view-permission-check');
         await expect(viewPermCheck).toBeVisible({ timeout: 15000 });
 
-        logAction.click('Tombol Aktifkan Kamera & Lokasi', '#btn-perm-retry');
-        await page.click('#btn-perm-retry');
+        const btnAktifkan = page.locator('#btn-perm-retry');
+        await expect(btnAktifkan).toBeVisible();
+
+        logAction.click('Tombol Aktifkan Kamera & Lokasi (Penekanan Ke-1)', '#btn-perm-retry');
+        await btnAktifkan.click();
+
+        logAction.click('Tombol Aktifkan Kamera & Lokasi (Penekanan Ke-2)', '#btn-perm-retry');
+        await btnAktifkan.click();
 
         logAction.step('4. Membuka Menu Absensi Cadangan');
         const permFallback = page.locator('#perm-state-fallback');
