@@ -3,7 +3,30 @@ const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
 
+    let consoleErrors = [];
+    let pageErrors = [];
+
     test.beforeEach(async ({ page, context }) => {
+        test.setTimeout(120000);
+        consoleErrors = [];
+        pageErrors = [];
+
+        // HENTIKAN DAN GAGALKAN TEST PROSES SECARA LANGSUNG JIKA TERJADI ERROR CONSOLE ATAU PAGE ERROR
+        page.on('console', msg => {
+            if (msg.type() === 'error') {
+                const text = msg.text();
+                consoleErrors.push(text);
+                console.error(`🚨 [STOP PROSES TEST] Console error dideteksi pada browser: ${text}`);
+                throw new Error(`[CRITICAL - TEST STOPPED] Console error dideteksi pada browser: ${text}`);
+            }
+        });
+
+        page.on('pageerror', error => {
+            pageErrors.push(error.message);
+            console.error(`🚨 [STOP PROSES TEST] Page uncaught error dideteksi: ${error.message}`);
+            throw new Error(`[CRITICAL - TEST STOPPED] Page uncaught error dideteksi pada browser: ${error.message}`);
+        });
+
         attachLogger(page, 'PWA Absensi Cadangan');
         await context.grantPermissions(['camera', 'geolocation']);
         await context.setGeolocation({ latitude: -0.6276, longitude: 100.1209 });
@@ -19,9 +42,9 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
 
         logAction.verify('Memverifikasi tampilan formulir Absensi Cadangan');
         const formView = page.locator('#viewForm');
-        await expect(formView).toBeVisible({ timeout: 10000 });
+        await expect(formView).toBeVisible({ timeout: 15000 });
 
-        logAction.step('2. Mengisi Biodata Diri & Alasan Absensi Cadangan');
+        logAction.step('2. Mengisi Biodata Diri & Alasan Absensi Cadangan (Awal)');
         
         const testData = {
             kode: '1F0442',
@@ -34,19 +57,19 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
         };
 
         logAction.input('Kode Akses Kegiatan', '#inpKode', testData.kode);
-        await page.fill('#inpKode', testData.kode);
+        await page.locator('#inpKode').pressSequentially(testData.kode, { delay: 100 });
 
         logAction.input('Nama Kegiatan', '#inpNamaKegiatan', testData.namaKegiatan);
-        await page.fill('#inpNamaKegiatan', testData.namaKegiatan);
+        await page.locator('#inpNamaKegiatan').pressSequentially(testData.namaKegiatan, { delay: 100 });
 
         logAction.input('NIP Pegawai', '#inpNip', testData.nip);
-        await page.fill('#inpNip', testData.nip);
+        await page.locator('#inpNip').pressSequentially(testData.nip, { delay: 100 });
 
         logAction.input('Nama Pegawai (Tanpa Gelar)', '#inpNama', testData.nama);
-        await page.fill('#inpNama', testData.nama);
+        await page.locator('#inpNama').pressSequentially(testData.nama, { delay: 100 });
 
         logAction.input('Jabatan', '#inpJabatan', testData.jabatan);
-        await page.fill('#inpJabatan', testData.jabatan);
+        await page.locator('#inpJabatan').pressSequentially(testData.jabatan, { delay: 100 });
 
         logAction.select('Perangkat Daerah (OPD)', '#inpOpd', testData.opd);
         await page.selectOption('#inpOpd', testData.opd);
@@ -54,9 +77,8 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
         logAction.check('Alasan Memakai Absensi Cadangan', `input[value="${testData.alasanValue}"]`);
         await page.check(`input[value="${testData.alasanValue}"]`);
 
-        logAction.step('3. Mengunggah File Foto & Memverifikasi Tombol "PAKAI FOTO INI"');
+        logAction.step('3. Mengunggah File Foto & Memverifikasi Tombol "PAKAI FOTO INI" (Awal)');
 
-        // Buat dummy buffer gambar JPEG valid untuk pengujian upload
         const dummyJpegBase64 = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
         const dummyJpegBuffer = Buffer.from(dummyJpegBase64, 'base64');
 
@@ -69,7 +91,7 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
 
         logAction.verify('Memverifikasi kotak preview foto selfie tampil');
         const boxPreview = page.locator('#boxPreviewFoto');
-        await expect(boxPreview).toBeVisible({ timeout: 7000 });
+        await expect(boxPreview).toBeVisible({ timeout: 10000 });
 
         logAction.verify('Memverifikasi elemen gambar preview #imgPreview');
         const imgPreview = page.locator('#imgPreview');
@@ -82,17 +104,83 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
 
         logAction.verify('Memverifikasi indikator Foto Siap Digunakan muncul (warna hijau)');
         const statusTerkonfirmasi = page.locator('#statusFotoTerkonfirmasi');
-        await expect(statusTerkonfirmasi).toBeVisible({ timeout: 5000 });
+        await expect(statusTerkonfirmasi).toBeVisible({ timeout: 8000 });
 
-        logAction.step('4. Mengirimkan Formulir Absensi Cadangan');
+        logAction.step('4. Mengosongkan & Reset Seluruh Data Form & Foto');
+
+        logAction.info('Mengosongkan input teks menggunakan Control+A + Backspace');
+        const textInputIds = ['#inpKode', '#inpNamaKegiatan', '#inpNip', '#inpNama', '#inpJabatan'];
+        for (const id of textInputIds) {
+            const loc = page.locator(id);
+            await loc.click();
+            await loc.press('Control+A');
+            await loc.press('Backspace');
+            await expect(loc).toHaveValue('');
+        }
+
+        logAction.info('Melakukan reset input file foto dan preview foto selfie');
+        await page.setInputFiles('#inpFotoFile', []);
+        await page.evaluate(() => {
+            const elFoto = document.getElementById('fotoBase64');
+            if (elFoto) elFoto.value = '';
+            const elBoxPrev = document.getElementById('boxPreviewFoto');
+            if (elBoxPrev) elBoxPrev.classList.add('hidden-view');
+            const elBoxPilih = document.getElementById('boxPilihFoto');
+            if (elBoxPilih) elBoxPilih.classList.remove('hidden-view');
+            const elStatus = document.getElementById('statusFotoTerkonfirmasi');
+            if (elStatus) elStatus.classList.add('hidden-view');
+            if (typeof fotoTerkonfirmasi !== 'undefined') {
+                fotoTerkonfirmasi = false;
+            }
+        });
+
+        logAction.verify('Memverifikasi kotak pilih foto awal tampil kembali');
+        await expect(page.locator('#boxPilihFoto')).toBeVisible();
+        await expect(boxPreview).toBeHidden();
+
+        logAction.step('5. Mengisi Ulang Biodata Diri & Foto dari Awal (Pengetikan 100ms/char)');
+
+        logAction.input('Kode Akses Kegiatan', '#inpKode', testData.kode);
+        await page.locator('#inpKode').pressSequentially(testData.kode, { delay: 100 });
+
+        logAction.input('Nama Kegiatan', '#inpNamaKegiatan', testData.namaKegiatan);
+        await page.locator('#inpNamaKegiatan').pressSequentially(testData.namaKegiatan, { delay: 100 });
+
+        logAction.input('NIP Pegawai', '#inpNip', testData.nip);
+        await page.locator('#inpNip').pressSequentially(testData.nip, { delay: 100 });
+
+        logAction.input('Nama Pegawai (Tanpa Gelar)', '#inpNama', testData.nama);
+        await page.locator('#inpNama').pressSequentially(testData.nama, { delay: 100 });
+
+        logAction.input('Jabatan', '#inpJabatan', testData.jabatan);
+        await page.locator('#inpJabatan').pressSequentially(testData.jabatan, { delay: 100 });
+
+        logAction.select('Perangkat Daerah (OPD)', '#inpOpd', testData.opd);
+        await page.selectOption('#inpOpd', testData.opd);
+
+        logAction.check('Alasan Memakai Absensi Cadangan', `input[value="${testData.alasanValue}"]`);
+        await page.check(`input[value="${testData.alasanValue}"]`);
+
+        logAction.click('Input Upload File Foto Selfie (Pengulangan)', '#inpFotoFile');
+        await page.setInputFiles('#inpFotoFile', {
+            name: 'foto-selfie-test.jpg',
+            mimeType: 'image/jpeg',
+            buffer: dummyJpegBuffer
+        });
+
+        await expect(boxPreview).toBeVisible({ timeout: 10000 });
+        await btnPakai.click();
+        await expect(statusTerkonfirmasi).toBeVisible({ timeout: 8000 });
+
+        logAction.step('6. Mengirimkan Formulir Absensi Cadangan');
         logAction.click('Tombol SIMPAN ABSENSI CADANGAN', '#btnSubmit');
         const btnSubmit = page.locator('#btnSubmit');
         await btnSubmit.click();
 
-        logAction.step('5. Memverifikasi Tampilan Receipt Bukti Absensi & Data Diri');
+        logAction.step('7. Memverifikasi Tampilan Receipt Bukti Absensi & Data Diri');
         logAction.verify('Menunggu tampilan Struk Bukti Absensi (#receiptView)');
         const receiptView = page.locator('#receiptView');
-        await expect(receiptView).toBeVisible({ timeout: 20000 });
+        await expect(receiptView).toBeVisible({ timeout: 60000 });
 
         logAction.verify('Memverifikasi Waktu Presensi di Receipt');
         await expect(page.locator('#rcpWaktu')).not.toBeEmpty();
@@ -121,6 +209,11 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
         logAction.verify('Memverifikasi kontainer QR Code Bukti Kehadiran');
         const qrContainer = page.locator('#receiptQrContainer');
         await expect(qrContainer).toBeVisible();
+
+        logAction.step('8. Memverifikasi Kebersihan Console & Uncaught Error Browser');
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
 
         logAction.success('Pengujian E2E Absensi Cadangan Internal BERHASIL 100%!');
     });

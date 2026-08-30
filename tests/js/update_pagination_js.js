@@ -1,5 +1,5 @@
 const fs = require('fs');
-let js = fs.readFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.js', 'utf8');
+let js = fs.readFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.js', 'utf8');
 
 const htmlTopReplacement = `
     let exportBtnHtml = '';
@@ -42,8 +42,8 @@ const endIndex = js.indexOf('    `;', startIndex) + 6;
 
 if (startIndex !== -1 && endIndex !== -1) {
     js = js.substring(0, startIndex) + htmlTopReplacement + js.substring(endIndex);
-    fs.writeFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.js', js);
-    fs.writeFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.min.js', js.replace(/\n/g, '').replace(/\s+/g, ' '));
+    fs.writeFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.js', js);
+    fs.writeFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.min.js', js.replace(/\n/g, '').replace(/\s+/g, ' '));
     console.log('admin.js updated with exportBtnHtml in pagination controls.');
 } else {
     console.log('Error: htmlTop definition not found in admin.js');

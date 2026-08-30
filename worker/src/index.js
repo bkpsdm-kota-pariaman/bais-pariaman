@@ -25,7 +25,7 @@ const corsHeaders = {
 	'Access-Control-Allow-Headers': 'Authorization, Content-Type',
 };
 
-const ALLOWED_ISSUERS = ['bais-pariaman-apps', 'bais-balad-apps', 'bais-pariaman-apps-admin', 'bais-pariaman-apps-jadwal'];
+const ALLOWED_ISSUERS = ['bais-pariaman-apps', 'bais-pariaman-apps', 'bais-pariaman-apps-admin', 'bais-pariaman-apps-jadwal'];
 const DEFAULT_ISSUER = 'bais-pariaman-apps';
 
 // Helper untuk mengubah data URI (base64) menjadi Blob, agar bisa dikirim sebagai file.
@@ -134,900 +134,931 @@ export default {
 			const url = new URL(request.url);
 			const pathname = url.pathname;
 
-		// Helper validasi jadwal
-		const validateJadwalAbsen = async (kodeAkses, payload) => {
-			if (!kodeAkses || !env.JADWAL_KV) return null;
-			const cachedJadwal = await env.JADWAL_KV.get(`jadwal:${kodeAkses}`, 'json');
-			if (!cachedJadwal) return null;
+			// Helper validasi jadwal
+			const validateJadwalAbsen = async (kodeAkses, payload) => {
+				if (!kodeAkses || !env.JADWAL_KV) return null;
+				const cachedJadwal = await env.JADWAL_KV.get(`jadwal:${kodeAkses}`, 'json');
+				if (!cachedJadwal) return null;
 
-			const now = new Date();
-			const todayYMD = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-			if (cachedJadwal.tanggal !== todayYMD) {
-				return { error: true, code: 403, message: "Gagal: Jadwal ini tidak berlaku untuk hari ini." };
-			}
-
-			const startTime = new Date(`${cachedJadwal.tanggal}T${cachedJadwal.jam_mulai}+07:00`);
-			if (now < startTime) {
-				return { error: true, code: 403, message: `Gagal: Absensi belum dibuka. Silakan tunggu hingga pukul ${cachedJadwal.jam_mulai} WIB.` };
-			}
-
-			const status = (payload.status_kehadiran || "hadir").toLowerCase();
-			let isTerlambat = false;
-			let isLuarRadius = false;
-
-			const endTime = new Date(`${cachedJadwal.tanggal}T${cachedJadwal.jam_selesai}+07:00`);
-			if (now > endTime) {
-				isTerlambat = true;
-			}
-
-			if (cachedJadwal.koordinat && cachedJadwal.koordinat !== "-") {
-				const parts = cachedJadwal.koordinat.replace(/'/g, '').split(',');
-				if (parts.length === 2) {
-					const tLat = parseFloat(parts[0]);
-					const tLng = parseFloat(parts[1]);
-					const pLat = parseFloat(payload.lat);
-					const pLng = parseFloat(payload.lng);
-					const radius = parseFloat(cachedJadwal.radius_meter) || 0;
-
-					const jarak = haversineDistance(pLat, pLng, tLat, tLng);
-					if (jarak > radius) {
-						isLuarRadius = true;
-					}
-				}
-			}
-
-			// Jika pegawai mencoba Hadir murni (bukan Izin/Sakit/Cuti)
-			if (status === "hadir") {
-				// Validasi Strict Time
-				if (cachedJadwal.is_strict_time && cachedJadwal.is_strict_time == 1 && isTerlambat) {
-					return { error: true, code: 403, message: "Gagal: Waktu Berakhir. Anda hanya bisa mengirim Izin/Keterangan karena Aturan Waktu Berlaku aktif." };
-				}
-
-				// Validasi Strict Location
-				if (cachedJadwal.is_strict_location && cachedJadwal.is_strict_location == 1 && isLuarRadius) {
-					return { error: true, code: 403, message: `Gagal: Anda di luar lokasi. Anda hanya bisa mengirim Izin/Keterangan karena Aturan Wajib Sesuai Lokasi aktif.` };
-				}
-			}
-
-			const pLat = parseFloat(payload.lat);
-			const pLng = parseFloat(payload.lng);
-			const isGpsError = (isNaN(pLat) || isNaN(pLng) || pLat === 0 || pLng === 0 || (payload.lokasi && payload.lokasi.toLowerCase().includes('gps')));
-
-			// Jika pegawai terlambat, di luar lokasi, GPS error, atau tidak hadir (izin dll)
-			if (status !== "hadir" || isTerlambat || isLuarRadius || isGpsError) {
-				if (payload.status_verifikasi !== "Terverifikasi Oleh Admin") {
-					payload.status_verifikasi = "Menunggu Verifikasi Admin";
-				}
-			}
-
-			return null;
-		};
-
-		// =================================================================
-		// RUTE LOGIN ASN (DENGAN KV CACHE)
-		// =================================================================
-		if (pathname.endsWith('/api/login-asn')) {
-
-			if (request.method !== 'POST') {
-				return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
-			}
-
-			// Validasi environment variables yang dibutuhkan untuk rute ini
-			if (!env.PEGAWAI_KV || !env.JWT_SECRET || !env.ORIGIN_API_URL || !env.WORKER_SECRET) {
-				console.error("Konfigurasi worker tidak lengkap. 'PEGAWAI_KV', 'JWT_SECRET', 'ORIGIN_API_URL', 'WORKER_SECRET' harus diatur.");
-				return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
-			}
-
-			try {
-				// Clone request SEBELUM membaca body. Ini penting untuk menghindari error "stream disturbed".
-				const requestClone = request.clone();
-				const { nip, nik } = await request.json(); // Body dibaca di sini.
-				if (!nip || !nik) {
-					return jsonResponse(false, 400, 'NIP dan NIK wajib diisi');
-				}
-
-				const kvKey = `pegawai:${nip}`;
-				const cachedPegawai = await env.PEGAWAI_KV.get(kvKey, 'json');
-
-				// --- CACHE HIT ---
-				if (cachedPegawai) {
-					// Pengecekan bcrypt NIK secara sinkron (karena bcryptjs mendukung di edge)
-					if (bcrypt.compareSync(nik, cachedPegawai.nik)) {
-						console.log(`[Login Cache] Cache HIT for NIP: ${nip}`);
-						const secret = new TextEncoder().encode(env.JWT_SECRET);
-						const issuedAt = Math.floor(Date.now() / 1000);
-						const expirationTime = issuedAt + 3600 * 24 * 30; // 30 hari
-
-						const payload = {
-							data: {
-								nip: cachedPegawai.nip,
-								nama: cachedPegawai.nama_pegawai,
-								opd: cachedPegawai.perangkat_daerah,
-								jabatan: cachedPegawai.jabatan,
-								role: cachedPegawai.role || ['asn'],
-								jenis_asn: cachedPegawai.jenis_asn
-							},
-						};
-
-						const jwtToken = await new SignJWT(payload).setProtectedHeader({ alg: 'HS256' }).setIssuedAt(issuedAt).setExpirationTime(expirationTime).setIssuer(DEFAULT_ISSUER).sign(secret);
-
-						const responseData = { token: jwtToken, user: { nama: cachedPegawai.nama_pegawai, jabatan: cachedPegawai.jabatan, opd: cachedPegawai.perangkat_daerah } };
-
-						return jsonResponse(true, 200, 'Login Berhasil (dari Cache)', responseData);
-					} else {
-						// NIK tidak cocok. Jangan hapus cache, cukup perlakukan sebagai cache miss.
-						console.log(`[Login Cache] NIK mismatch for NIP: ${nip}. Treating as Cache MISS.`);
-						// Tidak ada 'delete' di sini. Biarkan PWA melakukan fallback ke server utama.
-						// Lanjutkan ke logika CACHE MISS di bawah.
-					}
-				}
-
-				// --- CACHE MISS atau NIK mismatch setelah cache invalidation ---
-				console.log(`[Login Cache] Cache MISS or NIK mismatch for NIP: ${nip}. Returning 404 to PWA.`);
-				// Explicitly return 404 to signal PWA to try origin
-				return jsonResponse(false, 404, 'Data login tidak ditemukan di cache. Mencoba ke server utama.');
-
-			} catch (error) {
-				// Log error yang lebih detail untuk debugging di dashboard Cloudflare
-				console.error('Error di login handler worker:', error.message, error.stack);
-				return jsonResponse(false, 500, 'Server worker error: Gagal memproses login.');
-			}
-		}
-
-		// =================================================================
-		// RUTE GET JADWAL BY KODE (DIPANGGIL OLEH PWA UNTUK INPUT MANUAL)
-		// Pola: GET /api/jadwal-by-kode/:kode_akses
-		// =================================================================
-		const jadwalByKodeMatch = pathname.match(/^\/api\/jadwal-by-kode\/([a-zA-Z0-9_.-]+)\/?$/);
-		if (jadwalByKodeMatch && request.method === 'GET') {
-			// Validasi environment variables yang dibutuhkan
-			if (!env.JADWAL_KV) {
-				console.error("Konfigurasi worker tidak lengkap. 'JADWAL_KV' harus diatur.");
-				return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
-			}
-
-			const kodeAkses = jadwalByKodeMatch[1];
-			const kvKey = `jadwal:${kodeAkses}`;
-			const cachedJadwal = await env.JADWAL_KV.get(kvKey, 'json');
-
-			// --- CACHE HIT ---
-			if (cachedJadwal) {
-				// Validasi tanggal di sisi worker untuk memberikan feedback cepat.
-				// 'sv-SE' locale menghasilkan format YYYY-MM-DD.
-				const todayYMD = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-
+				const now = new Date();
+				const todayYMD = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 				if (cachedJadwal.tanggal !== todayYMD) {
-					// Jadwal tidak berlaku hari ini. Kembalikan error yang akan ditampilkan di PWA, BUKAN 404.
-					// Status 200 dengan `status: false` akan mencegah PWA melakukan fallback yang tidak perlu.
-					return jsonResponse(false, 403, 'Jadwal ini tidak berlaku untuk hari ini.', null, { 'Cache-Control': 'no-store' });
+					return { error: true, code: 403, message: "Gagal: Jadwal ini tidak berlaku untuk hari ini." };
 				}
 
-				// --- LOGIKA BARU: Validasi Waktu Mulai ---
-				// Cek apakah waktu saat ini sudah melewati jam mulai.
-				const now = new Date(); // Waktu saat ini di UTC
-				// Buat objek Date untuk waktu mulai dengan menentukan timezone Asia/Jakarta (UTC+7)
-				// Format: YYYY-MM-DDTHH:mm:ss+07:00
 				const startTime = new Date(`${cachedJadwal.tanggal}T${cachedJadwal.jam_mulai}+07:00`);
-
 				if (now < startTime) {
-					// Jika waktu saat ini belum mencapai waktu mulai, kembalikan error.
-					// Status 200 dengan status:false untuk mencegah PWA melakukan fallback.
-					return jsonResponse(false, 403, `Absensi untuk kegiatan ini belum dibuka. Silakan coba lagi pada atau setelah pukul ${cachedJadwal.jam_mulai} WIB.`, null, { 'Cache-Control': 'no-store' });
+					return { error: true, code: 403, message: `Gagal: Absensi belum dibuka. Silakan tunggu hingga pukul ${cachedJadwal.jam_mulai} WIB.` };
 				}
+
+				const status = (payload.status_kehadiran || "hadir").toLowerCase();
+				let isTerlambat = false;
+				let isLuarRadius = false;
 
 				const endTime = new Date(`${cachedJadwal.tanggal}T${cachedJadwal.jam_selesai}+07:00`);
-				const isTerlambat = now > endTime;
+				if (now > endTime) {
+					isTerlambat = true;
+				}
 
-				const responseData = {
-					...cachedJadwal,
-					is_terlambat: isTerlambat,
-					server_time: now.toISOString()
-				};
+				if (cachedJadwal.koordinat && cachedJadwal.koordinat !== "-") {
+					const parts = cachedJadwal.koordinat.replace(/'/g, '').split(',');
+					if (parts.length === 2) {
+						const tLat = parseFloat(parts[0]);
+						const tLng = parseFloat(parts[1]);
+						const pLat = parseFloat(payload.lat);
+						const pLng = parseFloat(payload.lng);
+						const radius = parseFloat(cachedJadwal.radius_meter) || 0;
 
-				// Jadwal valid, kembalikan data.
-				return jsonResponse(true, 200, 'Jadwal ditemukan di cache.', responseData, { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
-			}
-			// --- CACHE MISS ---
-			else {
-				// Jadwal tidak ditemukan di cache. Kembalikan 404 untuk memicu fallback di PWA.
-				return jsonResponse(false, 404, 'Jadwal tidak ditemukan.', null, { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
-			}
-		}
+						const jarak = haversineDistance(pLat, pLng, tLat, tLng);
+						if (jarak > radius) {
+							isLuarRadius = true;
+						}
+					}
+				}
 
-		// =================================================================
-		// RUTE OPD LIST (DIPANGGIL OLEH PWA)
-		// =================================================================
-		if (pathname.endsWith('/api/opd/list')) {
-			// Validasi environment variables yang dibutuhkan
-			if (!env.OPD_KV) {
-				console.error("Konfigurasi worker tidak lengkap. 'OPD_KV' harus diatur.");
-				return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
-			}
+				// Jika pegawai mencoba Hadir murni (bukan Izin/Sakit/Cuti)
+				if (status === "hadir") {
+					// Validasi Strict Time
+					if (cachedJadwal.is_strict_time && cachedJadwal.is_strict_time == 1 && isTerlambat) {
+						return { error: true, code: 403, message: "Gagal: Waktu Berakhir. Anda hanya bisa mengirim Izin/Keterangan karena Aturan Waktu Berlaku aktif." };
+					}
 
-			const cachedOpdList = await env.OPD_KV.get('opd_list', 'json');
+					// Validasi Strict Location
+					if (cachedJadwal.is_strict_location && cachedJadwal.is_strict_location == 1 && isLuarRadius) {
+						return { error: true, code: 403, message: `Gagal: Anda di luar lokasi. Anda hanya bisa mengirim Izin/Keterangan karena Aturan Wajib Sesuai Lokasi aktif.` };
+					}
+				}
 
-			if (cachedOpdList) {
-				console.log('[OPD Cache] Cache HIT for opd_list.');
-				return jsonResponse(true, 200, 'Daftar OPD dari cache.', cachedOpdList);
-			} else {
-				console.log('[OPD Cache] Cache MISS for opd_list. Returning 404 to PWA.');
-				return jsonResponse(false, 404, 'Daftar OPD tidak ditemukan di cache.');
-			}
-		}
+				const pLat = parseFloat(payload.lat);
+				const pLng = parseFloat(payload.lng);
+				const isGpsError = (isNaN(pLat) || isNaN(pLng) || pLat === 0 || pLng === 0 || (payload.lokasi && payload.lokasi.toLowerCase().includes('gps')));
 
-		// =================================================================
-		// RUTE SINKRONISASI OPD LIST (DIPANGGIL OLEH ADMIN PANEL VIA PHP)
-		// =================================================================
-		if (pathname.endsWith('/api/opd-list/sync') && request.method === 'PUT') {
-			if (!env.OPD_KV || !env.WORKER_SECRET) {
-				return jsonResponse(false, 500, 'Konfigurasi worker tidak lengkap (OPD_KV, WORKER_SECRET).');
-			}
-			if (request.headers.get('X-Worker-Secret') !== env.WORKER_SECRET) {
-				return jsonResponse(false, 403, 'Akses ditolak.');
-			}
-			const opdList = await request.json();
-			await env.OPD_KV.put('opd_list', JSON.stringify(opdList));
-			return jsonResponse(true, 200, 'Daftar OPD berhasil disinkronkan ke KV.');
-		}
+				// Jika pegawai terlambat, di luar lokasi, GPS error, atau tidak hadir (izin dll)
+				if (status !== "hadir" || isTerlambat || isLuarRadius || isGpsError) {
+					if (payload.status_verifikasi !== "Terverifikasi Oleh Admin") {
+						payload.status_verifikasi = "Menunggu Verifikasi Admin";
+					}
+				}
 
-		// =================================================================
-		// RUTE PENGATURAN APLIKASI (DIPANGGIL OLEH PWA / ABSENSI CADANGAN)
-		// =================================================================
-		if (pathname.endsWith('/api/pengaturan/link-absensi-cadangan')) {
-			const kvKey = 'pengaturan:link_absensi_cadangan';
-			if (env.PENGATURAN_KV) {
-				const cachedLink = await env.PENGATURAN_KV.get(kvKey);
-				if (cachedLink) {
-					console.log('[Pengaturan Cache] Cache HIT for link_absensi_cadangan:', cachedLink);
-					return jsonResponse(true, 200, 'Link absensi cadangan dari cache Worker KV.', { link_absensi_cadangan: cachedLink });
+				return null;
+			};
+
+			// =================================================================
+			// RUTE LOGIN ASN (DENGAN KV CACHE)
+			// =================================================================
+			if (pathname.endsWith('/api/login-asn')) {
+
+				if (request.method !== 'POST') {
+					return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
+				}
+
+				// Validasi environment variables yang dibutuhkan untuk rute ini
+				if (!env.PEGAWAI_KV || !env.JWT_SECRET || !env.ORIGIN_API_URL || !env.WORKER_SECRET) {
+					console.error("Konfigurasi worker tidak lengkap. 'PEGAWAI_KV', 'JWT_SECRET', 'ORIGIN_API_URL', 'WORKER_SECRET' harus diatur.");
+					return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
+				}
+
+				try {
+					// Clone request SEBELUM membaca body. Ini penting untuk menghindari error "stream disturbed".
+					const requestClone = request.clone();
+					const { nip, nik } = await request.json(); // Body dibaca di sini.
+					if (!nip || !nik) {
+						return jsonResponse(false, 400, 'NIP dan NIK wajib diisi');
+					}
+
+					const kvKey = `pegawai:${nip}`;
+					const cachedPegawai = await env.PEGAWAI_KV.get(kvKey, 'json');
+
+					// --- CACHE HIT ---
+					if (cachedPegawai) {
+						// Pengecekan bcrypt NIK secara sinkron (karena bcryptjs mendukung di edge)
+						if (bcrypt.compareSync(nik, cachedPegawai.nik)) {
+							console.log(`[Login Cache] Cache HIT for NIP: ${nip}`);
+							const secret = new TextEncoder().encode(env.JWT_SECRET);
+							const issuedAt = Math.floor(Date.now() / 1000);
+							const expirationTime = issuedAt + 3600 * 24 * 30; // 30 hari
+
+							const payload = {
+								data: {
+									nip: cachedPegawai.nip,
+									nama: cachedPegawai.nama_pegawai,
+									opd: cachedPegawai.perangkat_daerah,
+									jabatan: cachedPegawai.jabatan,
+									role: cachedPegawai.role || ['asn'],
+									jenis_asn: cachedPegawai.jenis_asn
+								},
+							};
+
+							const jwtToken = await new SignJWT(payload).setProtectedHeader({ alg: 'HS256' }).setIssuedAt(issuedAt).setExpirationTime(expirationTime).setIssuer(DEFAULT_ISSUER).sign(secret);
+
+							const responseData = { token: jwtToken, user: { nama: cachedPegawai.nama_pegawai, jabatan: cachedPegawai.jabatan, opd: cachedPegawai.perangkat_daerah } };
+
+							return jsonResponse(true, 200, 'Login Berhasil (dari Cache)', responseData);
+						} else {
+							// NIK tidak cocok. Jangan hapus cache, cukup perlakukan sebagai cache miss.
+							console.log(`[Login Cache] NIK mismatch for NIP: ${nip}. Treating as Cache MISS.`);
+							// Tidak ada 'delete' di sini. Biarkan PWA melakukan fallback ke server utama.
+							// Lanjutkan ke logika CACHE MISS di bawah.
+						}
+					}
+
+					// --- CACHE MISS atau NIK mismatch setelah cache invalidation ---
+					console.log(`[Login Cache] Cache MISS or NIK mismatch for NIP: ${nip}. Returning 404 to PWA.`);
+					// Explicitly return 404 to signal PWA to try origin
+					return jsonResponse(false, 404, 'Data login tidak ditemukan di cache. Mencoba ke server utama.');
+
+				} catch (error) {
+					// Log error yang lebih detail untuk debugging di dashboard Cloudflare
+					console.error('Error di login handler worker:', error.message, error.stack);
+					return jsonResponse(false, 500, 'Server worker error: Gagal memproses login.');
 				}
 			}
 
-			// Fallback ke origin PHP server jika cache miss
-			if (env.ORIGIN_API_URL) {
-				try {
-					console.log('[Pengaturan Cache] Cache MISS. Fetching from origin PHP...');
-					const phpRes = await fetch(`${env.ORIGIN_API_URL}/pengaturan/link-absensi-cadangan?_t=${Date.now()}`);
-					if (phpRes.ok) {
-						const phpData = await phpRes.json();
-						if (phpData && phpData.status && phpData.data && phpData.data.link_absensi_cadangan) {
-							const linkVal = phpData.data.link_absensi_cadangan;
-							if (env.PENGATURAN_KV) {
-								// Simpan permanen seumur hidup tanpa batas waktu (no TTL)
-								ctx.waitUntil(env.PENGATURAN_KV.put(kvKey, linkVal));
+			// =================================================================
+			// RUTE GET JADWAL BY KODE (DIPANGGIL OLEH PWA UNTUK INPUT MANUAL)
+			// Pola: GET /api/jadwal-by-kode/:kode_akses
+			// =================================================================
+			const jadwalByKodeMatch = pathname.match(/^\/api\/jadwal-by-kode\/([a-zA-Z0-9_.-]+)\/?$/);
+			if (jadwalByKodeMatch && request.method === 'GET') {
+				// Validasi environment variables yang dibutuhkan
+				if (!env.JADWAL_KV) {
+					console.error("Konfigurasi worker tidak lengkap. 'JADWAL_KV' harus diatur.");
+					return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
+				}
+
+				const kodeAkses = jadwalByKodeMatch[1];
+				const kvKey = `jadwal:${kodeAkses}`;
+				const cachedJadwal = await env.JADWAL_KV.get(kvKey, 'json');
+
+				// --- CACHE HIT ---
+				if (cachedJadwal) {
+					// Validasi tanggal di sisi worker untuk memberikan feedback cepat.
+					// 'sv-SE' locale menghasilkan format YYYY-MM-DD.
+					const todayYMD = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+
+					if (cachedJadwal.tanggal !== todayYMD) {
+						// Jadwal tidak berlaku hari ini. Kembalikan error yang akan ditampilkan di PWA, BUKAN 404.
+						// Status 200 dengan `status: false` akan mencegah PWA melakukan fallback yang tidak perlu.
+						return jsonResponse(false, 403, 'Jadwal ini tidak berlaku untuk hari ini.', null, { 'Cache-Control': 'no-store' });
+					}
+
+					// --- LOGIKA BARU: Validasi Waktu Mulai ---
+					// Cek apakah waktu saat ini sudah melewati jam mulai.
+					const now = new Date(); // Waktu saat ini di UTC
+					// Buat objek Date untuk waktu mulai dengan menentukan timezone Asia/Jakarta (UTC+7)
+					// Format: YYYY-MM-DDTHH:mm:ss+07:00
+					const startTime = new Date(`${cachedJadwal.tanggal}T${cachedJadwal.jam_mulai}+07:00`);
+
+					if (now < startTime) {
+						// Jika waktu saat ini belum mencapai waktu mulai, kembalikan error.
+						// Status 200 dengan status:false untuk mencegah PWA melakukan fallback.
+						return jsonResponse(false, 403, `Absensi untuk kegiatan ini belum dibuka. Silakan coba lagi pada atau setelah pukul ${cachedJadwal.jam_mulai} WIB.`, null, { 'Cache-Control': 'no-store' });
+					}
+
+					const endTime = new Date(`${cachedJadwal.tanggal}T${cachedJadwal.jam_selesai}+07:00`);
+					const isTerlambat = now > endTime;
+
+					const responseData = {
+						...cachedJadwal,
+						is_terlambat: isTerlambat,
+						server_time: now.toISOString()
+					};
+
+					// Jadwal valid, kembalikan data.
+					return jsonResponse(true, 200, 'Jadwal ditemukan di cache.', responseData, { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
+				}
+				// --- CACHE MISS ---
+				else {
+					// Jadwal tidak ditemukan di cache. Kembalikan 404 untuk memicu fallback di PWA.
+					return jsonResponse(false, 404, 'Jadwal tidak ditemukan.', null, { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
+				}
+			}
+
+			// =================================================================
+			// RUTE OPD LIST (DIPANGGIL OLEH PWA)
+			// =================================================================
+			if (pathname.endsWith('/api/opd/list')) {
+				// Validasi environment variables yang dibutuhkan
+				if (!env.OPD_KV) {
+					console.error("Konfigurasi worker tidak lengkap. 'OPD_KV' harus diatur.");
+					return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
+				}
+
+				const cachedOpdList = await env.OPD_KV.get('opd_list', 'json');
+
+				if (cachedOpdList) {
+					console.log('[OPD Cache] Cache HIT for opd_list.');
+					return jsonResponse(true, 200, 'Daftar OPD dari cache.', cachedOpdList);
+				} else {
+					console.log('[OPD Cache] Cache MISS for opd_list. Returning 404 to PWA.');
+					return jsonResponse(false, 404, 'Daftar OPD tidak ditemukan di cache.');
+				}
+			}
+
+			// =================================================================
+			// RUTE SINKRONISASI OPD LIST (DIPANGGIL OLEH ADMIN PANEL VIA PHP)
+			// =================================================================
+			if (pathname.endsWith('/api/opd-list/sync') && request.method === 'PUT') {
+				if (!env.OPD_KV || !env.WORKER_SECRET) {
+					return jsonResponse(false, 500, 'Konfigurasi worker tidak lengkap (OPD_KV, WORKER_SECRET).');
+				}
+				if (request.headers.get('X-Worker-Secret') !== env.WORKER_SECRET) {
+					return jsonResponse(false, 403, 'Akses ditolak.');
+				}
+				const opdList = await request.json();
+				await env.OPD_KV.put('opd_list', JSON.stringify(opdList));
+				return jsonResponse(true, 200, 'Daftar OPD berhasil disinkronkan ke KV.');
+			}
+
+			// =================================================================
+			// RUTE PENGATURAN APLIKASI (DIPANGGIL OLEH PWA / ABSENSI CADANGAN)
+			// =================================================================
+			if (pathname.endsWith('/api/pengaturan/link-absensi-cadangan')) {
+				const kvKey = 'pengaturan:link_absensi_cadangan';
+				if (env.PENGATURAN_KV) {
+					const cachedLink = await env.PENGATURAN_KV.get(kvKey);
+					if (cachedLink) {
+						console.log('[Pengaturan Cache] Cache HIT for link_absensi_cadangan:', cachedLink);
+						return jsonResponse(true, 200, 'Link absensi cadangan dari cache Worker KV.', { link_absensi_cadangan: cachedLink });
+					}
+				}
+
+				// Fallback ke origin PHP server jika cache miss
+				if (env.ORIGIN_API_URL) {
+					try {
+						console.log('[Pengaturan Cache] Cache MISS. Fetching from origin PHP...');
+						const phpRes = await fetch(`${env.ORIGIN_API_URL}/pengaturan/link-absensi-cadangan?_t=${Date.now()}`);
+						if (phpRes.ok) {
+							const phpData = await phpRes.json();
+							if (phpData && phpData.status && phpData.data && phpData.data.link_absensi_cadangan) {
+								const linkVal = phpData.data.link_absensi_cadangan;
+								if (env.PENGATURAN_KV) {
+									// Simpan permanen seumur hidup tanpa batas waktu (no TTL)
+									ctx.waitUntil(env.PENGATURAN_KV.put(kvKey, linkVal));
+								}
+								return jsonResponse(true, 200, 'Link absensi cadangan dari server origin.', { link_absensi_cadangan: linkVal });
 							}
-							return jsonResponse(true, 200, 'Link absensi cadangan dari server origin.', { link_absensi_cadangan: linkVal });
 						}
+					} catch (errOrigin) {
+						console.error('[Pengaturan Origin Fetch Error]:', errOrigin);
 					}
-				} catch (errOrigin) {
-					console.error('[Pengaturan Origin Fetch Error]:', errOrigin);
 				}
+
+				return jsonResponse(false, 404, 'Pengaturan link absensi cadangan tidak ditemukan.');
 			}
 
-			return jsonResponse(false, 404, 'Pengaturan link absensi cadangan tidak ditemukan.');
-		}
-
-		// =================================================================
-		// RUTE SINKRONISASI PENGATURAN (DIPANGGIL OLEH ADMIN VIA PHP / DIRECT)
-		// =================================================================
-		if ((pathname.endsWith('/api/pengaturan/sync') || pathname.endsWith('/api/pengaturan')) && (request.method === 'POST' || request.method === 'PUT')) {
-			if (!env.PENGATURAN_KV) {
-				return jsonResponse(false, 500, 'Konfigurasi worker tidak lengkap (PENGATURAN_KV belum di-bind).');
-			}
-
-			// Validasi auth via X-Worker-Secret atau Super Admin Token
-			const reqSecret = request.headers.get('X-Worker-Secret');
-			let isAuthorized = (reqSecret && reqSecret === env.WORKER_SECRET);
-			if (!isAuthorized) {
-				const superAdminPayload = await verifySuperAdminToken(request, env);
-				if (superAdminPayload) isAuthorized = true;
-			}
-
-			if (!isAuthorized) {
-				return jsonResponse(false, 403, 'Akses ditolak. Hanya Super Admin atau server internal yang diizinkan.');
-			}
-
-			try {
-				const settingsPayload = await request.json();
-				if (settingsPayload && typeof settingsPayload === 'object') {
-					for (const [key, val] of Object.entries(settingsPayload)) {
-						const kvKey = `pengaturan:${key}`;
-						// Simpan seumur hidup tanpa expiration / TTL
-						await env.PENGATURAN_KV.put(kvKey, String(val || ''));
-					}
-					return jsonResponse(true, 200, 'Pengaturan aplikasi berhasil disinkronkan ke Worker KV seumur hidup.');
-				} else {
-					return jsonResponse(false, 400, 'Format payload pengaturan tidak valid.');
+			// =================================================================
+			// RUTE SINKRONISASI PENGATURAN (DIPANGGIL OLEH ADMIN VIA PHP / DIRECT)
+			// =================================================================
+			if ((pathname.endsWith('/api/pengaturan/sync') || pathname.endsWith('/api/pengaturan')) && (request.method === 'POST' || request.method === 'PUT')) {
+				if (!env.PENGATURAN_KV) {
+					return jsonResponse(false, 500, 'Konfigurasi worker tidak lengkap (PENGATURAN_KV belum di-bind).');
 				}
-			} catch (errSync) {
-				return jsonResponse(false, 500, 'Gagal menyimpan pengaturan ke KV: ' + errSync.message);
-			}
-		}
 
-		// =================================================================
-		// RUTE CRUD JADWAL (DIPANGGIL OLEH ADMIN PANEL VIA PHP)
-		// Pola: /api/jadwal/:kode_akses?
-		// =================================================================
-		const jadwalMatch = pathname.match(/^\/api\/jadwal\/?([a-zA-Z0-9_.-]+)?\/?$/);
-		if (jadwalMatch) {
-			// Validasi environment variables yang dibutuhkan untuk rute ini
-			if (!env.JADWAL_KV || !env.WORKER_SECRET) {
-				console.error("Konfigurasi worker tidak lengkap. 'JADWAL_KV' dan 'WORKER_SECRET' harus diatur.");
-				return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
-			}
+				// Validasi auth via X-Worker-Secret atau Super Admin Token
+				const reqSecret = request.headers.get('X-Worker-Secret');
+				let isAuthorized = (reqSecret && reqSecret === env.WORKER_SECRET);
+				if (!isAuthorized) {
+					const superAdminPayload = await verifySuperAdminToken(request, env);
+					if (superAdminPayload) isAuthorized = true;
+				}
 
-			// Validasi secret dari server PHP
-			const requestSecret = request.headers.get('X-Worker-Secret');
-			if (requestSecret !== env.WORKER_SECRET) {
-				return jsonResponse(false, 403, 'Akses ditolak. Invalid secret.');
-			}
+				if (!isAuthorized) {
+					return jsonResponse(false, 403, 'Akses ditolak. Hanya Super Admin atau server internal yang diizinkan.');
+				}
 
-			const kodeAkses = jadwalMatch[1]; // Bisa undefined jika path-nya hanya /api/jadwal
-
-			// --- CREATE / UPDATE JADWAL (POST atau PUT) ---
-			if (request.method === 'POST' || request.method === 'PUT') {
 				try {
-					const jadwalData = await request.json();
-					const effectiveKodeAkses = kodeAkses || jadwalData.kode_akses;
-					if (!effectiveKodeAkses) {
-						return jsonResponse(false, 400, 'Kode akses tidak ditemukan di URL atau payload.');
-					}
-					const kvKey = `jadwal:${effectiveKodeAkses}`;
-					// Lakukan operasi put secara blocking (await) untuk memastikan data benar-benar tersimpan.
-					await env.JADWAL_KV.put(kvKey, JSON.stringify(jadwalData));
-					return jsonResponse(true, 200, `Jadwal ${effectiveKodeAkses} berhasil disimpan/diperbarui di cache.`);
-				} catch (e) {
-					console.error(`[KV JADWAL PUT Error] Gagal menyimpan jadwal:`, e);
-					const status = e instanceof SyntaxError ? 400 : 500;
-					const message = status === 400 ? `Gagal memproses request: ${e.message}` : `Server worker error: Gagal menyimpan data jadwal ke KV. Error: ${e.message}`;
-					return jsonResponse(false, status, message);
-				}
-			}
-
-			// --- DELETE JADWAL ---
-			if (request.method === 'DELETE' && kodeAkses) {
-				try {
-					const kvKey = `jadwal:${kodeAkses}`;
-					await env.JADWAL_KV.delete(kvKey);
-					return jsonResponse(true, 200, `Jadwal ${kodeAkses} berhasil dihapus dari cache.`);
-				} catch (e) {
-					console.error(`[KV JADWAL DELETE Error] Gagal menghapus jadwal ${kodeAkses}:`, e);
-					return jsonResponse(false, 500, `Server worker error: Gagal menghapus data jadwal dari KV. Error: ${e.message}`);
-				}
-			}
-
-			return jsonResponse(false, 405, 'Metode tidak valid untuk rute /api/jadwal.');
-		}
-
-		// =================================================================
-		// RUTE BARU: REFRESH TOKEN (DIPANGGIL OLEH PWA)
-		// =================================================================
-		if (pathname.endsWith('/api/profil/refresh-token')) {
-			if (request.method !== 'POST') {
-				return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
-			}
-
-			// 1. Validasi token JWT dari PWA
-			const authHeader = request.headers.get('Authorization');
-			if (!authHeader || !authHeader.startsWith('Bearer ')) {
-				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
-			}
-			const token = authHeader.substring(7);
-			const secret = new TextEncoder().encode(env.JWT_SECRET);
-			let decodedToken;
-			try {
-				const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
-				decodedToken = payload;
-			} catch (err) {
-				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
-			}
-
-			try {
-				const nip = decodedToken.data.nip;
-				const kvKey = `pegawai:${nip}`;
-				const profilKv = await env.PEGAWAI_KV.get(kvKey, 'json');
-
-				// 2. Jika data ada di cache (Cache HIT)
-				if (profilKv) {
-					console.log(`[Profil Refresh Token] Cache HIT untuk NIP ${nip}. Membuat token baru.`);
-
-					const issuedAt = Math.floor(Date.now() / 1000);
-					const expirationTime = issuedAt + 3600 * 24 * 30; // 30 hari
-					const payload = {
-						data: {
-							nip: profilKv.nip,
-							nama: profilKv.nama_pegawai,
-							opd: profilKv.perangkat_daerah,
-							jabatan: profilKv.jabatan,
-							role: profilKv.role || ['asn'],
-							jenis_asn: profilKv.jenis_asn
-						},
-					};
-					const newJwt = await new SignJWT(payload)
-						.setProtectedHeader({ alg: 'HS256' })
-						.setIssuedAt(issuedAt)
-						.setExpirationTime(expirationTime)
-						.setIssuer(DEFAULT_ISSUER)
-						.sign(secret);
-
-					const responseData = {
-						token: newJwt,
-					};
-
-					return jsonResponse(true, 200, 'Token berhasil diperbarui dari cache.', responseData);
-				}
-
-				// 3. Jika data tidak ada di cache (Cache MISS), panggil server PHP
-				console.log(`[Profil Refresh Token] Cache MISS untuk NIP ${nip}. Memanggil PHP.`);
-				const phpResponse = await fetch(`${env.ORIGIN_API_URL}/profil/refresh-token`, {
-					method: 'POST',
-					headers: { 'Authorization': `Bearer ${token}` },
-				});
-
-				const phpResult = await phpResponse.json();
-
-				// Kembalikan hasil dari PHP
-				const isSuccess = phpResponse.ok && (phpResult.status === true || phpResult.status === 'success');
-				return jsonResponse(isSuccess, phpResponse.status, phpResult.message || (isSuccess ? 'Sukses' : 'Gagal'), phpResult.data || null);
-
-			} catch (error) {
-				console.error('Error di worker /api/profil/refresh-token:', error.message, error.stack);
-				return jsonResponse(false, 500, 'Server worker error: Gagal memperbarui token.');
-			}
-		}
-
-		// =================================================================
-		// RUTE SINKRONISASI PROFIL (DIPANGGIL OLEH PWA)
-		// Sesuai permintaan: PWA "menarik" data terbaru dari cache. Worker akan:
-		// 1. Mengambil data dari KV.
-		// 2. Jika ada, buat token baru dan kirim kembali.
-		// 3. Jika tidak ada (cache miss), fallback ke server PHP, simpan ke KV, lalu kirim kembali.
-		// =================================================================
-		if (pathname.endsWith('/api/profil/sync')) {
-			if (request.method !== 'POST') {
-				return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
-			}
-
-			// 1. Validasi token JWT dari PWA
-			const authHeader = request.headers.get('Authorization');
-			if (!authHeader || !authHeader.startsWith('Bearer ')) {
-				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
-			}
-			const token = authHeader.substring(7);
-			const secret = new TextEncoder().encode(env.JWT_SECRET);
-			let decodedToken;
-			try {
-				const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
-				decodedToken = payload;
-			} catch (err) {
-				console.error(`[Profil Refresh Token] Gagal validasi token: ${err.message}`);
-				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
-			}
-
-			try {
-				const nip = decodedToken.data.nip;
-				const kvKey = `pegawai:${nip}`;
-				const profilKv = await env.PEGAWAI_KV.get(kvKey, 'json');
-
-				// 2. Jika data ada di cache (Cache HIT)
-				if (profilKv) {
-					console.log(`[Profil Sync] Cache HIT untuk NIP ${nip}. Membuat token baru dari data KV.`);
-
-					// Buat token baru dari data KV
-					const issuedAt = Math.floor(Date.now() / 1000);
-					const expirationTime = issuedAt + 3600 * 24 * 30; // 30 hari
-					const payload = {
-						data: {
-							nip: profilKv.nip,
-							nama: profilKv.nama_pegawai,
-							opd: profilKv.perangkat_daerah,
-							jabatan: profilKv.jabatan,
-							role: profilKv.role || ['asn'],
-							jenis_asn: profilKv.jenis_asn
-						},
-					};
-					const newJwt = await new SignJWT(payload)
-						.setProtectedHeader({ alg: 'HS256' })
-						.setIssuedAt(issuedAt)
-						.setExpirationTime(expirationTime)
-						.setIssuer(DEFAULT_ISSUER)
-						.sign(secret);
-
-					const responseData = {
-						token: newJwt,
-						user: {
-							nama: profilKv.nama_pegawai,
-							jabatan: profilKv.jabatan,
-							opd: profilKv.perangkat_daerah
+					const settingsPayload = await request.json();
+					if (settingsPayload && typeof settingsPayload === 'object') {
+						for (const [key, val] of Object.entries(settingsPayload)) {
+							const kvKey = `pengaturan:${key}`;
+							// Simpan seumur hidup tanpa expiration / TTL
+							await env.PENGATURAN_KV.put(kvKey, String(val || ''));
 						}
-					};
-
-					return jsonResponse(true, 200, 'Profil berhasil disinkronkan.', responseData);
-				}
-
-				// 3. Jika data tidak ada di cache (Cache MISS), panggil server PHP
-				console.log(`[Profil Sync] Cache MISS untuk NIP ${nip}. Memanggil PHP untuk sinkronisasi.`);
-				const cacheBuster = `?v=${Date.now()}`;
-				const phpResponse = await fetch(`${env.ORIGIN_API_URL}/profil/refresh${cacheBuster}`, {
-					method: 'GET',
-					headers: { 'Authorization': `Bearer ${token}` },
-				});
-
-				const phpResult = await phpResponse.json();
-
-				// 4. Jika panggilan PHP berhasil dan ada data untuk di-cache, lakukan update KV
-				if (phpResponse.ok && phpResult.status && phpResult.data.pegawai_to_cache) {
-					ctx.waitUntil(env.PEGAWAI_KV.put(kvKey, JSON.stringify(phpResult.data.pegawai_to_cache)));
-					delete phpResult.data.pegawai_to_cache; // Hapus dari respons ke PWA
-				}
-
-				const isSuccess = phpResponse.ok && (phpResult.status === true || phpResult.status === 'success');
-				return jsonResponse(isSuccess, phpResponse.status, phpResult.message || (isSuccess ? 'Sukses' : 'Gagal'), phpResult.data || null);
-			} catch (error) {
-				console.error('Error di worker /api/profil/sync:', error.message, error.stack);
-				return jsonResponse(false, 500, 'Server worker error: Gagal memproses sinkronisasi profil.');
-			}
-		}
-
-		// =================================================================
-		// RUTE BARU: GENERATE TEMPORARY TOKEN (DIPANGGIL OLEH PWA)
-		// =================================================================
-		if (pathname.endsWith('/api/token/generate-temporary')) {
-			if (request.method !== 'POST') {
-				return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
-			}
-
-			// Validasi environment variables
-			if (!env.JWT_SECRET) {
-				console.error("Secret 'JWT_SECRET' belum diatur di Cloudflare.");
-				return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
-			}
-
-			// Validasi token dari PWA
-			const authHeader = request.headers.get('Authorization');
-			if (!authHeader || !authHeader.startsWith('Bearer ')) {
-				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
-			}
-
-			const token = authHeader.substring(7);
-			const secret = new TextEncoder().encode(env.JWT_SECRET);
-			let decodedToken;
-
-			try {
-				const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
-				decodedToken = payload;
-			} catch (err) {
-				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
-			}
-
-			try {
-				// Buat JWT baru dengan masa berlaku singkat
-				const issuedAt = Math.floor(Date.now() / 1000);
-				const expirationTime = issuedAt + 1800; // Berlaku 30 menit (1800 detik)
-				const pegawaiData = decodedToken.data;
-
-				const tempPayload = {
-					data: {
-						nip: pegawaiData.nip,
-						nama: pegawaiData.nama,
-						opd: pegawaiData.opd,
-						jabatan: pegawaiData.jabatan,
-						role: pegawaiData.role || ['asn'],
-						jenis_asn: pegawaiData.jenis_asn
+						return jsonResponse(true, 200, 'Pengaturan aplikasi berhasil disinkronkan ke Worker KV seumur hidup.');
+					} else {
+						return jsonResponse(false, 400, 'Format payload pengaturan tidak valid.');
 					}
-				};
-
-				const tempJwt = await new SignJWT(tempPayload).setProtectedHeader({ alg: 'HS256' }).setExpirationTime(expirationTime).sign(secret);
-				const prefixedToken = "BB:" + tempJwt;
-
-				return jsonResponse(true, 200, 'Token sementara berhasil dibuat via worker', { token: prefixedToken });
-
-			} catch (error) {
-				console.error('Error di worker /api/token/generate-temporary:', error.message, error.stack);
-				return jsonResponse(false, 500, 'Server worker error: Gagal membuat token sementara.');
-			}
-		}
-
-		// =================================================================
-		// RUTE CRUD PEGAWAI (DIPANGGIL OLEH ADMIN PANEL VIA PHP)
-		// Pola: /api/pegawai/:nip
-		// =================================================================
-		const pegawaiMatch = pathname.match(/^\/api\/pegawai\/(\d{18})$/);
-		if (pegawaiMatch) {
-			// Validasi environment variables
-			if (!env.PEGAWAI_KV || !env.WORKER_SECRET) {
-				console.error("CRUD Pegawai Error: PEGAWAI_KV or WORKER_SECRET not configured.");
-				return jsonResponse(false, 500, 'Konfigurasi worker tidak lengkap.');
+				} catch (errSync) {
+					return jsonResponse(false, 500, 'Gagal menyimpan pengaturan ke KV: ' + errSync.message);
+				}
 			}
 
-			// Validasi secret dari server PHP
-			const requestSecret = request.headers.get('X-Worker-Secret');
-			if (requestSecret !== env.WORKER_SECRET) {
-				return jsonResponse(false, 403, 'Akses ditolak. Invalid secret.');
-			}
+			// =================================================================
+			// RUTE HAPUS PENGATURAN KV (DIPANGGIL OLEH ADMIN VIA PHP / DIRECT)
+			// Pola: DELETE /api/pengaturan/:key
+			// =================================================================
+			const pengaturanDelMatch = pathname.match(/^\/api\/pengaturan\/([a-zA-Z0-9_-]+)$/);
+			if (pengaturanDelMatch && request.method === 'DELETE') {
+				if (!env.PENGATURAN_KV) {
+					return jsonResponse(false, 500, 'Konfigurasi worker tidak lengkap (PENGATURAN_KV belum di-bind).');
+				}
 
-			const nip = pegawaiMatch[1];
-			const kvKey = `pegawai:${nip}`;
+				const reqSecret = request.headers.get('X-Worker-Secret');
+				let isAuthorized = (reqSecret && reqSecret === env.WORKER_SECRET);
+				if (!isAuthorized) {
+					const superAdminPayload = await verifySuperAdminToken(request, env);
+					if (superAdminPayload) isAuthorized = true;
+				}
 
-			// --- CREATE / UPDATE PEGAWAI (PUT) ---
-			if (request.method === 'PUT') {
+				if (!isAuthorized) {
+					return jsonResponse(false, 403, 'Akses ditolak. Hanya Super Admin atau server internal yang diizinkan.');
+				}
+
 				try {
-					const pegawaiData = await request.json();
-					// Jika NIK kosong/tidak diubah, pertahankan NIK hash lama yang ada di KV
-					if (!pegawaiData.nik) {
-						const existing = await env.PEGAWAI_KV.get(kvKey, 'json');
-						if (existing && existing.nik) {
-							pegawaiData.nik = existing.nik;
+					const key = pengaturanDelMatch[1];
+					const kvKey = `pengaturan:${key}`;
+					await env.PENGATURAN_KV.delete(kvKey);
+					return jsonResponse(true, 200, `Pengaturan '${key}' berhasil dihapus dari Worker KV.`);
+				} catch (errDel) {
+					return jsonResponse(false, 500, 'Gagal menghapus pengaturan dari KV: ' + errDel.message);
+				}
+			}
+
+			// =================================================================
+			// RUTE CRUD JADWAL (DIPANGGIL OLEH ADMIN PANEL VIA PHP)
+			// Pola: /api/jadwal/:kode_akses?
+			// =================================================================
+			const jadwalMatch = pathname.match(/^\/api\/jadwal\/?([a-zA-Z0-9_.-]+)?\/?$/);
+			if (jadwalMatch) {
+				// Validasi environment variables yang dibutuhkan untuk rute ini
+				if (!env.JADWAL_KV || !env.WORKER_SECRET) {
+					console.error("Konfigurasi worker tidak lengkap. 'JADWAL_KV' dan 'WORKER_SECRET' harus diatur.");
+					return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
+				}
+
+				// Validasi secret dari server PHP
+				const requestSecret = request.headers.get('X-Worker-Secret');
+				if (requestSecret !== env.WORKER_SECRET) {
+					return jsonResponse(false, 403, 'Akses ditolak. Invalid secret.');
+				}
+
+				const kodeAkses = jadwalMatch[1]; // Bisa undefined jika path-nya hanya /api/jadwal
+
+				// --- CREATE / UPDATE JADWAL (POST atau PUT) ---
+				if (request.method === 'POST' || request.method === 'PUT') {
+					try {
+						const jadwalData = await request.json();
+						const effectiveKodeAkses = kodeAkses || jadwalData.kode_akses;
+						if (!effectiveKodeAkses) {
+							return jsonResponse(false, 400, 'Kode akses tidak ditemukan di URL atau payload.');
 						}
+						const kvKey = `jadwal:${effectiveKodeAkses}`;
+						// Lakukan operasi put secara blocking (await) untuk memastikan data benar-benar tersimpan.
+						await env.JADWAL_KV.put(kvKey, JSON.stringify(jadwalData));
+						return jsonResponse(true, 200, `Jadwal ${effectiveKodeAkses} berhasil disimpan/diperbarui di cache.`);
+					} catch (e) {
+						console.error(`[KV JADWAL PUT Error] Gagal menyimpan jadwal:`, e);
+						const status = e instanceof SyntaxError ? 400 : 500;
+						const message = status === 400 ? `Gagal memproses request: ${e.message}` : `Server worker error: Gagal menyimpan data jadwal ke KV. Error: ${e.message}`;
+						return jsonResponse(false, status, message);
 					}
-					// Lakukan operasi put secara blocking (await) untuk memastikan data benar-benar tersimpan.
-					// Jangan gunakan ctx.waitUntil() karena kita butuh konfirmasi sukses/gagal. Hapus TTL agar data permanen.
-					await env.PEGAWAI_KV.put(kvKey, JSON.stringify(pegawaiData));
-					return jsonResponse(true, 200, `Cache untuk NIP ${nip} berhasil disimpan/diperbarui.`);
-				} catch (e) {
-					console.error(`[KV PEGAWAI PUT Error] Gagal menyimpan NIP ${nip}:`, e);
-					const status = e instanceof SyntaxError ? 400 : 500;
-					const message = status === 400 ? `Gagal memproses request: ${e.message}` : `Server worker error: Gagal menyimpan data ke KV. Error: ${e.message}`;
-					return jsonResponse(false, status, message);
 				}
+
+				// --- DELETE JADWAL ---
+				if (request.method === 'DELETE' && kodeAkses) {
+					try {
+						const kvKey = `jadwal:${kodeAkses}`;
+						await env.JADWAL_KV.delete(kvKey);
+						return jsonResponse(true, 200, `Jadwal ${kodeAkses} berhasil dihapus dari cache.`);
+					} catch (e) {
+						console.error(`[KV JADWAL DELETE Error] Gagal menghapus jadwal ${kodeAkses}:`, e);
+						return jsonResponse(false, 500, `Server worker error: Gagal menghapus data jadwal dari KV. Error: ${e.message}`);
+					}
+				}
+
+				return jsonResponse(false, 405, 'Metode tidak valid untuk rute /api/jadwal.');
 			}
 
-			// --- DELETE PEGAWAI (DELETE) ---
-			if (request.method === 'DELETE') {
+			// =================================================================
+			// RUTE BARU: REFRESH TOKEN (DIPANGGIL OLEH PWA)
+			// =================================================================
+			if (pathname.endsWith('/api/profil/refresh-token')) {
+				if (request.method !== 'POST') {
+					return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
+				}
+
+				// 1. Validasi token JWT dari PWA
+				const authHeader = request.headers.get('Authorization');
+				if (!authHeader || !authHeader.startsWith('Bearer ')) {
+					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+				}
+				const token = authHeader.substring(7);
+				const secret = new TextEncoder().encode(env.JWT_SECRET);
+				let decodedToken;
 				try {
-					await env.PEGAWAI_KV.delete(kvKey);
-					return jsonResponse(true, 200, `Cache untuk NIP ${nip} berhasil dihapus.`);
-				} catch (e) {
-					console.error(`[KV PEGAWAI DELETE Error] Gagal menghapus NIP ${nip}:`, e);
-					return jsonResponse(false, 500, `Server worker error: Gagal menghapus data dari KV. Error: ${e.message}`);
-				}
-			}
-
-			return jsonResponse(false, 405, 'Metode tidak valid untuk rute /api/pegawai.');
-		}
-
-		// =================================================================
-		// RUTE BULK UPDATE PEGAWAI (DIPANGGIL OLEH SKRIP CLI)
-		// Pola: POST /api/pegawai/bulk
-		// =================================================================
-		if (pathname.endsWith('/api/pegawai/bulk')) {
-			// Validasi environment variables
-			if (!env.PEGAWAI_KV || !env.WORKER_SECRET) {
-				console.error("Bulk Update Pegawai Error: PEGAWAI_KV or WORKER_SECRET not configured.");
-				return jsonResponse(false, 500, 'Konfigurasi worker tidak lengkap.');
-			}
-
-			// Validasi secret dari server PHP
-			const requestSecret = request.headers.get('X-Worker-Secret');
-			if (requestSecret !== env.WORKER_SECRET) {
-				return jsonResponse(false, 403, 'Akses ditolak. Invalid secret.');
-			}
-
-			// Hanya izinkan metode POST
-			if (request.method !== 'POST') {
-				return jsonResponse(false, 405, 'Metode tidak valid untuk rute /api/pegawai/bulk. Gunakan POST.');
-			}
-
-			try {
-				const pegawaiList = await request.json();
-				if (!Array.isArray(pegawaiList)) {
-					return jsonResponse(false, 400, 'Payload harus berupa array data pegawai.');
-				}
-
-				// Lakukan operasi put secara blocking (await) untuk memastikan data benar-benar tersimpan.
-				const bulkPutPromises =
-					pegawaiList
-						.filter(p => p && p.nip) // Abaikan item yang tidak valid
-						.map(pegawaiData => {
-							const kvKey = `pegawai:${pegawaiData.nip}`;
-							// Simpan secara permanen (tanpa TTL)
-							return env.PEGAWAI_KV.put(kvKey, JSON.stringify(pegawaiData));
-						});
-
-				await Promise.all(bulkPutPromises);
-
-				return jsonResponse(true, 200, `${pegawaiList.length} data pegawai berhasil disinkronkan.`);
-			} catch (e) {
-				console.error(`[KV PEGAWAI BULK PUT Error] Gagal menyimpan batch:`, e);
-				return jsonResponse(false, 500, `Server worker error: Gagal menyimpan sebagian atau semua data ke KV. Error: ${e.message}`);
-			}
-		}
-
-		// =================================================================
-		// RUTE 2: ENDPOINT UNTUK MENGUJI KONEKSI KV
-		// =================================================================
-		if (pathname.endsWith('/api/test-kv')) {
-			// Pastikan binding PEGAWAI_KV sudah ada
-			if (!env.PEGAWAI_KV) {
-				return jsonResponse(false, 500, "KV Namespace 'PEGAWAI_KV' tidak terkonfigurasi.");
-			}
-
-			// Metode POST: untuk menulis data ke KV
-			if (request.method === 'POST') {
-				try {
-					const { key, value } = await request.json();
-					// Simpan data ke KV. `put` tidak mengembalikan nilai.
-					// Kita gunakan ctx.waitUntil agar proses penyimpanan tidak memblokir response.
-					ctx.waitUntil(env.PEGAWAI_KV.put(key, JSON.stringify(value)));
-					return jsonResponse(true, 200, `OK. Data untuk kunci '${key}' sedang disimpan.`);
-				} catch (e) {
-					return jsonResponse(false, 400, `Gagal memproses request: ${e.message}`);
-				}
-			}
-
-			// Metode GET: untuk membaca data dari KV
-			if (request.method === 'GET') {
-				const key = url.searchParams.get('key');
-				if (!key) {
-					return jsonResponse(false, 400, "Parameter 'key' dibutuhkan.");
-				}
-				// Ambil data dari KV. Parameter kedua 'json' akan otomatis mem-parsing hasilnya.
-				const value = await env.PEGAWAI_KV.get(key, 'json');
-				if (value) {
-					return jsonResponse(true, 200, 'Data ditemukan.', value);
-				} else {
-					return jsonResponse(false, 404, `Data untuk kunci '${key}' tidak ditemukan.`);
-				}
-			}
-
-			return jsonResponse(false, 405, 'Metode tidak diizinkan untuk /api/test-kv. Gunakan GET atau POST.');
-		}
-
-		// =================================================================
-		// RUTE BARU: SUBMIT ABSENSI CEPAT (PRODUSER QUEUE)
-		// =================================================================
-		if (pathname.endsWith('/api/absen-cepat/submit')) {
-			if (request.method !== 'POST') {
-				return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
-			}
-
-			// Validasi token admin dari header
-			if (!env.JWT_SECRET) {
-				console.error("Secret 'JWT_SECRET' belum diatur di Cloudflare.");
-				return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
-			}
-
-			const authHeader = request.headers.get('Authorization');
-			if (!authHeader || !authHeader.startsWith('Bearer ')) {
-				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
-			}
-
-			const adminToken = authHeader.substring(7);
-			const secret = new TextEncoder().encode(env.JWT_SECRET);
-			let decodedPayload;
-
-			try {
-				// Verifikasi token admin
-				const { payload } = await jwtVerify(adminToken, secret, { issuer: ALLOWED_ISSUERS });
-				decodedPayload = payload;
-			} catch (err) {
-				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
-			}
-
-			// Otorisasi: Pastikan pengguna yang melakukan request memiliki peran 'admin' atau 'super admin'
-			const userRoles = Array.isArray(decodedPayload?.data?.role) ? decodedPayload.data.role : (decodedPayload?.data?.role ? [decodedPayload.data.role] : []);
-			const hasAdminRole = userRoles.some(r => ['admin', 'super admin'].includes(String(r).trim().toLowerCase()));
-			if (!hasAdminRole) {
-				return jsonResponse(false, 403, 'Hak akses ditolak.');
-			}
-
-			try {
-				// Ambil payload dari body, yang berisi data absensi dan token user
-				const payload = await request.json();
-				const userToken = payload.user_token;
-
-				if (!userToken) {
+					const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
+					decodedToken = payload;
+				} catch (err) {
 					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 				}
 
-				// Validasi aturan ketat (waktu dan lokasi)
-				const validationError = await validateJadwalAbsen(payload.kode_akses, payload);
-				if (validationError) {
-					return jsonResponse(false, validationError.code, validationError.message);
+				try {
+					const nip = decodedToken.data.nip;
+					const kvKey = `pegawai:${nip}`;
+					const profilKv = await env.PEGAWAI_KV.get(kvKey, 'json');
+
+					// 2. Jika data ada di cache (Cache HIT)
+					if (profilKv) {
+						console.log(`[Profil Refresh Token] Cache HIT untuk NIP ${nip}. Membuat token baru.`);
+
+						const issuedAt = Math.floor(Date.now() / 1000);
+						const expirationTime = issuedAt + 3600 * 24 * 30; // 30 hari
+						const payload = {
+							data: {
+								nip: profilKv.nip,
+								nama: profilKv.nama_pegawai,
+								opd: profilKv.perangkat_daerah,
+								jabatan: profilKv.jabatan,
+								role: profilKv.role || ['asn'],
+								jenis_asn: profilKv.jenis_asn
+							},
+						};
+						const newJwt = await new SignJWT(payload)
+							.setProtectedHeader({ alg: 'HS256' })
+							.setIssuedAt(issuedAt)
+							.setExpirationTime(expirationTime)
+							.setIssuer(DEFAULT_ISSUER)
+							.sign(secret);
+
+						const responseData = {
+							token: newJwt,
+						};
+
+						return jsonResponse(true, 200, 'Token berhasil diperbarui dari cache.', responseData);
+					}
+
+					// 3. Jika data tidak ada di cache (Cache MISS), panggil server PHP
+					console.log(`[Profil Refresh Token] Cache MISS untuk NIP ${nip}. Memanggil PHP.`);
+					const phpResponse = await fetch(`${env.ORIGIN_API_URL}/profil/refresh-token`, {
+						method: 'POST',
+						headers: { 'Authorization': `Bearer ${token}` },
+					});
+
+					const phpResult = await phpResponse.json();
+
+					// Kembalikan hasil dari PHP
+					const isSuccess = phpResponse.ok && (phpResult.status === true || phpResult.status === 'success');
+					return jsonResponse(isSuccess, phpResponse.status, phpResult.message || (isSuccess ? 'Sukses' : 'Gagal'), phpResult.data || null);
+
+				} catch (error) {
+					console.error('Error di worker /api/profil/refresh-token:', error.message, error.stack);
+					return jsonResponse(false, 500, 'Server worker error: Gagal memperbarui token.');
 				}
-
-				// Hapus user_token dari payload utama agar tidak terkirim ke PHP jika ada fallback
-				delete payload.user_token;
-
-				// Buat payload untuk antrian, gunakan token user dari body dan set keterangan_verifikasi
-				if (!env.MY_QUEUE) {
-					console.error("Binding MY_QUEUE belum dikonfigurasi.");
-					return jsonResponse(false, 500, 'Server worker error: Binding Queue belum dikonfigurasi di Cloudflare.');
-				}
-
-				const keteranganAdmin = payload.keterangan_verifikasi || payload.keterangan || 'Absensi Cepat oleh Admin';
-				const queuePayload = {
-					...payload,
-					keterangan_verifikasi: keteranganAdmin,
-					foto_base64: payload.foto_base64 || null,
-					jwt_token: userToken,
-					submittedAt: new Date().toISOString()
-				};
-				delete queuePayload.keterangan; // Jangan timpa kolom keterangan pegawai
-				await env.MY_QUEUE.send(queuePayload);
-
-				return jsonResponse(true, 202, 'Absensi Cepat telah diterima dan akan segera diproses.');
-			} catch (error) {
-				console.error('Error di fetch handler (producer absen-cepat) worker / queue limit:', error);
-				return jsonResponse(false, 500, 'Server worker / Queue limit exceeded: ' + (error.message || 'Gagal memproses permintaan Absensi Cepat Anda.'));
 			}
+
+			// =================================================================
+			// RUTE SINKRONISASI PROFIL (DIPANGGIL OLEH PWA)
+			// Sesuai permintaan: PWA "menarik" data terbaru dari cache. Worker akan:
+			// 1. Mengambil data dari KV.
+			// 2. Jika ada, buat token baru dan kirim kembali.
+			// 3. Jika tidak ada (cache miss), fallback ke server PHP, simpan ke KV, lalu kirim kembali.
+			// =================================================================
+			if (pathname.endsWith('/api/profil/sync')) {
+				if (request.method !== 'POST') {
+					return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
+				}
+
+				// 1. Validasi token JWT dari PWA
+				const authHeader = request.headers.get('Authorization');
+				if (!authHeader || !authHeader.startsWith('Bearer ')) {
+					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+				}
+				const token = authHeader.substring(7);
+				const secret = new TextEncoder().encode(env.JWT_SECRET);
+				let decodedToken;
+				try {
+					const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
+					decodedToken = payload;
+				} catch (err) {
+					console.error(`[Profil Refresh Token] Gagal validasi token: ${err.message}`);
+					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+				}
+
+				try {
+					const nip = decodedToken.data.nip;
+					const kvKey = `pegawai:${nip}`;
+					const profilKv = await env.PEGAWAI_KV.get(kvKey, 'json');
+
+					// 2. Jika data ada di cache (Cache HIT)
+					if (profilKv) {
+						console.log(`[Profil Sync] Cache HIT untuk NIP ${nip}. Membuat token baru dari data KV.`);
+
+						// Buat token baru dari data KV
+						const issuedAt = Math.floor(Date.now() / 1000);
+						const expirationTime = issuedAt + 3600 * 24 * 30; // 30 hari
+						const payload = {
+							data: {
+								nip: profilKv.nip,
+								nama: profilKv.nama_pegawai,
+								opd: profilKv.perangkat_daerah,
+								jabatan: profilKv.jabatan,
+								role: profilKv.role || ['asn'],
+								jenis_asn: profilKv.jenis_asn
+							},
+						};
+						const newJwt = await new SignJWT(payload)
+							.setProtectedHeader({ alg: 'HS256' })
+							.setIssuedAt(issuedAt)
+							.setExpirationTime(expirationTime)
+							.setIssuer(DEFAULT_ISSUER)
+							.sign(secret);
+
+						const responseData = {
+							token: newJwt,
+							user: {
+								nama: profilKv.nama_pegawai,
+								jabatan: profilKv.jabatan,
+								opd: profilKv.perangkat_daerah
+							}
+						};
+
+						return jsonResponse(true, 200, 'Profil berhasil disinkronkan.', responseData);
+					}
+
+					// 3. Jika data tidak ada di cache (Cache MISS), panggil server PHP
+					console.log(`[Profil Sync] Cache MISS untuk NIP ${nip}. Memanggil PHP untuk sinkronisasi.`);
+					const cacheBuster = `?v=${Date.now()}`;
+					const phpResponse = await fetch(`${env.ORIGIN_API_URL}/profil/refresh${cacheBuster}`, {
+						method: 'GET',
+						headers: { 'Authorization': `Bearer ${token}` },
+					});
+
+					const phpResult = await phpResponse.json();
+
+					// 4. Jika panggilan PHP berhasil dan ada data untuk di-cache, lakukan update KV
+					if (phpResponse.ok && phpResult.status && phpResult.data.pegawai_to_cache) {
+						ctx.waitUntil(env.PEGAWAI_KV.put(kvKey, JSON.stringify(phpResult.data.pegawai_to_cache)));
+						delete phpResult.data.pegawai_to_cache; // Hapus dari respons ke PWA
+					}
+
+					const isSuccess = phpResponse.ok && (phpResult.status === true || phpResult.status === 'success');
+					return jsonResponse(isSuccess, phpResponse.status, phpResult.message || (isSuccess ? 'Sukses' : 'Gagal'), phpResult.data || null);
+				} catch (error) {
+					console.error('Error di worker /api/profil/sync:', error.message, error.stack);
+					return jsonResponse(false, 500, 'Server worker error: Gagal memproses sinkronisasi profil.');
+				}
+			}
+
+			// =================================================================
+			// RUTE BARU: GENERATE TEMPORARY TOKEN (DIPANGGIL OLEH PWA)
+			// =================================================================
+			if (pathname.endsWith('/api/token/generate-temporary')) {
+				if (request.method !== 'POST') {
+					return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
+				}
+
+				// Validasi environment variables
+				if (!env.JWT_SECRET) {
+					console.error("Secret 'JWT_SECRET' belum diatur di Cloudflare.");
+					return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
+				}
+
+				// Validasi token dari PWA
+				const authHeader = request.headers.get('Authorization');
+				if (!authHeader || !authHeader.startsWith('Bearer ')) {
+					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+				}
+
+				const token = authHeader.substring(7);
+				const secret = new TextEncoder().encode(env.JWT_SECRET);
+				let decodedToken;
+
+				try {
+					const { payload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
+					decodedToken = payload;
+				} catch (err) {
+					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+				}
+
+				try {
+					// Buat JWT baru dengan masa berlaku singkat
+					const issuedAt = Math.floor(Date.now() / 1000);
+					const expirationTime = issuedAt + 1800; // Berlaku 30 menit (1800 detik)
+					const pegawaiData = decodedToken.data;
+
+					const tempPayload = {
+						data: {
+							nip: pegawaiData.nip,
+							nama: pegawaiData.nama,
+							opd: pegawaiData.opd,
+							jabatan: pegawaiData.jabatan,
+							role: pegawaiData.role || ['asn'],
+							jenis_asn: pegawaiData.jenis_asn
+						}
+					};
+
+					const tempJwt = await new SignJWT(tempPayload).setProtectedHeader({ alg: 'HS256' }).setExpirationTime(expirationTime).sign(secret);
+					const prefixedToken = "BB:" + tempJwt;
+
+					return jsonResponse(true, 200, 'Token sementara berhasil dibuat via worker', { token: prefixedToken });
+
+				} catch (error) {
+					console.error('Error di worker /api/token/generate-temporary:', error.message, error.stack);
+					return jsonResponse(false, 500, 'Server worker error: Gagal membuat token sementara.');
+				}
+			}
+
+			// =================================================================
+			// RUTE CRUD PEGAWAI (DIPANGGIL OLEH ADMIN PANEL VIA PHP)
+			// Pola: /api/pegawai/:nip
+			// =================================================================
+			const pegawaiMatch = pathname.match(/^\/api\/pegawai\/(\d{18})$/);
+			if (pegawaiMatch) {
+				// Validasi environment variables
+				if (!env.PEGAWAI_KV || !env.WORKER_SECRET) {
+					console.error("CRUD Pegawai Error: PEGAWAI_KV or WORKER_SECRET not configured.");
+					return jsonResponse(false, 500, 'Konfigurasi worker tidak lengkap.');
+				}
+
+				// Validasi secret dari server PHP
+				const requestSecret = request.headers.get('X-Worker-Secret');
+				if (requestSecret !== env.WORKER_SECRET) {
+					return jsonResponse(false, 403, 'Akses ditolak. Invalid secret.');
+				}
+
+				const nip = pegawaiMatch[1];
+				const kvKey = `pegawai:${nip}`;
+
+				// --- CREATE / UPDATE PEGAWAI (PUT) ---
+				if (request.method === 'PUT') {
+					try {
+						const pegawaiData = await request.json();
+						// Jika NIK kosong/tidak diubah, pertahankan NIK hash lama yang ada di KV
+						if (!pegawaiData.nik) {
+							const existing = await env.PEGAWAI_KV.get(kvKey, 'json');
+							if (existing && existing.nik) {
+								pegawaiData.nik = existing.nik;
+							}
+						}
+						// Lakukan operasi put secara blocking (await) untuk memastikan data benar-benar tersimpan.
+						// Jangan gunakan ctx.waitUntil() karena kita butuh konfirmasi sukses/gagal. Hapus TTL agar data permanen.
+						await env.PEGAWAI_KV.put(kvKey, JSON.stringify(pegawaiData));
+						return jsonResponse(true, 200, `Cache untuk NIP ${nip} berhasil disimpan/diperbarui.`);
+					} catch (e) {
+						console.error(`[KV PEGAWAI PUT Error] Gagal menyimpan NIP ${nip}:`, e);
+						const status = e instanceof SyntaxError ? 400 : 500;
+						const message = status === 400 ? `Gagal memproses request: ${e.message}` : `Server worker error: Gagal menyimpan data ke KV. Error: ${e.message}`;
+						return jsonResponse(false, status, message);
+					}
+				}
+
+				// --- DELETE PEGAWAI (DELETE) ---
+				if (request.method === 'DELETE') {
+					try {
+						await env.PEGAWAI_KV.delete(kvKey);
+						return jsonResponse(true, 200, `Cache untuk NIP ${nip} berhasil dihapus.`);
+					} catch (e) {
+						console.error(`[KV PEGAWAI DELETE Error] Gagal menghapus NIP ${nip}:`, e);
+						return jsonResponse(false, 500, `Server worker error: Gagal menghapus data dari KV. Error: ${e.message}`);
+					}
+				}
+
+				return jsonResponse(false, 405, 'Metode tidak valid untuk rute /api/pegawai.');
+			}
+
+			// =================================================================
+			// RUTE BULK UPDATE PEGAWAI (DIPANGGIL OLEH SKRIP CLI)
+			// Pola: POST /api/pegawai/bulk
+			// =================================================================
+			if (pathname.endsWith('/api/pegawai/bulk')) {
+				// Validasi environment variables
+				if (!env.PEGAWAI_KV || !env.WORKER_SECRET) {
+					console.error("Bulk Update Pegawai Error: PEGAWAI_KV or WORKER_SECRET not configured.");
+					return jsonResponse(false, 500, 'Konfigurasi worker tidak lengkap.');
+				}
+
+				// Validasi secret dari server PHP
+				const requestSecret = request.headers.get('X-Worker-Secret');
+				if (requestSecret !== env.WORKER_SECRET) {
+					return jsonResponse(false, 403, 'Akses ditolak. Invalid secret.');
+				}
+
+				// Hanya izinkan metode POST
+				if (request.method !== 'POST') {
+					return jsonResponse(false, 405, 'Metode tidak valid untuk rute /api/pegawai/bulk. Gunakan POST.');
+				}
+
+				try {
+					const pegawaiList = await request.json();
+					if (!Array.isArray(pegawaiList)) {
+						return jsonResponse(false, 400, 'Payload harus berupa array data pegawai.');
+					}
+
+					// Lakukan operasi put secara blocking (await) untuk memastikan data benar-benar tersimpan.
+					const bulkPutPromises =
+						pegawaiList
+							.filter(p => p && p.nip) // Abaikan item yang tidak valid
+							.map(pegawaiData => {
+								const kvKey = `pegawai:${pegawaiData.nip}`;
+								// Simpan secara permanen (tanpa TTL)
+								return env.PEGAWAI_KV.put(kvKey, JSON.stringify(pegawaiData));
+							});
+
+					await Promise.all(bulkPutPromises);
+
+					return jsonResponse(true, 200, `${pegawaiList.length} data pegawai berhasil disinkronkan.`);
+				} catch (e) {
+					console.error(`[KV PEGAWAI BULK PUT Error] Gagal menyimpan batch:`, e);
+					return jsonResponse(false, 500, `Server worker error: Gagal menyimpan sebagian atau semua data ke KV. Error: ${e.message}`);
+				}
+			}
+
+			// =================================================================
+			// RUTE 2: ENDPOINT UNTUK MENGUJI KONEKSI KV
+			// =================================================================
+			if (pathname.endsWith('/api/test-kv')) {
+				// Pastikan binding PEGAWAI_KV sudah ada
+				if (!env.PEGAWAI_KV) {
+					return jsonResponse(false, 500, "KV Namespace 'PEGAWAI_KV' tidak terkonfigurasi.");
+				}
+
+				// Metode POST: untuk menulis data ke KV
+				if (request.method === 'POST') {
+					try {
+						const { key, value } = await request.json();
+						// Simpan data ke KV. `put` tidak mengembalikan nilai.
+						// Kita gunakan ctx.waitUntil agar proses penyimpanan tidak memblokir response.
+						ctx.waitUntil(env.PEGAWAI_KV.put(key, JSON.stringify(value)));
+						return jsonResponse(true, 200, `OK. Data untuk kunci '${key}' sedang disimpan.`);
+					} catch (e) {
+						return jsonResponse(false, 400, `Gagal memproses request: ${e.message}`);
+					}
+				}
+
+				// Metode GET: untuk membaca data dari KV
+				if (request.method === 'GET') {
+					const key = url.searchParams.get('key');
+					if (!key) {
+						return jsonResponse(false, 400, "Parameter 'key' dibutuhkan.");
+					}
+					// Ambil data dari KV. Parameter kedua 'json' akan otomatis mem-parsing hasilnya.
+					const value = await env.PEGAWAI_KV.get(key, 'json');
+					if (value) {
+						return jsonResponse(true, 200, 'Data ditemukan.', value);
+					} else {
+						return jsonResponse(false, 404, `Data untuk kunci '${key}' tidak ditemukan.`);
+					}
+				}
+
+				return jsonResponse(false, 405, 'Metode tidak diizinkan untuk /api/test-kv. Gunakan GET atau POST.');
+			}
+
+			// =================================================================
+			// RUTE BARU: SUBMIT ABSENSI CEPAT (PRODUSER QUEUE)
+			// =================================================================
+			if (pathname.endsWith('/api/absen-cepat/submit')) {
+				if (request.method !== 'POST') {
+					return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
+				}
+
+				// Validasi token admin dari header
+				if (!env.JWT_SECRET) {
+					console.error("Secret 'JWT_SECRET' belum diatur di Cloudflare.");
+					return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
+				}
+
+				const authHeader = request.headers.get('Authorization');
+				if (!authHeader || !authHeader.startsWith('Bearer ')) {
+					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+				}
+
+				const adminToken = authHeader.substring(7);
+				const secret = new TextEncoder().encode(env.JWT_SECRET);
+				let decodedPayload;
+
+				try {
+					// Verifikasi token admin
+					const { payload } = await jwtVerify(adminToken, secret, { issuer: ALLOWED_ISSUERS });
+					decodedPayload = payload;
+				} catch (err) {
+					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+				}
+
+				// Otorisasi: Pastikan pengguna yang melakukan request memiliki peran 'admin' atau 'super admin'
+				const userRoles = Array.isArray(decodedPayload?.data?.role) ? decodedPayload.data.role : (decodedPayload?.data?.role ? [decodedPayload.data.role] : []);
+				const hasAdminRole = userRoles.some(r => ['admin', 'super admin'].includes(String(r).trim().toLowerCase()));
+				if (!hasAdminRole) {
+					return jsonResponse(false, 403, 'Hak akses ditolak.');
+				}
+
+				try {
+					// Ambil payload dari body, yang berisi data absensi dan token user
+					const payload = await request.json();
+					const userToken = payload.user_token;
+
+					if (!userToken) {
+						return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+					}
+
+					// Validasi aturan ketat (waktu dan lokasi)
+					const validationError = await validateJadwalAbsen(payload.kode_akses, payload);
+					if (validationError) {
+						return jsonResponse(false, validationError.code, validationError.message);
+					}
+
+					// Hapus user_token dari payload utama agar tidak terkirim ke PHP jika ada fallback
+					delete payload.user_token;
+
+					// Buat payload untuk antrian, gunakan token user dari body dan set keterangan_verifikasi
+					if (!env.MY_QUEUE) {
+						console.error("Binding MY_QUEUE belum dikonfigurasi.");
+						return jsonResponse(false, 500, 'Server worker error: Binding Queue belum dikonfigurasi di Cloudflare.');
+					}
+
+					const keteranganAdmin = payload.keterangan_verifikasi || payload.keterangan || 'Absensi Cepat oleh Admin';
+					const queuePayload = {
+						...payload,
+						keterangan_verifikasi: keteranganAdmin,
+						foto_base64: payload.foto_base64 || null,
+						jwt_token: userToken,
+						submittedAt: new Date().toISOString()
+					};
+					delete queuePayload.keterangan; // Jangan timpa kolom keterangan pegawai
+					await env.MY_QUEUE.send(queuePayload);
+
+					return jsonResponse(true, 202, 'Absensi Cepat telah diterima dan akan segera diproses.');
+				} catch (error) {
+					console.error('Error di fetch handler (producer absen-cepat) worker / queue limit:', error);
+					return jsonResponse(false, 500, 'Server worker / Queue limit exceeded: ' + (error.message || 'Gagal memproses permintaan Absensi Cepat Anda.'));
+				}
+			}
+
+			// =================================================================
+			// RUTE 4: SUBMIT ABSENSI (PRODUSER QUEUE) - Logika yang sudah ada
+			// =================================================================
+			if (pathname.endsWith('/api/absen/submit')) {
+				if (request.method !== 'POST') {
+					return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
+				}
+
+				if (!env.JWT_SECRET) {
+					console.error("Secret 'JWT_SECRET' belum diatur di Cloudflare.");
+					return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
+				}
+
+				const authHeader = request.headers.get('Authorization');
+				if (!authHeader || !authHeader.startsWith('Bearer ')) {
+					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+				}
+
+				const token = authHeader.substring(7);
+				let jwtPayload;
+				try {
+					const { payload: decodedPayload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
+					jwtPayload = decodedPayload;
+				} catch (err) {
+					return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+				}
+
+				try {
+					const payload = await request.json();
+
+					// Validasi role: jika role = asn (bukan admin/super admin), foto_base64 / bukti dukung wajib diisi
+					const userRoles = Array.isArray(jwtPayload?.data?.role)
+						? jwtPayload.data.role
+						: (jwtPayload?.data?.role ? [jwtPayload.data.role] : ['asn']);
+					const isAdminOrSuperAdmin = userRoles.some(r => ['admin', 'super admin'].includes(String(r).trim().toLowerCase()));
+					const isSubmittedByAdmin = isAdminOrSuperAdmin || payload.status_verifikasi === 'Terverifikasi Oleh Admin';
+
+					const hasFoto = Boolean(payload.foto_base64 && String(payload.foto_base64).trim() !== '');
+
+					if (!isSubmittedByAdmin && !hasFoto) {
+						return jsonResponse(false, 400, 'Foto / bukti dukung wajib diisi.');
+					}
+
+					// Validasi jadwal (waktu mulai, strict time, strict location)
+					const validationError = await validateJadwalAbsen(payload.kode_akses, payload);
+					if (validationError) {
+						return jsonResponse(false, validationError.code, validationError.message);
+					}
+
+					if (!env.MY_QUEUE) {
+						console.error("Binding MY_QUEUE belum dikonfigurasi.");
+						return jsonResponse(false, 500, 'Server worker error: Binding Queue belum dikonfigurasi di Cloudflare.');
+					}
+
+					const queuePayload = { ...payload, jwt_token: token, submittedAt: new Date().toISOString() };
+					await env.MY_QUEUE.send(queuePayload);
+
+					const pesanSukses = (payload.status_verifikasi === 'Menunggu Verifikasi Admin')
+						? 'Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.'
+						: 'Absensi Anda telah diterima dan akan segera diproses.';
+
+					return jsonResponse(true, 202, pesanSukses, { waktu: new Date().toISOString() });
+				} catch (error) {
+					console.error('Error di fetch handler (producer) worker / queue limit:', error);
+					return jsonResponse(false, 500, 'Server worker / Queue limit exceeded: ' + (error.message || 'Gagal memproses permintaan Anda.'));
+				}
+			}
+
+			// Fallback untuk rute yang tidak dikenal
+			return jsonResponse(false, 404, 'Endpoint tidak ditemukan di worker.');
+		} catch (topLevelErr) {
+			console.error("Unhandled Exception di Worker:", topLevelErr);
+			return jsonResponse(false, 500, "Server worker error: " + (topLevelErr.message || "Terjadi kesalahan internal pada worker."));
 		}
-
-		// =================================================================
-		// RUTE 4: SUBMIT ABSENSI (PRODUSER QUEUE) - Logika yang sudah ada
-		// =================================================================
-		if (pathname.endsWith('/api/absen/submit')) {
-			if (request.method !== 'POST') {
-				return jsonResponse(false, 405, 'Metode request yang diharapkan adalah POST');
-			}
-
-			if (!env.JWT_SECRET) {
-				console.error("Secret 'JWT_SECRET' belum diatur di Cloudflare.");
-				return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
-			}
-
-			const authHeader = request.headers.get('Authorization');
-			if (!authHeader || !authHeader.startsWith('Bearer ')) {
-				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
-			}
-
-			const token = authHeader.substring(7);
-			let jwtPayload;
-			try {
-				const { payload: decodedPayload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
-				jwtPayload = decodedPayload;
-			} catch (err) {
-				return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
-			}
-
-			try {
-				const payload = await request.json();
-
-				// Validasi role: jika role = asn (bukan admin/super admin), foto_base64 / bukti dukung wajib diisi
-				const userRoles = Array.isArray(jwtPayload?.data?.role)
-					? jwtPayload.data.role
-					: (jwtPayload?.data?.role ? [jwtPayload.data.role] : ['asn']);
-				const isAdminOrSuperAdmin = userRoles.some(r => ['admin', 'super admin'].includes(String(r).trim().toLowerCase()));
-				const isSubmittedByAdmin = isAdminOrSuperAdmin || payload.status_verifikasi === 'Terverifikasi Oleh Admin';
-
-				const hasFoto = Boolean(payload.foto_base64 && String(payload.foto_base64).trim() !== '');
-
-				if (!isSubmittedByAdmin && !hasFoto) {
-					return jsonResponse(false, 400, 'Foto / bukti dukung wajib diisi.');
-				}
-
-				// Validasi jadwal (waktu mulai, strict time, strict location)
-				const validationError = await validateJadwalAbsen(payload.kode_akses, payload);
-				if (validationError) {
-					return jsonResponse(false, validationError.code, validationError.message);
-				}
-
-				if (!env.MY_QUEUE) {
-					console.error("Binding MY_QUEUE belum dikonfigurasi.");
-					return jsonResponse(false, 500, 'Server worker error: Binding Queue belum dikonfigurasi di Cloudflare.');
-				}
-
-				const queuePayload = { ...payload, jwt_token: token, submittedAt: new Date().toISOString() };
-				await env.MY_QUEUE.send(queuePayload);
-
-				const pesanSukses = (payload.status_verifikasi === 'Menunggu Verifikasi Admin')
-					? 'Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.'
-					: 'Absensi Anda telah diterima dan akan segera diproses.';
-
-				return jsonResponse(true, 202, pesanSukses, { waktu: new Date().toISOString() });
-			} catch (error) {
-				console.error('Error di fetch handler (producer) worker / queue limit:', error);
-				return jsonResponse(false, 500, 'Server worker / Queue limit exceeded: ' + (error.message || 'Gagal memproses permintaan Anda.'));
-			}
-		}
-
-		// Fallback untuk rute yang tidak dikenal
-		return jsonResponse(false, 404, 'Endpoint tidak ditemukan di worker.');
-	} catch (topLevelErr) {
-		console.error("Unhandled Exception di Worker:", topLevelErr);
-		return jsonResponse(false, 500, "Server worker error: " + (topLevelErr.message || "Terjadi kesalahan internal pada worker."));
-	}
-},
+	},
 
 	/**
 	 * Queue handler: Berperan sebagai CONSUMER.

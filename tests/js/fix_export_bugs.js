@@ -1,5 +1,5 @@
 const fs = require('fs');
-let js = fs.readFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.js', 'utf8');
+let js = fs.readFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.js', 'utf8');
 
 // 1. Add global variables
 if (!js.includes('let currentJadwalData = [];')) {
@@ -21,6 +21,6 @@ js = js.replace(
 // 5. loadOpd
 js = js.replace('renderOpdTable(result.data);', 'currentOpdData = result.data;\n            renderOpdTable(currentOpdData);');
 
-fs.writeFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.js', js);
-fs.writeFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.min.js', js.replace(/\n/g, '').replace(/\s+/g, ' '));
+fs.writeFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.js', js);
+fs.writeFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.min.js', js.replace(/\n/g, '').replace(/\s+/g, ' '));
 console.log('Fixed currentData variables and pegawai URL params');

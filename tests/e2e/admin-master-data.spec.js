@@ -5,16 +5,18 @@ const { attachLogger, logAction } = require('./test-logger');
 test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () => {
 
     const activeAdmin = adminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+    let consoleErrors = [];
+    let pageErrors = [];
 
     async function doAdminLogin(page) {
         logAction.step('Memeriksa status login Admin');
         const loginOverlay = page.locator('#loginOverlay');
         if (await loginOverlay.isVisible()) {
             logAction.input('Username/NIP Admin', '#adminUser', activeAdmin.nip);
-            await page.fill('#adminUser', activeAdmin.nip);
+            await page.locator('#adminUser').pressSequentially(activeAdmin.nip, { delay: 100 });
 
             logAction.input('Password/NIK Admin', '#adminPass', '********');
-            await page.fill('#adminPass', activeAdmin.nik);
+            await page.locator('#adminPass').pressSequentially(activeAdmin.nik, { delay: 100 });
 
             logAction.click('Tombol Masuk', '#btnLogin');
             await page.click('#btnLogin');
@@ -27,6 +29,26 @@ test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () =
     }
 
     test.beforeEach(async ({ page }) => {
+        test.setTimeout(90000);
+        consoleErrors = [];
+        pageErrors = [];
+
+        // HENTIKAN DAN GAGALKAN TEST PROSES SECARA LANGSUNG JIKA TERJADI ERROR CONSOLE ATAU PAGE ERROR
+        page.on('console', msg => {
+            if (msg.type() === 'error') {
+                const text = msg.text();
+                consoleErrors.push(text);
+                console.error(`🚨 [STOP PROSES TEST] Console error dideteksi pada browser: ${text}`);
+                throw new Error(`[CRITICAL - TEST STOPPED] Console error dideteksi pada browser: ${text}`);
+            }
+        });
+
+        page.on('pageerror', error => {
+            pageErrors.push(error.message);
+            console.error(`🚨 [STOP PROSES TEST] Page uncaught error dideteksi: ${error.message}`);
+            throw new Error(`[CRITICAL - TEST STOPPED] Page uncaught error dideteksi pada browser: ${error.message}`);
+        });
+
         attachLogger(page, 'Admin Master Data');
         logAction.navigate('admin/index.html');
         await page.goto('admin/index.html');
@@ -46,10 +68,10 @@ test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () =
         await expect(passInput).toBeVisible();
 
         logAction.input('NIP Salah', '#adminUser', 'wrong_admin_nip');
-        await userInput.fill('wrong_admin_nip');
+        await userInput.pressSequentially('wrong_admin_nip', { delay: 100 });
 
         logAction.input('Password Salah', '#adminPass', 'wrong_password');
-        await passInput.fill('wrong_password');
+        await passInput.pressSequentially('wrong_password', { delay: 100 });
 
         logAction.click('Tombol Masuk', '#btnLogin');
         await loginBtn.click();
@@ -64,10 +86,16 @@ test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () =
 
         logAction.step('Uji Coba 1.2: Login Nyata Kredensial Super Admin dari CSV');
         logAction.input('NIP Admin Nyata', '#adminUser', activeAdmin.nip);
-        await userInput.fill(activeAdmin.nip);
+        await userInput.click();
+        await userInput.press('Control+A');
+        await userInput.press('Backspace');
+        await userInput.pressSequentially(activeAdmin.nip, { delay: 100 });
 
         logAction.input('Password NIK Nyata', '#adminPass', '********');
-        await passInput.fill(activeAdmin.nik);
+        await passInput.click();
+        await passInput.press('Control+A');
+        await passInput.press('Backspace');
+        await passInput.pressSequentially(activeAdmin.nik, { delay: 100 });
 
         logAction.click('Tombol Masuk', '#btnLogin');
         await loginBtn.click();
@@ -75,6 +103,11 @@ test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () =
         logAction.verify('Menunggu respons server backend & Dashboard ditampilkan');
         await expect(page.locator('#dashboardContainer')).toBeVisible({ timeout: 15000 });
         await expect(loginOverlay).toBeHidden();
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Login Admin berhasil diverifikasi');
     });
 
@@ -104,6 +137,11 @@ test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () =
         logAction.click('Tutup Modal Tambah OPD', '#modalOpd .btn-close');
         await page.click('#modalOpd button[data-bs-dismiss="modal"], #modalOpd .btn-close');
         await expect(modalOpd).toBeHidden({ timeout: 5000 });
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Master Data OPD berhasil diverifikasi');
     });
 
@@ -133,9 +171,13 @@ test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () =
         logAction.click('Tutup Modal Tambah Pegawai', '#modalPegawai .btn-close');
         await page.click('#modalPegawai button[data-bs-dismiss="modal"], #modalPegawai .btn-close');
         await expect(modalPegawai).toBeHidden({ timeout: 5000 });
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Master Data Pegawai berhasil diverifikasi');
     });
-
 
     test('4. Master Data Jadwal Kegiatan — Memuat daftar jadwal & modal buat kegiatan via UI Navbar', async ({ page }) => {
         await doAdminLogin(page);
@@ -163,12 +205,12 @@ test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () =
         logAction.click('Tutup Modal Buat Jadwal', '#modalBuatKegiatan .btn-close');
         await page.locator('#modalBuatKegiatan .btn-close').click();
         await expect(modalBuatKegiatan).toBeHidden({ timeout: 10000 });
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Master Data Jadwal Kegiatan berhasil diverifikasi');
     });
 
-
-
-
 });
-
-

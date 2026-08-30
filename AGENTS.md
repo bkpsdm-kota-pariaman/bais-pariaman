@@ -1,208 +1,721 @@
 # AGENTS.md — BAIS Pariaman
 
-> Catatan penting: File ini merupakan panduan utama agen AI dalam pengembangan aplikasi BAIS Pariaman.
+> Aturan utama untuk AI coding agent di project BAIS Pariaman.
+>
+> File ini wajib dibaca sebelum membuat, mengubah, menghapus, atau mereview kode.
 
 ---
 
-## 1. Project Overview
+## 1. MANDATORY CONTEXT
 
-- **Name** : BAIS Pariaman - Aplikasi Absensi Kegiatan ASN
-- **Description** : Aplikasi absensi modern yang dikembangkan untuk memfasilitasi pencatatan kehadiran Aparatur Sipil Negara (ASN) di lingkungan Pemerintah Kota Pariaman.
-- **Goal** : Menyediakan pencatatan kehadiran ASN berbasis PWA yang cepat dan pemantauan realtime oleh Admin.
-- **Target Users**: ASN (Aparatur Sipil Negara) Kota Pariaman dan Admin.
-- **Version** : v1.0.0
-- **Status** : Active development
+**Jangan mengandalkan memory percakapan sebelumnya.**
 
----
+Setiap sesi AI baru harus membaca file dokumentasi yang relevan dari project.
 
-## 2. Tech Stack
+### Wajib untuk semua task
 
-- **Backend Language** : PHP (>= 7.2)
-- **Frontend Language** : HTML, CSS, JavaScript (Native ES6+)
-- **Backend Routing** : FastRoute
-- **Authentication** : Firebase PHP-JWT
-- **Database** : MySQL / MariaDB
-- **Build System / Bundler** : Node.js, NPM, ESBuild, HTML Minifier Terser
-- **Architecture** : RESTful API Backend + PWA Frontend
-- **Background Worker** : Node.js
-
----
-
-## 3. Commands
-
-```bash
-# Development Frontend
-npm run build        # Build frontend ke folder docs/
-npm run build:pwa    # Build spesifik PWA
-npm run build:admin  # Build spesifik Admin
-npm run build:landing# Build spesifik Landing Page
-
-# Backend Setup
-composer install     # Install dependencies PHP
+```text
+AGENTS.md
+TASK_INSTRUCTION.md
+ARCHITECTURE.md
 ```
 
-> Jangan gunakan framework frontend modern seperti React/Next.js/Tailwind. Gunakan native web technologies sesuai struktur saat ini.
+### Wajib untuk task fitur / behavior
+
+```text
+PRD.md
+```
+
+### Wajib untuk task UI / UX
+
+```text
+DESIGN.md
+```
+
+### Wajib untuk task security / authentication / authorization / API
+
+```text
+SECURITY.md
+```
+
+### Wajib untuk task testing / Playwright / Jest
+
+```text
+TESTING.md
+```
+
+### Wajib untuk task deployment / build / release
+
+```text
+DEPLOYMENT.md
+```
+
+### Aturan
+
+- Baca dokumen sebelum coding.
+- Jangan menebak isi dokumen.
+- Jangan mengandalkan context dari model sebelumnya.
+- Jangan menganggap file dokumentasi sudah dibaca hanya karena file tersedia.
+- Periksa source code existing sebelum membuat kode baru.
+- Jika dokumentasi dan source code berbeda, jangan otomatis mengubah source. Identifikasi konflik terlebih dahulu.
+
+---
+
+## 2. Project Overview
+
+- **Name:** BAIS Pariaman — Aplikasi Absensi Kegiatan ASN
+- **Purpose:** pencatatan kehadiran ASN dan pengelolaan/monitoring oleh Admin.
+- **Target Users:** ASN dan Admin.
+- **Architecture:** RESTful API Backend + Static PWA Frontend.
+- **Status:** Active development.
+
+---
+
+## 3. Tech Stack
+
+```text
+Backend:
+PHP Native >= 7.2
+FastRoute
+firebase/php-jwt
+PDO
+MySQL / MariaDB
+
+Frontend:
+HTML
+CSS
+Native JavaScript
+ES6+
+PWA
+
+Build:
+Node.js >= 22
+NPM >= 10
+ESBuild
+Tailwind CSS tooling
+html-minifier-terser
+
+Testing:
+Jest
+Playwright
+
+Background:
+Node.js Worker
+```
+
+Jangan menambahkan framework frontend modern seperti React atau Vue tanpa instruksi eksplisit.
+
+Jangan mengganti architecture hanya karena ada teknologi lain yang lebih populer.
 
 ---
 
 ## 4. Project Structure
 
-Architecture: REST API + Static PWA
-
-```
-bais-balad/
-    config/              # Konfigurasi utama sistem dan database
-    database/            # File struktur database (structure.sql)
-    docs/                # Hasil build / output statis untuk Frontend (Siap deploy)
-    public_html/         # Entry point (index.php) untuk REST API backend
-        api/             # Folder web root
-    src/                 # Source code utama (Backend & Frontend)
-        Controllers/     # Logic API & Controller PHP
-        Helpers/         # Fungsi-fungsi bantuan (Helper)
-        Views/           # Source code mentah Frontend (Admin, PWA, Landing Page)
-        routes.php       # Definisi rute/endpoint API
-    worker/              # Script background worker/sinkronisasi
-    composer.json        # Dependensi library PHP backend
-    package.json         # Konfigurasi build script frontend dan dependensi NPM
-```
-
-Aturan penempatan file:
-- File PHP routing dan controller harus berada di `src/Controllers` atau root `src/`.
-- File Javascript/HTML mentah sebelum di build harus diletakkan di `src/Views/`.
-- File worker diletakkan di folder `worker/`.
-
----
-
-## 5. Naming Conventions
-
-```
-# File & Folder
-- File PHP Kelas  : PascalCase (contoh: AuthController.php)
-- File Helper     : camelCase atau snake_case
-- File Frontend   : kebab-case atau camelCase (contoh: app.js, style.css)
-
-# Di Dalam Kode
-- Variabel PHP  : $camelCase
-- Fungsi PHP    : camelCase()
-- Kelas PHP     : PascalCase
-- Variabel JS   : camelCase
+```text
+bais-pariaman/
+    config/              # Konfigurasi sistem
+    database/            # Struktur database
+    docs/                # Generated build / static frontend
+    public_html/         # Web root backend
+        api/             # REST API entry point
+    src/                 # Source utama
+        Controllers/     # Controller PHP
+        Helpers/         # Helper
+        Views/           # Source HTML/CSS/JavaScript frontend
+        routes.php       # FastRoute routes
+    worker/              # Node.js worker
+    tests/               # Automated tests
+    composer.json        # PHP dependencies
+    package.json         # Node/NPM dependencies dan build scripts
 ```
 
 ---
 
-## 6. Code Conventions
+## 5. Source vs Generated Files
 
-```
-# Pendekatan Umum
-- Terapkan prinsip Clean Code.
-- Pastikan kode Javascript native kompatibel dengan bundler ESBuild.
-- Pastikan endpoint PHP membalas dengan JSON yang terstruktur.
+### Source of truth frontend
 
-# Urutan Import PHP
-- Gunakan `use` statement di bagian atas file setelah namespace.
-- Pastikan composer autoload dijalankan di entry point.
-
-# Error Handling
-- PHP: Tangkap error menggunakan try-catch, return JSON HTTP error (misal 400, 500).
-- JS: Gunakan try-catch untuk fetch requests, tampilkan pesan error yang jelas di UI.
+```text
+src/Views/
 ```
 
----
+### Generated frontend
 
-## 7. API & Data Fetching Rules
-
+```text
+docs/
 ```
-# Pendekatan Fetching
-- Gunakan native `fetch` API di sisi Frontend.
 
-# Format Response API
-- Semua endpoint backend sebaiknya mengembalikan format JSON yang konsisten, contoh:
-  `{ "status": "success", "data": {...}, "message": "Berhasil" }`
-  atau
-  `{ "status": "error", "message": "Deskripsi error" }`
+Aturan:
+
+- Edit source frontend di `src/Views/`.
+- Jangan edit file generated di `docs/` secara manual.
+- Setelah perubahan source yang membutuhkan build, jalankan build bila diperlukan.
+- Jangan mengubah generated file untuk menyembunyikan bug source.
+- Jika E2E menggunakan `docs/`, `docs/` harus merupakan hasil build aplikasi BAIS sebenarnya.
+
+Build utama:
+
+```bash
+npm run build
 ```
 
 ---
 
-## 8. Styling Rules
+## 6. Development Rules
 
+### General
+
+- Periksa implementasi existing sebelum membuat kode.
+- Reuse function/component/helper existing bila sesuai.
+- Buat perubahan sekecil mungkin.
+- Jangan melakukan refactor besar tanpa kebutuhan.
+- Jangan menambah dependency tanpa alasan.
+- Jangan mengubah behavior existing tanpa alasan jelas.
+- Jangan membuat duplicate implementation bila solusi existing masih dapat digunakan.
+
+### Backend
+
+Routing:
+
+```text
+src/routes.php
 ```
-# Aturan Styling
-- Gunakan Vanilla CSS / Native CSS.
-- Organisasikan CSS per komponen atau modul dalam `src/Views/`.
-- Pastikan responsivitas (Mobile-first).
+
+Controller:
+
+```text
+src/Controllers/
+```
+
+Database:
+
+```text
+PDO + prepared statements
+```
+
+Authentication:
+
+```text
+JWT
+```
+
+### Frontend
+
+Gunakan:
+
+```text
+Native JavaScript
+HTML
+CSS
+```
+
+Fetching API gunakan:
+
+```javascript
+fetch()
 ```
 
 ---
 
-## 9. Git Rules
+## 7. Security Rules
 
+- Jangan bypass authentication.
+- Jangan bypass authorization.
+- Jangan menonaktifkan validation hanya untuk development/test.
+- Jangan mengekspos secret ke frontend.
+- Jangan memasukkan credential production ke source code.
+- Semua query SQL menggunakan prepared statements.
+- Security check backend adalah security boundary.
+- Jangan mengandalkan validasi frontend sebagai satu-satunya protection.
+
+Untuk detail, baca `SECURITY.md`.
+
+---
+
+## 8. UI / UX Rules
+
+- Mobile-first untuk PWA ASN.
+- Pertahankan design existing.
+- Jangan redesign besar tanpa kebutuhan.
+- Reuse pattern UI existing.
+- Hindari dependency berat.
+- Pertahankan loading dan interaction yang cepat.
+- Jangan mengubah flow user tanpa kebutuhan produk.
+
+Untuk detail, baca `DESIGN.md`.
+
+---
+
+## 9. Testing Rules
+
+Testing memiliki tiga level:
+
+```text
+Unit
+Integration
+E2E
 ```
-# Format Pesan Commit
-feat     : [deskripsi fitur baru]
-fix      : [deskripsi perbaikan bug]
-refactor : [deskripsi perombakan kode]
-style    : [perubahan tampilan/format]
-docs     : [update dokumentasi]
+
+### Unit
+
+Gunakan Jest untuk logic kecil dan terisolasi.
+
+### Integration
+
+Gunakan test integration untuk komunikasi antar-komponen.
+
+### E2E
+
+Gunakan Playwright untuk mensimulasikan user melalui browser.
+
+E2E harus menguji aplikasi BAIS sebenarnya.
+
+---
+
+## 10. E2E Environment BAIS
+
+### Wajib
+
+```text
+Playwright
+    ↓
+Browser
+    ↓
+Frontend BAIS asli
+    ↓
+Local Web Server
+    ↓
+docs/
+    ↓
+app.js / admin.js / frontend BAIS asli
+    ↓
+Remote Backend BAIS Testing asli
+    ↓
+Database / Service Testing
+```
+
+Frontend boleh disajikan melalui localhost.
+
+Backend untuk E2E **WAJIB remote testing backend yang sebenarnya**.
+
+Jangan menjalankan backend fake/local sebagai pengganti remote backend testing.
+
+### Localhost
+
+Localhost boleh digunakan hanya untuk menyajikan frontend BAIS asli.
+
+Contoh:
+
+```text
+http://127.0.0.1:4173
+```
+
+Localhost bukan fake application.
+
+### Dilarang
+
+```text
+fake frontend
+fake HTML
+fake backend
+fake API
+fake server
+mock application
+production backend untuk E2E testing
+```
+
+### API
+
+Jangan mengganti URL API aplikasi menjadi localhost hanya untuk E2E jika aplikasi memang sudah dikonfigurasi memakai remote testing backend.
+
+### Worker
+
+Periksa `WORKER_URL` sebelum menguji flow yang menggunakan Worker.
+
+---
+
+## 11. Playwright User Interaction
+
+E2E harus bertindak seperti user.
+
+Gunakan:
+
+```text
+open page
+click
+fill via keyboard
+select
+check
+upload file
+wait
+verify UI
+```
+
+Jangan mengganti user interaction dengan internal function call.
+
+Jangan memanggil endpoint API secara langsung sebagai pengganti alur UI jika tujuan test adalah E2E.
+
+---
+
+## 12. Input Typing Rules
+
+Untuk semua input text yang mewakili tindakan user:
+
+```text
+input
+textarea
+search box
+username
+password
+kode akses
+NIP
+nama
+jabatan
+keterangan
+filter pencarian
+```
+
+WAJIB gunakan pengetikan per karakter:
+
+```javascript
+await page.locator('#input').pressSequentially('contoh text', { delay: 100 });
+```
+
+Aturan:
+
+```text
+delay = 100ms per character
+```
+
+Jangan gunakan:
+
+```javascript
+page.fill()
+locator.fill()
+```
+
+untuk mensimulasikan user mengetik.
+
+Jangan menggunakan:
+
+```javascript
+element.value = '...'
+```
+
+atau DOM manipulation sebagai pengganti keyboard input.
+
+`setInputFiles()` tetap diperbolehkan untuk test upload file.
+
+---
+
+## 13. Browser Console Error Rules
+
+E2E harus memantau error browser.
+
+Minimal:
+
+```text
+console.error
+pageerror
+uncaught JavaScript exception
+unhandled rejection
+```
+
+Contoh:
+
+```javascript
+const consoleErrors = [];
+const pageErrors = [];
+
+page.on('console', msg => {
+    if (msg.type() === 'error') {
+        consoleErrors.push(msg.text());
+    }
+});
+
+page.on('pageerror', error => {
+    pageErrors.push(error.message);
+});
+```
+
+Unexpected error harus membuat test FAIL.
+
+Jika UI PASS tetapi browser menghasilkan unexpected JavaScript error:
+
+```text
+TEST FAIL
+```
+
+Jangan membuat filter umum untuk menyembunyikan error.
+
+Exception hanya boleh dibuat untuk error yang memang diketahui dan memang diharapkan, dengan alasan yang jelas dan filter yang spesifik.
+
+---
+
+## 14. Production Code Protection During Testing
+
+**Jangan mengubah production code hanya agar test PASS.**
+
+Flow yang benar:
+
+```text
+Test gagal
+↓
+Analisis
+↓
+TEST BUG?
+    ↓
+    Perbaiki test
+
+APPLICATION BUG?
+    ↓
+    Perbaiki aplikasi
+
+ENVIRONMENT BUG?
+    ↓
+    Perbaiki environment / laporkan blocker
+
+REQUIREMENT UNCLEAR?
+    ↓
+    Laporkan ambiguity
+```
+
+Bukan:
+
+```text
+Test gagal
+↓
+Ubah aplikasi
+↓
+Sembunyikan error
+↓
+PASS
 ```
 
 ---
 
-## 10. Do Not
+## 15. Test Execution Policy
 
-> JIKA INSTRUKSI USER AMBIGU, BERHENTI DAN TANYAKAN DULU. JANGAN BERASUMSI.
+AI coding agent **TIDAK BOLEH menjalankan automated test secara otomatis** setelah membuat atau mengubah test.
 
+Hanya user yang menjalankan test.
+
+AI boleh:
+
+- membuat test
+- mengubah test
+- menganalisis test
+- membaca konfigurasi
+- memberikan command
+
+AI tidak boleh otomatis menjalankan:
+
+```bash
+npm run test
+npm run test:unit
+npm run test:e2e
+npx jest
+npx playwright test
 ```
-# Struktur File
-- DILARANG menambahkan framework Javascript modern (React, Vue, dll).
-- DILARANG menghapus proses build ESBuild.
 
-# Kode
-- DILARANG mengekspos API Secret Key ke frontend.
-- DILARANG melakukan *bypass* autentikasi JWT di API.
+Setelah perubahan test, AI harus memberikan command yang bisa dijalankan user.
+
+Contoh:
+
+```bash
+npm run test:e2e
 ```
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+Test tertentu:
 
-This project is indexed by GitNexus as **bais-pariaman** (2880 symbols, 8508 relationships, 219 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+```bash
+npx playwright test tests/e2e/pwa-absensi-cadangan.spec.js
+```
 
-> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
+Mode headed:
 
-## Always Do
+```bash
+npx playwright test tests/e2e/pwa-absensi-cadangan.spec.js --headed
+```
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
-- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
+AI tidak boleh menyatakan PASS/FAIL sebelum user menjalankan test dan memberikan hasilnya.
 
-## Never Do
+---
 
-- NEVER edit a function, class, or method without first running `impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
-- NEVER commit changes without running `detect_changes()` to check affected scope.
+## 16. Test Data
 
-## Resources
+Gunakan test data yang memang ditujukan untuk testing.
 
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/bais-pariaman/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/bais-pariaman/clusters` | All functional areas |
-| `gitnexus://repo/bais-pariaman/processes` | All execution flows |
-| `gitnexus://repo/bais-pariaman/process/{name}` | Step-by-step execution trace |
+Contoh:
 
-## CLI
+```text
+Dedicated test account
+Dedicated test database
+Seed
+Fixture
+Testing API
+```
 
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+Jangan menggunakan production data secara sembarangan.
 
-<!-- gitnexus:end -->
+Jangan membuat fake data flow yang mengubah behavior aplikasi hanya agar test PASS.
+
+---
+
+## 17. Existing Behavior First
+
+Sebelum membuat test:
+
+1. Baca source terkait.
+2. Identifikasi alur sebenarnya.
+3. Identifikasi API yang benar-benar dipanggil.
+4. Identifikasi authentication.
+5. Identifikasi Worker jika ada.
+6. Identifikasi UI element.
+7. Baru buat test.
+
+Jangan menulis test berdasarkan asumsi.
+
+---
+
+## 18. Commands
+
+Build:
+
+```bash
+npm run build
+```
+
+PWA:
+
+```bash
+npm run build:pwa
+```
+
+Admin:
+
+```bash
+npm run build:admin
+```
+
+Landing:
+
+```bash
+npm run build:landing
+```
+
+Unit test:
+
+```bash
+npm run test:unit
+```
+
+E2E:
+
+```bash
+npm run test:e2e
+```
+
+All tests:
+
+```bash
+npm run test
+```
+
+PHP dependencies:
+
+```bash
+composer install
+```
+
+---
+
+## 19. Ambiguity Rule
+
+Jika requirement user ambigu:
+
+```text
+STOP
+↓
+IDENTIFY ambiguity
+↓
+DO NOT guess critical behavior
+```
+
+Namun jangan menanyakan ulang sesuatu yang sudah jelas dari source code, dokumentasi, test existing, atau configuration existing.
+
+---
+
+## 20. Change Discipline
+
+Setiap task harus fokus pada scope yang diminta.
+
+Jangan sekaligus:
+
+```text
+fix feature
++
+refactor unrelated code
++
+redesign UI
++
+replace dependency
+```
+
+kecuali memang diperlukan oleh task.
+
+---
+
+## 21. GitNexus
+
+Project menggunakan GitNexus untuk code intelligence.
+
+Gunakan GitNexus untuk:
+
+- memahami execution flow
+- mencari hubungan symbol
+- impact analysis
+- debugging
+- refactoring
+
+Ikuti instruksi GitNexus yang tersedia di blok GitNexus dalam file ini dan skill yang terkait.
+
+---
+
+## 22. Final Checklist Before Finishing a Task
+
+Pastikan:
+
+```text
+[ ] Documentation relevant sudah dibaca
+[ ] Source code existing sudah diperiksa
+[ ] Scope task tidak melebar
+[ ] Production behavior tidak diubah tanpa alasan
+[ ] Security tidak dilemahkan
+[ ] Generated files tidak diedit manual
+[ ] Test relevan sudah dibuat/diperbaiki jika diperlukan
+[ ] Test command diberikan kepada user
+[ ] AI tidak mengklaim PASS sebelum user menjalankan test
+```
+
+---
+
+## 23. Core Rules
+
+```text
+READ FIRST.
+UNDERSTAND EXISTING CODE.
+FOLLOW PROJECT DOCUMENTATION.
+MAKE THE SMALLEST CORRECT CHANGE.
+DO NOT GUESS.
+DO NOT HIDE BUGS.
+DO NOT CHANGE PRODUCTION CODE TO MAKE TESTS PASS.
+E2E MUST TEST THE REAL BAIS FRONTEND.
+E2E MUST USE THE REAL REMOTE TESTING BACKEND.
+E2E MUST SIMULATE REAL USER INTERACTION.
+TEXT INPUT MUST USE REAL KEYBOARD TYPING WITH 100MS DELAY PER CHARACTER.
+BROWSER CONSOLE ERRORS MUST BE DETECTED.
+AI MUST NOT AUTOMATICALLY RUN TESTS.
+USER RUNS THE TESTS.
+ALWAYS PROVIDE THE EXACT TEST COMMAND.
+```

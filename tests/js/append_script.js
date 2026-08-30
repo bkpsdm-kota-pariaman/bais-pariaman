@@ -52,6 +52,6 @@ function validateAndSubmitPegawai(event) {
 }
 `;
 
-fs.appendFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.js', code);
-fs.appendFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.min.js', code.replace(/\n/g, '').replace(/\s+/g, ' '));
+fs.appendFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.js', code);
+fs.appendFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.min.js', code.replace(/\n/g, '').replace(/\s+/g, ' '));
 console.log('Appended to files');

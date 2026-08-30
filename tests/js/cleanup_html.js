@@ -1,5 +1,5 @@
 const fs = require('fs');
-let index = fs.readFileSync('d:/public_html/bais-balad/src/Views/admin/index.html', 'utf8');
+let index = fs.readFileSync('d:/public_html/bais-pariaman/src/Views/admin/index.html', 'utf8');
 
 // 1. Jadwal
 index = index.replace('<button id="btnDownloadExcelJadwal" class="btn btn-outline-success fw-bold px-4 shadow-sm me-2 d-none" onclick="exportJadwalToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>\n        ', '');
@@ -19,5 +19,5 @@ index = index.replace('<button id="btnDownloadExcel" class="btn btn-outline-succ
 // 6. Statistik
 index = index.replace('<button id="btnDownloadExcelStatistik" class="btn btn-outline-success fw-bold d-none" onclick="exportStatistikToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>', '');
 
-fs.writeFileSync('d:/public_html/bais-balad/src/Views/admin/index.html', index);
+fs.writeFileSync('d:/public_html/bais-pariaman/src/Views/admin/index.html', index);
 console.log('HTML cleanup done');

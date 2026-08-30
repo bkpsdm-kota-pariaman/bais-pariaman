@@ -4,7 +4,30 @@ const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite 5: PWA Race Conditions & Concurrency Guards', () => {
 
+    let consoleErrors = [];
+    let pageErrors = [];
+
     test.beforeEach(async ({ page, context }) => {
+        test.setTimeout(90000);
+        consoleErrors = [];
+        pageErrors = [];
+
+        // HENTIKAN DAN GAGALKAN TEST PROSES SECARA LANGSUNG JIKA TERJADI ERROR CONSOLE ATAU PAGE ERROR
+        page.on('console', msg => {
+            if (msg.type() === 'error') {
+                const text = msg.text();
+                consoleErrors.push(text);
+                console.error(`🚨 [STOP PROSES TEST] Console error dideteksi pada browser: ${text}`);
+                throw new Error(`[CRITICAL - TEST STOPPED] Console error dideteksi pada browser: ${text}`);
+            }
+        });
+
+        page.on('pageerror', error => {
+            pageErrors.push(error.message);
+            console.error(`🚨 [STOP PROSES TEST] Page uncaught error dideteksi: ${error.message}`);
+            throw new Error(`[CRITICAL - TEST STOPPED] Page uncaught error dideteksi pada browser: ${error.message}`);
+        });
+
         attachLogger(page, 'PWA Race Guards');
         await context.grantPermissions(['camera', 'geolocation']);
         await context.setGeolocation({ latitude: -0.6276, longitude: 100.1209 });
@@ -23,10 +46,10 @@ test.describe('E2E Suite 5: PWA Race Conditions & Concurrency Guards', () => {
         const testUser = sampleUsers[0] || { nip: '199001012020011001', nik: '1377010101900001' };
 
         logAction.input('NIP Pegawai', '#logNip', testUser.nip);
-        await page.fill('#logNip', testUser.nip);
+        await page.locator('#logNip').pressSequentially(testUser.nip, { delay: 100 });
 
         logAction.input('NIK / Password', '#logNik', '********');
-        await page.fill('#logNik', testUser.nik);
+        await page.locator('#logNik').pressSequentially(testUser.nik, { delay: 100 });
 
         const submitBtn = page.locator('button[type="submit"]:has-text("MASUK APLIKASI"), #formLogin button[type="submit"]');
 
@@ -36,6 +59,11 @@ test.describe('E2E Suite 5: PWA Race Conditions & Concurrency Guards', () => {
         logAction.verify('Memverifikasi aplikasi mengarah ke Dashboard tanpa crash');
         const dashView = page.locator('#view-dashboard');
         await expect(dashView).toBeVisible({ timeout: 15000 });
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Rapid Double Submit Guard diverifikasi');
     });
 
@@ -45,10 +73,10 @@ test.describe('E2E Suite 5: PWA Race Conditions & Concurrency Guards', () => {
 
         logAction.step('Login ASN PWA');
         logAction.input('NIP Pegawai', '#logNip', testUser.nip);
-        await page.fill('#logNip', testUser.nip);
+        await page.locator('#logNip').pressSequentially(testUser.nip, { delay: 100 });
 
         logAction.input('NIK / Password', '#logNik', '********');
-        await page.fill('#logNik', testUser.nik);
+        await page.locator('#logNik').pressSequentially(testUser.nik, { delay: 100 });
 
         logAction.click('Tombol MASUK APLIKASI', 'button[type="submit"]');
         await page.click('button[type="submit"]:has-text("MASUK APLIKASI"), #formLogin button[type="submit"]');
@@ -71,9 +99,12 @@ test.describe('E2E Suite 5: PWA Race Conditions & Concurrency Guards', () => {
 
         logAction.verify('Memverifikasi kembali ke Dashboard dengan stabil');
         await expect(dashView).toBeVisible({ timeout: 5000 });
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Rapid View Navigation Guard diverifikasi');
     });
 
 });
-
-

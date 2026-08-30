@@ -38,7 +38,8 @@
 
         <!-- STATE 1: LOADING (Sedang Mengecek ke Server PHP) -->
         <div id="stateLoading" class="fade-in">
-            <div class="w-16 h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
+            <div
+                class="w-16 h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
                 <div class="animate-spin rounded-full h-8 w-8 border-4 border-red-200 border-t-red-600"></div>
             </div>
             <h4 class="font-extrabold text-base text-gray-900 mb-1">Memeriksa Link Absensi</h4>
@@ -49,7 +50,8 @@
 
         <!-- STATE 2: REDIRECTING (Link Ditemukan & Mengalihkan) -->
         <div id="stateRedirecting" class="hidden-view fade-in">
-            <div class="w-16 h-16 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
+            <div
+                class="w-16 h-16 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
                 <i class="bi bi-box-arrow-up-right animate-pulse"></i>
             </div>
             <h4 class="font-extrabold text-base text-gray-900 mb-1">Mengalihkan ke Absensi Cadangan</h4>
@@ -65,7 +67,8 @@
 
         <!-- STATE 3: ERROR / TIDAK DITEMUKAN -->
         <div id="stateError" class="hidden-view fade-in">
-            <div class="w-16 h-16 rounded-2xl bg-yellow-50 text-yellow-600 flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
+            <div
+                class="w-16 h-16 rounded-2xl bg-yellow-50 text-yellow-600 flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
                 <i class="bi bi-exclamation-triangle-fill text-2xl"></i>
             </div>
             <h4 class="font-extrabold text-base text-gray-900 mb-1">Link Tidak Ditemukan</h4>
@@ -93,12 +96,12 @@
             stRedirect.classList.add('hidden-view');
             stError.classList.add('hidden-view');
 
-            const isBeta = window.location.href.includes('beta') || window.location.hostname === 'localhost' || window.location.port !== '';
-            const workerBase = isBeta 
-                ? "https://absensi-kegiatan-asn-worker-dev.bidpp-bkpsdm.workers.dev" 
+            const isBeta = true;
+            const workerBase = isBeta
+                ? "https://absensi-kegiatan-asn-worker-dev.bidpp-bkpsdm.workers.dev"
                 : "https://absensi-kegiatan-asn-worker.bidpp-bkpsdm.workers.dev";
-            const phpApiBase = isBeta 
-                ? "https://api-esdm.pariamankota.go.id/beta-bais-pariaman/api" 
+            const phpApiBase = isBeta
+                ? "https://api-esdm.pariamankota.go.id/beta-bais-pariaman/api"
                 : "https://bais-pariaman.pariamankota.go.id/api";
 
             // 1. Prioritas Utama: Tarik link pengaturan dari Cloudflare Worker KV (Cache Seumur Hidup)

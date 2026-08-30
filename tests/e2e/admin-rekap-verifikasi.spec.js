@@ -5,16 +5,18 @@ const { attachLogger, logAction } = require('./test-logger');
 test.describe('E2E Suite 2: Admin Rekap, Verifikasi & Audit Log Absensi', () => {
 
     const activeAdmin = adminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+    let consoleErrors = [];
+    let pageErrors = [];
 
     async function doAdminLogin(page) {
         logAction.step('Memeriksa status login Admin');
         const loginOverlay = page.locator('#loginOverlay');
         if (await loginOverlay.isVisible()) {
             logAction.input('NIP Admin', '#adminUser', activeAdmin.nip);
-            await page.fill('#adminUser', activeAdmin.nip);
+            await page.locator('#adminUser').pressSequentially(activeAdmin.nip, { delay: 100 });
 
             logAction.input('Password NIK', '#adminPass', '********');
-            await page.fill('#adminPass', activeAdmin.nik);
+            await page.locator('#adminPass').pressSequentially(activeAdmin.nik, { delay: 100 });
 
             logAction.click('Tombol Masuk', '#btnLogin');
             await page.click('#btnLogin');
@@ -26,6 +28,26 @@ test.describe('E2E Suite 2: Admin Rekap, Verifikasi & Audit Log Absensi', () => 
     }
 
     test.beforeEach(async ({ page }) => {
+        test.setTimeout(90000);
+        consoleErrors = [];
+        pageErrors = [];
+
+        // HENTIKAN DAN GAGALKAN TEST PROSES SECARA LANGSUNG JIKA TERJADI ERROR CONSOLE ATAU PAGE ERROR
+        page.on('console', msg => {
+            if (msg.type() === 'error') {
+                const text = msg.text();
+                consoleErrors.push(text);
+                console.error(`🚨 [STOP PROSES TEST] Console error dideteksi pada browser: ${text}`);
+                throw new Error(`[CRITICAL - TEST STOPPED] Console error dideteksi pada browser: ${text}`);
+            }
+        });
+
+        page.on('pageerror', error => {
+            pageErrors.push(error.message);
+            console.error(`🚨 [STOP PROSES TEST] Page uncaught error dideteksi: ${error.message}`);
+            throw new Error(`[CRITICAL - TEST STOPPED] Page uncaught error dideteksi pada browser: ${error.message}`);
+        });
+
         attachLogger(page, 'Admin Rekap');
         logAction.navigate('admin/index.html');
         await page.goto('admin/index.html');
@@ -50,6 +72,11 @@ test.describe('E2E Suite 2: Admin Rekap, Verifikasi & Audit Log Absensi', () => 
             logAction.verify('Memverifikasi input filter kode akses kegiatan log absensi');
             const filterKegiatan = page.locator('#logFilterKegiatan');
             await expect(filterKegiatan).toBeVisible();
+
+            logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+            expect(consoleErrors).toEqual([]);
+            expect(pageErrors).toEqual([]);
+
             logAction.success('Halaman Log Absensi diverifikasi');
         }
     });
@@ -71,6 +98,11 @@ test.describe('E2E Suite 2: Admin Rekap, Verifikasi & Audit Log Absensi', () => 
         const tglSelesai = page.locator('#rekapKeseluruhanEndDate');
         await expect(tglMulai).toBeVisible();
         await expect(tglSelesai).toBeVisible();
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Halaman Rekap Keseluruhan diverifikasi');
     });
 
@@ -89,6 +121,11 @@ test.describe('E2E Suite 2: Admin Rekap, Verifikasi & Audit Log Absensi', () => 
         logAction.verify('Memverifikasi tombol Tampilkan Statistik');
         const btnFilter = page.locator('button:has-text("Tampilkan Statistik")');
         await expect(btnFilter).toBeVisible();
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Halaman Statistik Kehadiran diverifikasi');
     });
 
@@ -100,9 +137,12 @@ test.describe('E2E Suite 2: Admin Rekap, Verifikasi & Audit Log Absensi', () => 
         logAction.verify('Memverifikasi input pencarian jadwal kegiatan');
         const searchInput = page.locator('#filterJadwalSearch');
         await expect(searchInput).toBeVisible();
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Tampilan Rekap Kegiatan diverifikasi');
     });
 
 });
-
-

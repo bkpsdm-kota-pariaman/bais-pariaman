@@ -16,6 +16,7 @@ document.body.innerHTML = `
   <div id="modalPegawai"></div>
   <div id="modalTambahPeserta"></div>
   <div id="modalOpd"></div>
+  <div id="modalImportAbsen"></div>
 `;
 
 const { formatIndonesianDateTime, selectAllOpd, deselectAllOpd } = require('../../src/Views/admin/js/admin.js');

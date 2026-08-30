@@ -1,14 +1,14 @@
 # TESTING — BAIS Pariaman
 
-> Panduan QA dan Automated Testing untuk aplikasi BAIS BALAD.
+> Panduan QA dan Automated Testing untuk aplikasi BAIS PARIAMAN.
 >
-> **Version:** v2.0.0
+> **Version:** v2.1.0
 
 ---
 
 ## 1. Tujuan Testing
 
-Testing bertujuan memastikan aplikasi BAIS BALAD benar-benar bekerja sesuai perilaku user.
+Testing bertujuan memastikan aplikasi BAIS PARIAMAN benar-benar bekerja sesuai perilaku user.
 
 Prioritas:
 
@@ -17,6 +17,7 @@ Prioritas:
 3. Memastikan alur user berjalan dari awal sampai akhir.
 4. Memastikan perubahan kode tidak merusak fitur existing.
 5. Memastikan E2E menggunakan browser dan aplikasi sebenarnya.
+6. Memastikan tidak ada JavaScript error yang tidak diharapkan pada browser selama test.
 
 **E2E test bukan dibuat sekadar supaya status PASS.**
 
@@ -121,12 +122,6 @@ berisi hasil build frontend BAIS.
 
 Playwright boleh menggunakan local web server untuk menyajikan folder tersebut.
 
-Contoh:
-
-```text
-http://127.0.0.1:4173
-```
-
 Localhost di sini **BUKAN fake application**.
 
 Localhost hanya web server untuk menyajikan frontend BAIS sebenarnya.
@@ -223,7 +218,9 @@ untuk menggantikan environment E2E normal.
 
 ### 3.6 Tidak Perlu Mengubah API URL untuk Playwright
 
-Playwright `baseURL` hanya digunakan untuk membuka frontend:
+Playwright `baseURL` hanya digunakan untuk membuka frontend.
+
+Contoh:
 
 ```javascript
 use: {
@@ -231,45 +228,11 @@ use: {
 }
 ```
 
-Contoh:
-
-```javascript
-await page.goto('/');
-```
-
 Browser kemudian menjalankan JavaScript frontend sebenarnya.
 
 Request API akan mengikuti konfigurasi `API_BASE_URL` yang ada pada aplikasi.
 
 Jangan membuat Playwright memanggil API secara langsung sebagai pengganti user interaction jika tujuan test adalah E2E.
-
----
-
-### 3.7 Prinsip Utama
-
-E2E harus merepresentasikan:
-
-```text
-User
- ↓
-Browser
- ↓
-BAIS frontend asli
- ↓
-Internet
- ↓
-BAIS backend testing asli
- ↓
-Testing database/service
-```
-
-Perbedaan dari user nyata hanya:
-
-```text
-Frontend disajikan dari localhost
-```
-
-Tujuan E2E adalah menguji **behavior aplikasi sebenarnya**, bukan membuat test environment yang mudah menghasilkan PASS.
 
 ---
 
@@ -326,7 +289,145 @@ Jangan mengganti user interaction dengan pemanggilan internal function aplikasi.
 
 ---
 
-## 6. Production Code Protection
+## 6. Browser Console dan JavaScript Error
+
+E2E test **WAJIB memeriksa browser console**.
+
+Test tidak boleh dianggap PASS jika selama alur E2E terdapat JavaScript error yang tidak diharapkan.
+
+### 6.1 Error yang Harus Dideteksi
+
+Minimal tangkap:
+
+```text
+console.error
+pageerror
+unhandled exception
+unhandled rejection
+```
+
+Gunakan Playwright untuk menangkap error.
+
+Contoh:
+
+```javascript
+const consoleErrors = [];
+const pageErrors = [];
+
+page.on('console', msg => {
+    if (msg.type() === 'error') {
+        consoleErrors.push(msg.text());
+    }
+});
+
+page.on('pageerror', error => {
+    pageErrors.push(error.message);
+});
+```
+
+Setelah alur test selesai, periksa:
+
+```javascript
+expect(consoleErrors).toEqual([]);
+expect(pageErrors).toEqual([]);
+```
+
+### 6.2 Error yang Tampil Merah di Browser Console
+
+Tujuan utama adalah memastikan tidak ada error browser yang muncul sebagai:
+
+```text
+ERROR
+```
+
+atau pesan console berlevel:
+
+```text
+error
+```
+
+atau uncaught JavaScript error.
+
+Jika browser DevTools akan menampilkan pesan tersebut sebagai error berwarna merah, E2E harus menganggapnya sebagai kegagalan kecuali sudah dinyatakan sebagai pengecualian yang valid.
+
+### 6.3 Jangan Mengabaikan Semua Console Error
+
+Dilarang membuat filter seperti:
+
+```javascript
+page.on('console', () => {});
+```
+
+hanya agar error tidak terlihat.
+
+Dilarang membuang semua error:
+
+```javascript
+consoleErrors.length = 0;
+```
+
+Dilarang menonaktifkan listener agar test PASS.
+
+Jika ada console error, cari akar masalahnya.
+
+### 6.4 Error yang Memang Diharapkan
+
+Tidak semua pesan console otomatis merupakan bug.
+
+Jika suatu error memang disengaja dan valid untuk skenario tertentu, pengecualian harus ditulis eksplisit.
+
+Contoh:
+
+```javascript
+const allowedConsoleErrors = [
+    'contoh error yang memang diharapkan'
+];
+```
+
+Pengecualian harus:
+
+1. spesifik
+2. memiliki alasan
+3. terbatas pada pesan yang benar-benar diharapkan
+4. tidak digunakan untuk menyembunyikan bug
+
+Jangan menggunakan:
+
+```javascript
+return true;
+```
+
+atau filter terlalu umum yang mengabaikan semua error.
+
+### 6.5 Definition of Done Console
+
+E2E normal dianggap PASS jika:
+
+```text
+UI behavior benar
++
+Assertion benar
++
+Tidak ada unexpected console.error
++
+Tidak ada pageerror
+=
+E2E PASS
+```
+
+Jika UI PASS tetapi browser menghasilkan unexpected JavaScript error:
+
+```text
+TEST FAIL
+```
+
+Jangan mengubah assertion menjadi lebih lemah.
+
+Jangan mengubah production code hanya untuk menghilangkan error tanpa memahami akar masalah.
+
+---
+
+## 7. Production Code Protection
 
 Production code tidak boleh diubah hanya agar test lulus.
 
@@ -337,7 +438,7 @@ Test gagal
 ↓
 Ubah aplikasi
 ↓
-Validasi dihapus
+Error disembunyikan
 ↓
 Test PASS
 ```
@@ -351,13 +452,14 @@ Analisis
 ↓
 Test bug? → Perbaiki test
 Application bug? → Perbaiki aplikasi
+Console error? → Cari akar masalah
 Environment bug? → Perbaiki environment / laporkan blocker
 Requirement unclear? → Laporkan
 ```
 
 ---
 
-## 7. Mocking Policy
+## 8. Mocking Policy
 
 ### Unit Test
 
@@ -390,7 +492,7 @@ UI tetap harus menggunakan aplikasi BAIS sebenarnya.
 
 ---
 
-## 8. Test Data
+## 9. Test Data
 
 Gunakan:
 
@@ -408,7 +510,7 @@ Jangan membuat endpoint palsu hanya agar Playwright mendapatkan data tertentu.
 
 ---
 
-## 9. Login ASN
+## 10. Login ASN
 
 Simulasikan user ASN:
 
@@ -442,7 +544,7 @@ Jangan bypass login ketika tujuan test adalah menguji login.
 
 ---
 
-## 10. Scan QR dan Absensi
+## 11. Scan QR dan Absensi
 
 Simulasikan proses absensi sebenarnya:
 
@@ -472,7 +574,7 @@ Jangan mengubah production code hanya supaya kamera tidak diperlukan.
 
 ---
 
-## 11. Offline dan Sync
+## 12. Offline dan Sync
 
 Gunakan aplikasi sebenarnya.
 
@@ -502,7 +604,7 @@ Jangan membuat fake server untuk mensimulasikan offline.
 
 ---
 
-## 12. Login Admin
+## 13. Login Admin
 
 ```text
 Buka aplikasi admin
@@ -520,7 +622,7 @@ Verifikasi authentication, role, dan dashboard.
 
 ---
 
-## 13. Laporan Rekapitulasi
+## 14. Laporan Rekapitulasi
 
 ```text
 Login admin
@@ -552,7 +654,174 @@ HTTP 200
 
 ---
 
-## 14. Assertion
+## 15. Input Typing Policy
+
+Semua input yang mewakili tindakan user harus menggunakan **pengetikan asli per karakter**.
+
+Berlaku untuk:
+
+- input text
+- input number
+- input search
+- kotak pencarian
+- textarea
+- username
+- password
+- kode akses
+- NIP
+- nama
+- jabatan
+- keterangan
+- filter pencarian
+- field form lain yang diketik user
+
+### Wajib
+
+Gunakan Playwright `pressSequentially()` dengan delay:
+
+```javascript
+await page.locator('#inpKode').pressSequentially('1F0442', { delay: 100 });
+```
+
+Contoh:
+
+```javascript
+await page.getByLabel('Username').pressSequentially(USERNAME, { delay: 100 });
+```
+
+Textarea:
+
+```javascript
+await page.locator('#keterangan').pressSequentially('Keterangan test', { delay: 100 });
+```
+
+Kotak pencarian:
+
+```javascript
+await page.locator('#search').pressSequentially('pegawai', { delay: 100 });
+```
+
+Password:
+
+```javascript
+await page.getByLabel('Password').pressSequentially(PASSWORD, { delay: 100 });
+```
+
+### DILARANG
+
+Jangan menggunakan:
+
+```javascript
+page.fill()
+```
+
+untuk input yang seharusnya merepresentasikan pengetikan user.
+
+Jangan menggunakan:
+
+```javascript
+locator.fill()
+```
+
+untuk input user.
+
+Jangan menggunakan:
+
+```javascript
+locator.evaluate(...)
+```
+
+untuk memasukkan text secara langsung.
+
+Jangan menggunakan JavaScript DOM manipulation untuk mengisi nilai input:
+
+```javascript
+document.querySelector(...).value = ...
+```
+
+Jangan menggunakan:
+
+```javascript
+input.dispatchEvent(...)
+```
+
+sebagai pengganti pengetikan user.
+
+Jangan menggunakan metode lain yang memasukkan seluruh text sekaligus.
+
+### Aturan 100ms
+
+Setiap karakter harus diketik dengan:
+
+```javascript
+{ delay: 100 }
+```
+
+Contoh:
+
+```javascript
+await page.locator('#inpNama').pressSequentially(
+    'EGO DAFMA DASA',
+    { delay: 100 }
+);
+```
+
+Tujuan:
+
+```text
+User mengetik karakter
+↓
+Aplikasi menerima event keyboard/input
+↓
+Validasi frontend berjalan
+↓
+UI memperbarui state
+↓
+Karakter berikutnya diketik
+```
+
+Bukan:
+
+```text
+Set seluruh text sekaligus
+↓
+PASS
+```
+
+### Clear Existing Value
+
+Jika field sudah memiliki nilai dan perlu dikosongkan sebelum mengetik, gunakan interaksi keyboard/browser yang merepresentasikan tindakan user.
+
+Contoh:
+
+```javascript
+await page.locator('#search').click();
+await page.locator('#search').press('Control+A');
+await page.locator('#search').press('Backspace');
+await page.locator('#search').pressSequentially('pegawai', { delay: 100 });
+```
+
+Jangan menggunakan `fill('')` untuk menggantikan tindakan user.
+
+### Pengecualian
+
+`setInputFiles()` boleh digunakan untuk test upload file karena user memilih file melalui file picker dan Playwright memang menyediakan API khusus untuk file input.
+
+Contoh:
+
+```javascript
+await page.setInputFiles('#inpFotoFile', {
+    name: 'foto-selfie-test.jpg',
+    mimeType: 'image/jpeg',
+    buffer: dummyJpegBuffer
+});
+```
+
+Aturan pengetikan per karakter berlaku untuk **text input**, bukan file upload.
+
+---
+
+## 16. Assertion
 
 Assertion harus memeriksa hasil bermakna bagi user.
 
@@ -579,7 +848,7 @@ Jangan melemahkan assertion hanya agar test PASS.
 
 ---
 
-## 15. Test Failure Handling
+## 17. Test Failure Handling
 
 ### Application Bug
 
@@ -592,6 +861,12 @@ Perbaiki aplikasi jika memang bug.
 Test salah.
 
 Perbaiki test.
+
+### Console Error
+
+Jika ada unexpected browser console error atau `pageerror`, test harus dianggap gagal dan langsung stop proses test.
+
+Jangan mengabaikan error hanya karena assertion UI PASS.
 
 ### Environment Bug
 
@@ -615,7 +890,7 @@ Jangan menebak behavior penting.
 
 ---
 
-## 16. Playwright Structure
+## 19. Playwright Structure
 
 Struktur yang disarankan:
 
@@ -636,7 +911,61 @@ Sesuaikan dengan struktur existing jika sudah tersedia.
 
 ---
 
-## 17. Test Commands
+## 18. Test Execution Policy
+
+Test **TIDAK BOLEH dijalankan otomatis oleh AI coding agent**.
+
+AI boleh:
+
+- membuat test
+- memperbaiki test
+- membaca konfigurasi testing
+- menganalisis hasil test yang diberikan user
+- menampilkan command untuk menjalankan test
+
+AI **tidak boleh menjalankan**:
+
+```text
+npm run test
+npm run test:unit
+npm run test:e2e
+npx jest
+npx playwright test
+```
+
+atau command testing lain secara otomatis setelah membuat atau mengubah test.
+
+### User Menjalankan Test
+
+Hanya user yang menjalankan automated test.
+
+Setelah selesai membuat atau mengubah test, AI harus menampilkan command yang dapat dijalankan user.
+
+Contoh:
+
+```bash
+npm run test:e2e
+```
+
+Test tertentu:
+
+```bash
+npx playwright test tests/e2e/pwa-absensi-cadangan.spec.js
+```
+
+Mode headed:
+
+```bash
+npx playwright test tests/e2e/pwa-absensi-cadangan.spec.js --headed
+```
+
+AI tidak boleh mengklaim test PASS/FAIL sebelum user menjalankan test dan memberikan hasilnya.
+
+Jika AI diminta menjalankan test, tetap jangan menjalankannya. Berikan command yang tepat kepada user.
+
+---
+
+## 20. Test Commands
 
 Unit:
 
@@ -666,7 +995,7 @@ Jangan menyatakan test PASS jika test belum dijalankan.
 
 ---
 
-## 18. E2E Development Workflow
+## 21. E2E Development Workflow
 
 ```text
 1. Baca AGENTS.md
@@ -691,24 +1020,28 @@ Jangan menyatakan test PASS jika test belum dijalankan.
         ↓
 11. Identifikasi alur UI sebenarnya
         ↓
-12. Buat Playwright test
+12. Pasang monitoring console/page errors
         ↓
-13. Jalankan test
+13. Buat Playwright test
         ↓
-14. Analisis failure
+14. Jalankan test
         ↓
-15. Tentukan akar masalah
+15. Analisis failure
         ↓
-16. Perbaiki akar masalah
+16. Periksa UI assertion + console error + pageerror
         ↓
-17. Jalankan ulang test
+17. Tentukan akar masalah
         ↓
-18. Verifikasi hasil
+18. Perbaiki akar masalah
+        ↓
+19. Jalankan ulang test
+        ↓
+20. Verifikasi hasil
 ```
 
 ---
 
-## 19. Aturan Mutlak untuk AI Coding Agent
+## 22. Aturan Mutlak untuk AI Coding Agent
 
 ```text
 NEVER modify application code solely to make a test pass.
@@ -735,6 +1068,12 @@ NEVER redirect the E2E frontend to localhost API when remote testing API is conf
 
 NEVER redirect E2E to production backend.
 
+NEVER ignore unexpected browser console errors just because UI assertions pass.
+
+NEVER disable console/page error monitoring just to make tests pass.
+
+NEVER add broad console-error exclusions to hide failures.
+
 ALWAYS serve the real BAIS frontend from `docs/` through a local web server.
 
 ALWAYS use the real remote BAIS testing backend for normal E2E.
@@ -744,6 +1083,25 @@ ALWAYS use the real BAIS frontend JavaScript.
 ALWAYS use Playwright browser interaction as a real user would.
 
 ALWAYS test user-visible behavior.
+
+ALWAYS monitor `console.error` and `pageerror` during E2E.
+
+NEVER automatically execute automated tests after creating or modifying tests.
+
+NEVER run test commands unless the user explicitly runs them outside the AI agent workflow.
+
+ALWAYS provide the exact test command for the user to run.
+
+ALWAYS use real per-character typing for text input with `{ delay: 100 }`.
+
+NEVER use `page.fill()` or `locator.fill()` for user text input.
+
+NEVER set input values directly through DOM manipulation.
+
+
+ALWAYS fail E2E when unexpected JavaScript errors occur.
+
+IF an error is intentionally expected, document a narrow explicit exception.
 
 IF the real application cannot be started or accessed, report the environment blocker.
 
@@ -762,7 +1120,7 @@ DO NOT change production behavior only for testing convenience.
 
 ---
 
-## 20. Definition of Done
+## 23. Definition of Done
 
 E2E test valid jika:
 
@@ -779,13 +1137,15 @@ E2E test valid jika:
 - tidak bypass authentication
 - tidak mengubah production code hanya agar test PASS
 - memiliki assertion bermakna
+- tidak memiliki unexpected `console.error`
+- tidak memiliki unexpected `pageerror`
 - dapat gagal ketika aplikasi rusak
 - dapat berhasil ketika aplikasi benar-benar bekerja
 - dapat dijalankan ulang secara konsisten
 
 ---
 
-## 21. Tujuan Akhir
+## 24. Tujuan Akhir
 
 Testing bukan perlombaan membuat:
 
@@ -802,7 +1162,7 @@ USER
  ↓
 BROWSER
  ↓
-BAIS BALAD FRONTEND ASLI
+BAIS PARIAMAN FRONTEND ASLI
  ↓
 REMOTE BAIS TESTING API
  ↓
@@ -812,6 +1172,22 @@ HASIL SEBENARNYA
 ```
 
 Frontend localhost hanya media untuk menyajikan frontend asli.
+
+Kondisi PASS yang valid:
+
+```text
+UI benar
++
+Assertion benar
++
+Console bersih dari unexpected error
++
+Tidak ada pageerror
++
+Backend testing benar-benar digunakan
+=
+E2E PASS
+```
 
 **Jangan mengubah aplikasi agar test PASS.**
 

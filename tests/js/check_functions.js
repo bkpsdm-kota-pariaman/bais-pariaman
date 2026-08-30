@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-const jsPath = 'd:/public_html/bais-balad/src/Views/admin/js/admin.js';
+const jsPath = 'd:/public_html/bais-pariaman/src/Views/admin/js/admin.js';
 const js = fs.readFileSync(jsPath, 'utf8');
 
 const onRegex1 = /\bon[a-z]+="([a-zA-Z0-9_]+)\s*\(/g;

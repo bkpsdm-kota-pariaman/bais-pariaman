@@ -1,6 +1,6 @@
-# BAIS BALAD - Aplikasi Absensi Kegiatan ASN
+# BAIS PARIAMAN - Aplikasi Absensi Kegiatan ASN
 
-BAIS BALAD adalah aplikasi absensi modern yang dikembangkan untuk memfasilitasi pencatatan kehadiran Aparatur Sipil Negara (ASN) di lingkungan Pemerintah Kota Pariaman. Aplikasi ini mendukung berbagai metode absensi, dilengkapi dengan Progressive Web App (PWA) untuk kenyamanan pengguna, serta Admin Dashboard untuk manajemen kegiatan dan rekapitulasi data.
+BAIS PARIAMAN adalah aplikasi absensi modern yang dikembangkan untuk memfasilitasi pencatatan kehadiran Aparatur Sipil Negara (ASN) di lingkungan Pemerintah Kota Pariaman. Aplikasi ini mendukung berbagai metode absensi, dilengkapi dengan Progressive Web App (PWA) untuk kenyamanan pengguna, serta Admin Dashboard untuk manajemen kegiatan dan rekapitulasi data.
 
 ## 🚀 Fitur Utama
 
@@ -28,7 +28,7 @@ BAIS BALAD adalah aplikasi absensi modern yang dikembangkan untuk memfasilitasi 
 Berikut adalah struktur utama dalam repositori ini:
 
 ```text
-bais-balad/
+bais-pariaman/
 ├── config/              # Konfigurasi utama sistem dan database
 ├── database/            # File struktur database (structure.sql)
 ├── docs/                # Hasil build / output statis untuk Frontend (Siap deploy)

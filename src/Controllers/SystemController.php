@@ -1,5 +1,5 @@
 <?php
-// src/Controllers/PengaturanController.php
+// src/Controllers/SystemController.php
 
 namespace App\Controllers;
 
@@ -8,7 +8,19 @@ use App\Helpers\Database;
 use App\Helpers\AdminAuthHelper;
 use PDO;
 
-class PengaturanController {
+class SystemController {
+
+    /**
+     * [Public API] Healthcheck / Ping test API.
+     */
+    public function ping() {
+        Response::json(true, 200, "API Siap Digunakan", ['timestamp' => time()]);
+    }
+
+    // =========================================================================
+    // PENGATURAN APLIKASI & WORKER KV CACHE
+    // =========================================================================
+
 
     /**
      * Memastikan tabel pengaturan aplikasi sudah ada di database dengan skema terbaru:
@@ -202,6 +214,35 @@ class PengaturanController {
     }
 
     /**
+     * [Admin API] Menghapus satu item pengaturan aplikasi dan sinkronisasi ke Worker KV (Super Admin Only).
+     */
+    public function deletePengaturan($vars) {
+        $adminData = AdminAuthHelper::validate();
+        $roles = isset($adminData['role']) ? (array) $adminData['role'] : [];
+        if (!in_array('super admin', $roles)) {
+            Response::json(false, 403, "Hak akses ditolak. Hanya Super Admin yang dapat menghapus pengaturan.");
+            return;
+        }
+
+        $kode = strtolower(trim($vars['kode'] ?? ''));
+        if (empty($kode)) {
+            Response::json(false, 400, "Kode pengaturan tidak valid.");
+            return;
+        }
+
+        $db = Database::getConnection();
+        $this->ensureTableExists($db);
+
+        $stmt = $db->prepare("DELETE FROM app_absensi_pengaturan_aplikasi WHERE kode_pengaturan = :kode");
+        $stmt->execute([':kode' => $kode]);
+
+        // Hapus juga kunci dari Cloudflare Worker KV
+        $kvDeleted = $this->deletePengaturanFromKv($kode);
+
+        Response::json(true, 200, "Pengaturan '{$kode}' berhasil dihapus " . ($kvDeleted ? "dan disinkronkan ke Worker KV." : "dari database."));
+    }
+
+    /**
      * [Admin API] Sinkronisasi manual seluruh tabel pengaturan ke Worker KV (Super Admin Only).
      */
     public function syncKvCache() {
@@ -263,5 +304,37 @@ class PengaturanController {
 
         return $curlErrorNo === 0 && $httpCode >= 200 && $httpCode < 300;
     }
-}
 
+    /**
+     * Helper cURL untuk menghapus satu key pengaturan dari Cloudflare Worker KV.
+     */
+    private function deletePengaturanFromKv(string $kode) {
+        $config = require APP_PATH . '/config/config.php';
+        $workerUrl = $config['worker_url'] ?? null;
+        $workerSecret = $config['worker_secret'] ?? null;
+
+        if (!$workerUrl || !$workerSecret) {
+            error_log("[Pengaturan KV Delete] Gagal: Konfigurasi Worker URL/secret tidak ada.");
+            return false;
+        }
+
+        $url = rtrim($workerUrl, '/') . '/api/pengaturan/' . urlencode($kode);
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'X-Worker-Secret: ' . $workerSecret
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+
+        curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErrorNo = curl_errno($ch);
+        curl_close($ch);
+
+        return $curlErrorNo === 0 && $httpCode >= 200 && $httpCode < 300;
+    }
+
+}

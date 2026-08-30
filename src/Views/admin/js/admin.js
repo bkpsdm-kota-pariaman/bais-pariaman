@@ -1219,6 +1219,7 @@ function kembaliKeDaftar() {
     document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
     document.getElementById('statistikKehadiranContainer').classList.add('d-none');
     document.getElementById('logAbsensiContainer').classList.add('d-none');
+    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
     document.getElementById('dashboardContainer').classList.remove('d-none');
     loadJadwalKegiatan();
 }
@@ -1231,6 +1232,7 @@ function bukaHalamanPegawai() {
     document.getElementById('statistikKehadiranContainer').classList.add('d-none');
     document.getElementById('opdContainer').classList.add('d-none');
     document.getElementById('logAbsensiContainer').classList.add('d-none');
+    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
     document.getElementById('pegawaiContainer').classList.remove('d-none');
 
     // Reset tampilan dan isi filter, jangan load data dulu
@@ -1250,6 +1252,7 @@ function bukaHalamanOpd() {
     document.getElementById('statistikKehadiranContainer').classList.add('d-none');
     document.getElementById('pegawaiContainer').classList.add('d-none');
     document.getElementById('logAbsensiContainer').classList.add('d-none');
+    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
     document.getElementById('opdContainer').classList.remove('d-none');
     loadOpdData();
 }
@@ -1260,6 +1263,7 @@ async function lihatRekap(kodeAkses) {
     document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
     document.getElementById('statistikKehadiranContainer').classList.add('d-none');
     document.getElementById('logAbsensiContainer').classList.add('d-none');
+    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
     document.getElementById('rekapContainer').classList.remove('d-none');
     currentRekapData = { jadwal: null, filtered_pegawai: [] }; // Reset data cache
     resetRekapFilters();
@@ -2897,6 +2901,7 @@ async function bukaHalamanRekapKeseluruhan() {
     document.getElementById('opdContainer').classList.add('d-none');
     document.getElementById('statistikKehadiranContainer').classList.add('d-none');
     document.getElementById('logAbsensiContainer').classList.add('d-none');
+    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
     document.getElementById('rekapKeseluruhanContainer').classList.remove('d-none');
 
     initRekapKeseluruhanUI();
@@ -3213,6 +3218,7 @@ async function bukaHalamanStatistikKehadiran() {
     document.getElementById('opdContainer').classList.add('d-none');
     document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
     document.getElementById('logAbsensiContainer').classList.add('d-none');
+    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
     document.getElementById('statistikKehadiranContainer').classList.remove('d-none');
 
     initStatistikUI();
@@ -3433,10 +3439,6 @@ function exportOpdToExcel() {
 
 // exportRekapKeseluruhanToExcel didefinisikan secara lengkap di fungsi utama rekap
 
-function exportStatistikToExcel() {
-    exportRawDataToExcel(currentStatistikData, 'Statistik_Kehadiran');
-}
-
 /**
  * =================================================
  * IMPORT CSV ABSEN MANUAL
@@ -3460,13 +3462,20 @@ function bukaModalImportAbsen() {
     modalImportAbsen.show();
 }
 
-document.getElementById('modalImportAbsen').addEventListener('hidden.bs.modal', function () {
-    document.getElementById('formImportAbsen').reset();
-    parsedImportData = [];
-    document.getElementById('previewImportBody').innerHTML = '';
-    document.getElementById('previewImportContainer').classList.add('d-none');
-    document.getElementById('btnProsesImport').classList.add('d-none');
-});
+const elModalImport = document.getElementById('modalImportAbsen');
+if (elModalImport) {
+    elModalImport.addEventListener('hidden.bs.modal', function () {
+        const formImport = document.getElementById('formImportAbsen');
+        if (formImport) formImport.reset();
+        parsedImportData = [];
+        const previewBody = document.getElementById('previewImportBody');
+        if (previewBody) previewBody.innerHTML = '';
+        const previewContainer = document.getElementById('previewImportContainer');
+        if (previewContainer) previewContainer.classList.add('d-none');
+        const btnProses = document.getElementById('btnProsesImport');
+        if (btnProses) btnProses.classList.add('d-none');
+    });
+}
 
 let parsedImportData = [];
 
@@ -3732,6 +3741,55 @@ function escapeHtml(str) {
 
 let listPengaturanCache = [];
 
+async function bukaHalamanPengaturanAplikasi() {
+    if (!isSuperAdmin()) {
+        Swal.fire('Akses Ditolak', 'Hanya super admin yang dapat mengakses pengaturan aplikasi.', 'error');
+        return;
+    }
+
+    // Warning Dialog (Nomor 4)
+    const confirmResult = await Swal.fire({
+        title: 'Peringatan Pengaturan Aplikasi',
+        html: '<div class="text-start"><p class="mb-2">Silakan konsultasikan dengan programmer terlebih dahulu sebelum menggunakan fitur ini.</p><p class="mb-0 text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i> Kesalahan dalam pengisian dapat menyebabkan aplikasi error.</p></div>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#b91c1c',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Lanjutkan',
+        cancelButtonText: 'Batal'
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
+    resetPaginasi();
+
+    // Sembunyikan container lain, tampilkan pengaturanContainer
+    document.getElementById('dashboardContainer').classList.add('d-none');
+    document.getElementById('rekapContainer').classList.add('d-none');
+    document.getElementById('pegawaiContainer').classList.add('d-none');
+    document.getElementById('opdContainer').classList.add('d-none');
+    document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
+    document.getElementById('statistikKehadiranContainer').classList.add('d-none');
+    document.getElementById('logAbsensiContainer').classList.add('d-none');
+    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.remove('d-none');
+
+    showAdminLoading(true, 'Memuat pengaturan aplikasi...');
+    try {
+        const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
+        showAdminLoading(false);
+        if (res && res.status && res.data) {
+            listPengaturanCache = Array.isArray(res.data.list) ? res.data.list : [];
+            renderTabelPengaturanAplikasi(listPengaturanCache);
+        } else {
+            Swal.fire('Gagal', (res && res.message) ? res.message : 'Gagal memuat pengaturan.', 'error');
+        }
+    } catch (e) {
+        showAdminLoading(false);
+        console.error('Error membuka halaman pengaturan:', e);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat memuat pengaturan aplikasi.', 'error');
+    }
+}
+
 async function bukaModalPengaturanAplikasi() {
     if (!isSuperAdmin()) {
         Swal.fire('Akses Ditolak', 'Hanya super admin yang dapat mengelola pengaturan aplikasi.', 'error');
@@ -3761,11 +3819,14 @@ async function bukaModalPengaturanAplikasi() {
 }
 
 function renderTabelPengaturanAplikasi(dataList) {
-    const tbody = document.getElementById('tbodyPengaturanAplikasi');
-    if (!tbody) return;
+    const tbodyModal = document.getElementById('tbodyPengaturanAplikasi');
+    const tbodyPage = document.getElementById('tbodyPengaturanAplikasiPage');
+
+    const emptyRow = '<tr><td colspan="5" class="text-center text-muted py-4">Belum ada data pengaturan aplikasi.</td></tr>';
 
     if (!Array.isArray(dataList) || dataList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Belum ada data pengaturan aplikasi.</td></tr>';
+        if (tbodyModal) tbodyModal.innerHTML = emptyRow;
+        if (tbodyPage) tbodyPage.innerHTML = emptyRow;
         return;
     }
 
@@ -3791,16 +3852,23 @@ function renderTabelPengaturanAplikasi(dataList) {
                     <div class="text-break font-monospace small" style="max-height: 80px; overflow-y: auto;">${nilai}</div>
                 </td>
                 <td class="text-center">
-                    <button class="btn btn-sm btn-outline-primary fw-bold px-2 py-1 shadow-sm"
-                        onclick="bukaModalFormPengaturanFromTable('${kodeAttr}', '${namaAttr}', '${nilaiAttr}')">
-                        <i class="bi bi-pencil-square me-1"></i> Edit
-                    </button>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-sm btn-outline-primary fw-bold px-2 py-1 shadow-sm"
+                            onclick="bukaModalFormPengaturanFromTable('${kodeAttr}', '${namaAttr}', '${nilaiAttr}')" title="Edit Pengaturan">
+                            <i class="bi bi-pencil-square me-1"></i> Edit
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger fw-bold px-2 py-1 shadow-sm"
+                            onclick="hapusPengaturan('${kodeAttr}', '${namaAttr}')" title="Hapus Pengaturan">
+                            <i class="bi bi-trash me-1"></i> Hapus
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
     });
 
-    tbody.innerHTML = html;
+    if (tbodyModal) tbodyModal.innerHTML = html;
+    if (tbodyPage) tbodyPage.innerHTML = html;
 }
 
 function bukaModalFormPengaturanFromTable(kodeEnc, namaEnc, nilaiEnc) {
@@ -3960,6 +4028,61 @@ async function syncPengaturanKv() {
 
 let currentLogAbsensiData = [];
 
+async function hapusPengaturan(kodeEnc, namaEnc) {
+    if (!isSuperAdmin()) {
+        Swal.fire('Akses Ditolak', 'Hanya super admin yang dapat menghapus pengaturan.', 'error');
+        return;
+    }
+
+    const kode = decodeURIComponent(kodeEnc || '');
+    const nama = decodeURIComponent(namaEnc || '');
+
+    const confirmResult = await Swal.fire({
+        title: 'Hapus Pengaturan?',
+        html: `Apakah Anda yakin ingin menghapus pengaturan <b>${escapeHtml(nama)}</b> (<code>${escapeHtml(kode)}</code>)?<br><br><strong class="text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i> Kesalahan dalam penghapusan dapat menyebabkan aplikasi error.</strong>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Ya, Hapus!',
+        cancelButtonText: 'Batal'
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
+    showAdminLoading(true, 'Menghapus pengaturan...');
+    try {
+        const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan/${encodeURIComponent(kode)}`, {
+            method: 'DELETE'
+        });
+        showAdminLoading(false);
+
+        if (res && res.status) {
+            // Refresh list pengaturan
+            const refreshRes = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
+            if (refreshRes && refreshRes.status && refreshRes.data) {
+                listPengaturanCache = Array.isArray(refreshRes.data.list) ? refreshRes.data.list : [];
+                renderTabelPengaturanAplikasi(listPengaturanCache);
+            }
+
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: res.message || 'Pengaturan berhasil dihapus!',
+                showConfirmButton: false,
+                timer: 2500
+            });
+        } else {
+            Swal.fire('Gagal', (res && res.message) ? res.message : 'Gagal menghapus pengaturan.', 'error');
+        }
+    } catch (e) {
+        showAdminLoading(false);
+        console.error('Error menghapus pengaturan:', e);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus pengaturan aplikasi.', 'error');
+    }
+}
+
 async function bukaHalamanLogAbsensi() {
     if (!isSuperAdmin()) {
         Swal.fire('Akses Ditolak', 'Hanya super admin yang dapat mengakses log absensi.', 'error');
@@ -3974,6 +4097,7 @@ async function bukaHalamanLogAbsensi() {
     document.getElementById('opdContainer').classList.add('d-none');
     document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
     document.getElementById('statistikKehadiranContainer').classList.add('d-none');
+    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
     document.getElementById('logAbsensiContainer').classList.remove('d-none');
 
     // Reset input filter

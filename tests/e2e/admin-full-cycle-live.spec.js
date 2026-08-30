@@ -4,7 +4,30 @@ const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Live Full Cycle: Realtime Activity Schedule, Cloudflare Worker Queue & Admin Rekap', () => {
 
+    let consoleErrors = [];
+    let pageErrors = [];
+
     test.beforeEach(async ({ page, context }) => {
+        test.setTimeout(90000);
+        consoleErrors = [];
+        pageErrors = [];
+
+        // HENTIKAN DAN GAGALKAN TEST PROSES SECARA LANGSUNG JIKA TERJADI ERROR CONSOLE ATAU PAGE ERROR
+        page.on('console', msg => {
+            if (msg.type() === 'error') {
+                const text = msg.text();
+                consoleErrors.push(text);
+                console.error(`🚨 [STOP PROSES TEST] Console error dideteksi pada browser: ${text}`);
+                throw new Error(`[CRITICAL - TEST STOPPED] Console error dideteksi pada browser: ${text}`);
+            }
+        });
+
+        page.on('pageerror', error => {
+            pageErrors.push(error.message);
+            console.error(`🚨 [STOP PROSES TEST] Page uncaught error dideteksi: ${error.message}`);
+            throw new Error(`[CRITICAL - TEST STOPPED] Page uncaught error dideteksi pada browser: ${error.message}`);
+        });
+
         attachLogger(page, 'Full Cycle E2E');
         await context.grantPermissions(['camera', 'geolocation']);
         await context.setGeolocation({ latitude: -0.6276, longitude: 100.1209 });
@@ -23,10 +46,10 @@ test.describe('E2E Live Full Cycle: Realtime Activity Schedule, Cloudflare Worke
         const loginBtn = page.locator('#btnLogin');
 
         logAction.input('NIP Admin', '#adminUser', activeAdmin.nip);
-        await userInput.fill(activeAdmin.nip);
+        await userInput.pressSequentially(activeAdmin.nip, { delay: 100 });
 
         logAction.input('Password NIK', '#adminPass', '********');
-        await passInput.fill(activeAdmin.nik);
+        await passInput.pressSequentially(activeAdmin.nik, { delay: 100 });
 
         logAction.click('Tombol Masuk', '#btnLogin');
         await loginBtn.click();
@@ -48,7 +71,7 @@ test.describe('E2E Live Full Cycle: Realtime Activity Schedule, Cloudflare Worke
         const todayStr = new Date().toISOString().split('T')[0];
         
         logAction.input('Judul Kegiatan', '#newJudul', judul);
-        await page.fill('#newJudul', judul);
+        await page.locator('#newJudul').pressSequentially(judul, { delay: 100 });
         await page.evaluate((valDate) => {
             const elTgl = document.getElementById('newTanggal');
             if (elTgl) {
@@ -74,15 +97,13 @@ test.describe('E2E Live Full Cycle: Realtime Activity Schedule, Cloudflare Worke
 
         logAction.verify('Memverifikasi modal tertutup setelah simpan');
         await expect(modal).toBeHidden({ timeout: 15000 });
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Jadwal Kegiatan baru berhasil dibuat via UI');
     });
-
-
-
-
-
-
-
 
     test('2. Live ASN Attendance Flow — Presensi ASN Nyata via PWA Form', async ({ page }) => {
         const sampleUsers = getSampleAsnUsers(1);
@@ -94,10 +115,10 @@ test.describe('E2E Live Full Cycle: Realtime Activity Schedule, Cloudflare Worke
 
         logAction.step(`Login ASN di PWA (NIP: ${targetAsn.nip})`);
         logAction.input('NIP Pegawai', '#logNip', targetAsn.nip);
-        await page.fill('#logNip', targetAsn.nip);
+        await page.locator('#logNip').pressSequentially(targetAsn.nip, { delay: 100 });
 
         logAction.input('NIK / Password', '#logNik', '********');
-        await page.fill('#logNik', targetAsn.nik);
+        await page.locator('#logNik').pressSequentially(targetAsn.nik, { delay: 100 });
 
         logAction.click('Tombol MASUK APLIKASI', 'button:has-text("MASUK APLIKASI")');
         const submitLogin = page.locator('button[type="submit"]:has-text("MASUK APLIKASI"), #formLogin button[type="submit"]');
@@ -114,9 +135,12 @@ test.describe('E2E Live Full Cycle: Realtime Activity Schedule, Cloudflare Worke
         logAction.verify('Memverifikasi tampilan Pilih Metode Absensi');
         const viewPilihMetode = page.locator('#view-pilih-metode');
         await expect(viewPilihMetode).toBeVisible({ timeout: 10000 });
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Alur presensi PWA ASN diverifikasi');
     });
 
 });
-
-

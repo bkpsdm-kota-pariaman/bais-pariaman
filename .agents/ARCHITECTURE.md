@@ -82,7 +82,7 @@ MySQL / MariaDB
 ## 3. Directory Structure
 
 ```text
-bais-balad/
+bais-pariaman/
   config/              # Konfigurasi sistem
   database/            # Struktur SQL
   docs/                # Generated static assets / Web Root Frontend

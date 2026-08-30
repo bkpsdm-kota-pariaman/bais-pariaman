@@ -155,7 +155,7 @@
                     class="bi bi-building me-2"></i> Perangkat Daerah (OPD)</a></li>
               <li id="menuDividerPengaturanAplikasi" class="dropdown-divider d-none"></li>
               <li id="menuItemPengaturanAplikasi" class="d-none"><a class="dropdown-item fw-semibold text-danger" href="#"
-                  onclick="bukaModalPengaturanAplikasi(); return false;"><i class="bi bi-gear-fill me-2"></i> Pengaturan Aplikasi</a></li>
+                  onclick="bukaHalamanPengaturanAplikasi(); return false;"><i class="bi bi-gear-fill me-2"></i> Pengaturan Aplikasi</a></li>
             </ul>
           </li>
 
@@ -792,6 +792,57 @@
 
         <!-- BOTTOM PAGINATION LOG -->
         <div id="logAbsensiPagination" class="d-none"></div>
+      </div>
+    </div>
+
+    <!-- MANAJEMEN PENGATURAN APLIKASI (SUPER ADMIN ONLY) -->
+    <div id="pengaturanContainer" class="d-none">
+      <button class="btn btn-secondary btn-sm fw-bold mb-3 shadow-sm" onclick="kembaliKeDaftar()"><i
+          class="bi bi-arrow-left"></i> Kembali ke Daftar Jadwal</button>
+
+      <div class="box-container">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-gear-fill text-danger me-2"></i> Pengaturan Aplikasi</h4>
+            <p class="mb-0 text-muted small">Kelola konfigurasi dan parameter sistem BAIS Pariaman.</p>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-danger fw-bold px-3 shadow-sm" onclick="bukaModalFormPengaturan('tambah')">
+              <i class="bi bi-plus-circle me-1"></i> Tambah Pengaturan
+            </button>
+            <button type="button" id="btnSyncPengaturanKvPage" onclick="syncPengaturanKv()" class="btn btn-outline-danger fw-bold px-3 shadow-sm">
+              <i class="bi bi-cloud-upload me-1"></i> Sinkronkan ke Worker KV
+            </button>
+          </div>
+        </div>
+
+        <!-- WARNING BANNER PENGATURAN -->
+        <div class="alert alert-warning border-warning d-flex align-items-center shadow-sm mb-4">
+          <i class="bi bi-exclamation-triangle-fill text-warning fs-3 me-3 flex-shrink-0"></i>
+          <div>
+            <strong class="d-block text-dark">PERINGATAN SANGAT PENTING:</strong>
+            <span>Silakan konsultasikan dengan programmer terlebih dahulu sebelum menggunakan fitur ini. Kesalahan dalam pengisian dapat menyebabkan aplikasi error.</span>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover table-bordered align-middle mb-0">
+            <thead class="table-light text-secondary">
+              <tr>
+                <th style="width: 50px;" class="text-center">No</th>
+                <th style="min-width: 180px;">Nama Pengaturan</th>
+                <th style="min-width: 180px;">Kode Pengaturan</th>
+                <th style="min-width: 250px;">Nilai Pengaturan</th>
+                <th style="width: 140px;" class="text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyPengaturanAplikasiPage">
+              <tr>
+                <td colspan="5" class="text-center text-muted py-4">Memuat data pengaturan...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -1634,6 +1685,15 @@
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4">
+          <!-- WARNING BANNER DI MODAL -->
+          <div class="alert alert-warning border-warning d-flex align-items-center shadow-sm mb-3">
+            <i class="bi bi-exclamation-triangle-fill text-warning fs-4 me-3 flex-shrink-0"></i>
+            <div class="small">
+              <strong class="d-block text-dark">PERINGATAN:</strong>
+              Silakan konsultasikan dengan programmer terlebih dahulu sebelum menggunakan fitur ini. Kesalahan dalam pengisian dapat menyebabkan aplikasi error.
+            </div>
+          </div>
+
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <button type="button" class="btn btn-sm btn-danger fw-bold shadow-sm" onclick="bukaModalFormPengaturan('tambah')">
               <i class="bi bi-plus-circle me-1"></i> Tambah Pengaturan
@@ -1651,7 +1711,7 @@
                   <th style="min-width: 170px;">Nama Pengaturan</th>
                   <th style="min-width: 170px;">Kode Pengaturan</th>
                   <th style="min-width: 220px;">Nilai Pengaturan</th>
-                  <th style="width: 80px;" class="text-center">Aksi</th>
+                  <th style="width: 120px;" class="text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody id="tbodyPengaturanAplikasi">
@@ -1680,6 +1740,15 @@
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4">
+          <!-- WARNING BANNER DI MODAL FORM -->
+          <div class="alert alert-warning border-warning d-flex align-items-center shadow-sm mb-3">
+            <i class="bi bi-exclamation-triangle-fill text-warning fs-4 me-3 flex-shrink-0"></i>
+            <div class="small">
+              <strong class="d-block text-dark">PERINGATAN:</strong>
+              Silakan konsultasikan dengan programmer terlebih dahulu sebelum menggunakan fitur ini. Kesalahan dalam pengisian dapat menyebabkan aplikasi error.
+            </div>
+          </div>
+
           <form onsubmit="submitFormPengaturanItem(event)">
             <input type="hidden" id="formPengaturanMode" value="tambah">
             

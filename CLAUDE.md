@@ -1,3 +1,247 @@
+# CLAUDE.md — BAIS Pariaman
+
+> Instruksi operasional singkat untuk Claude/AI coding agent.
+>
+> `AGENTS.md` adalah aturan utama project. Jika ada konflik, ikuti `AGENTS.md` dan dokumentasi task yang relevan.
+
+---
+
+## 1. MANDATORY STARTUP
+
+Setiap sesi baru:
+
+```text
+DO NOT rely on previous conversation memory.
+
+READ AGENTS.md FIRST.
+
+READ TASK_INSTRUCTION.md before coding.
+
+For testing tasks:
+READ TESTING.md.
+
+For feature/behavior tasks:
+READ PRD.md.
+
+For architecture tasks:
+READ ARCHITECTURE.md.
+
+For UI/UX tasks:
+READ DESIGN.md.
+
+For security/auth/API tasks:
+READ SECURITY.md.
+
+For deployment/build tasks:
+READ DEPLOYMENT.md.
+```
+
+Jangan mulai coding sebelum dokumentasi relevan dibaca.
+
+---
+
+## 2. BAIS PROJECT CONTEXT
+
+```text
+BAIS Pariaman
+↓
+PWA Frontend + Admin Dashboard
+↓
+Native HTML/CSS/JavaScript
+↓
+PHP Native + FastRoute API
+↓
+JWT Authentication
+↓
+MySQL/MariaDB
+↓
+Node.js Worker
+```
+
+Source frontend:
+
+```text
+src/Views/
+```
+
+Generated frontend:
+
+```text
+docs/
+```
+
+Backend:
+
+```text
+public_html/api/
+```
+
+Tests:
+
+```text
+tests/
+```
+
+---
+
+## 3. IMPORTANT E2E CONTEXT
+
+Untuk Playwright E2E:
+
+```text
+Playwright
+↓
+Browser
+↓
+BAIS frontend ASLI
+↓
+local web server
+↓
+docs/
+↓
+remote BAIS testing backend ASLI
+↓
+testing database/service
+```
+
+Localhost hanya untuk menyajikan frontend asli.
+
+Backend E2E tetap remote.
+
+Jangan membuat:
+
+```text
+fake frontend
+fake HTML
+fake backend
+fake API
+fake server
+```
+
+Jangan arahkan E2E ke production backend.
+
+---
+
+## 4. TESTING RULES
+
+E2E harus:
+
+```text
+simulate real user interaction
+use real browser
+use real BAIS frontend
+use real remote testing backend
+verify user-visible behavior
+```
+
+Text input wajib:
+
+```javascript
+pressSequentially('text', { delay: 100 })
+```
+
+Jangan gunakan `fill()` untuk simulasi user mengetik.
+
+Browser console harus dipantau.
+
+Unexpected:
+
+```text
+console.error
+pageerror
+uncaught exception
+unhandled rejection
+```
+
+harus membuat test FAIL.
+
+---
+
+## 5. TEST EXECUTION
+
+AI **jangan otomatis menjalankan test**.
+
+User yang menjalankan test.
+
+Setelah coding, berikan command:
+
+```bash
+npm run test:e2e
+```
+
+atau test tertentu:
+
+```bash
+npx playwright test tests/e2e/<file>.spec.js
+```
+
+Jangan menyatakan PASS/FAIL sebelum user memberikan hasil.
+
+---
+
+## 6. PRODUCTION CODE PROTECTION
+
+Never:
+
+```text
+modify production code solely to make test PASS
+hide browser errors
+weaken assertions
+mock the real backend in normal E2E
+replace UI interaction with internal function calls
+invent missing behavior
+```
+
+Jika gagal:
+
+```text
+TEST BUG
+APPLICATION BUG
+ENVIRONMENT BUG
+REQUIREMENT UNCLEAR
+```
+
+Cari akar masalah.
+
+---
+
+## 7. CHANGE DISCIPLINE
+
+Sebelum coding:
+
+```text
+READ
+UNDERSTAND
+CHECK EXISTING CODE
+CHECK IMPACT
+CHANGE
+```
+
+Buat perubahan minimal.
+
+Jangan refactor unrelated code.
+
+Jangan edit `docs/` manual.
+
+Jangan bypass security.
+
+---
+
+## 8. USER INTENT
+
+User sering berganti model AI.
+
+Karena itu:
+
+```text
+DO NOT ASSUME PREVIOUS AI CONTEXT EXISTS.
+DO NOT ASSUME PREVIOUS MODEL MEMORY EXISTS.
+ALWAYS RE-READ PROJECT DOCUMENTATION.
+```
+
+Dokumentasi project adalah persistent context.
+
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 

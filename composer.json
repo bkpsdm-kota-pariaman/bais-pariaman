@@ -1,6 +1,6 @@
 {
-    "name": "pariamankota/bais-balad",
-    "description": "Aplikasi Absensi Kegiatan ASN BAIS BALAD.",
+    "name": "pariamankota/bais-pariaman",
+    "description": "Aplikasi Absensi Kegiatan ASN BAIS PARIAMAN.",
     "type": "project",
     "license": "proprietary",
     "require": {

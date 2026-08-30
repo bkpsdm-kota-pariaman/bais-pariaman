@@ -1,5 +1,5 @@
 const fs = require('fs');
-let js = fs.readFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.js', 'utf8');
+let js = fs.readFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.js', 'utf8');
 
 // Remove references to btnDownloadExcel (Rekap Kehadiran)
 js = js.replace(/document\.getElementById\('btnDownloadExcel'\)\.classList\.add\('d-none'\);/g, '');
@@ -30,8 +30,8 @@ let newLines = [];
 let skipNext = false;
 for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (line.includes("getElementById('btnDownloadExcel')") || 
-        line.includes("getElementById('btnDownloadExcelKeseluruhan')") || 
+    if (line.includes("getElementById('btnDownloadExcel')") ||
+        line.includes("getElementById('btnDownloadExcelKeseluruhan')") ||
         line.includes("getElementById('btnDownloadExcelStatistik')") ||
         line.includes("btnDownload.classList.add") ||
         line.includes("btnDownload.classList.remove") ||
@@ -40,7 +40,7 @@ for (let i = 0; i < lines.length; i++) {
     ) {
         continue; // skip this line
     }
-    
+
     // Also skip the block:
     // if (result.data.length > 0) {
     //     btnDownload.classList.remove('d-none');
@@ -50,6 +50,6 @@ for (let i = 0; i < lines.length; i++) {
     newLines.push(line);
 }
 
-fs.writeFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.js', newLines.join('\n'));
-fs.writeFileSync('d:/public_html/bais-balad/src/Views/admin/js/admin.min.js', newLines.join('\n').replace(/\n/g, '').replace(/\s+/g, ' '));
+fs.writeFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.js', newLines.join('\n'));
+fs.writeFileSync('d:/public_html/bais-pariaman/src/Views/admin/js/admin.min.js', newLines.join('\n').replace(/\n/g, '').replace(/\s+/g, ' '));
 console.log('JS cleaned up');

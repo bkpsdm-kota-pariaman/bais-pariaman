@@ -4,16 +4,19 @@ const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite 3: PWA ASN Presensi, Strict Rules & Pengajuan Tidak Hadir', () => {
 
+    let consoleErrors = [];
+    let pageErrors = [];
+
     async function loginAsn(page, user) {
         logAction.step(`Melakukan Login ASN PWA (NIP: ${user.nip})`);
         const loginView = page.locator('#view-login');
         await expect(loginView).toBeVisible({ timeout: 10000 });
 
         logAction.input('NIP Pegawai', '#logNip', user.nip);
-        await page.fill('#logNip', user.nip);
+        await page.locator('#logNip').pressSequentially(user.nip, { delay: 100 });
 
         logAction.input('NIK / Password', '#logNik', '********');
-        await page.fill('#logNik', user.nik);
+        await page.locator('#logNik').pressSequentially(user.nik, { delay: 100 });
 
         logAction.click('Tombol MASUK APLIKASI', 'button:has-text("MASUK APLIKASI")');
         const submitBtn = page.locator('button[type="submit"]:has-text("MASUK APLIKASI"), #formLogin button[type="submit"]');
@@ -26,6 +29,26 @@ test.describe('E2E Suite 3: PWA ASN Presensi, Strict Rules & Pengajuan Tidak Had
     }
 
     test.beforeEach(async ({ page, context }) => {
+        test.setTimeout(90000);
+        consoleErrors = [];
+        pageErrors = [];
+
+        // HENTIKAN DAN GAGALKAN TEST PROSES SECARA LANGSUNG JIKA TERJADI ERROR CONSOLE ATAU PAGE ERROR
+        page.on('console', msg => {
+            if (msg.type() === 'error') {
+                const text = msg.text();
+                consoleErrors.push(text);
+                console.error(`🚨 [STOP PROSES TEST] Console error dideteksi pada browser: ${text}`);
+                throw new Error(`[CRITICAL - TEST STOPPED] Console error dideteksi pada browser: ${text}`);
+            }
+        });
+
+        page.on('pageerror', error => {
+            pageErrors.push(error.message);
+            console.error(`🚨 [STOP PROSES TEST] Page uncaught error dideteksi: ${error.message}`);
+            throw new Error(`[CRITICAL - TEST STOPPED] Page uncaught error dideteksi pada browser: ${error.message}`);
+        });
+
         attachLogger(page, 'PWA ASN Attendance');
         await context.grantPermissions(['camera', 'geolocation']);
         await context.setGeolocation({ latitude: -0.6276, longitude: 100.1209 });
@@ -58,6 +81,11 @@ test.describe('E2E Suite 3: PWA ASN Presensi, Strict Rules & Pengajuan Tidak Had
 
         logAction.verify('Memverifikasi kembali ke halaman login PWA');
         await expect(page.locator('#view-login')).toBeVisible({ timeout: 10000 });
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Uji login dan logout ASN diverifikasi');
     });
 
@@ -82,6 +110,11 @@ test.describe('E2E Suite 3: PWA ASN Presensi, Strict Rules & Pengajuan Tidak Had
         const inputManual = page.locator('#inputKodeManual');
         await expect(btnScan).toBeVisible();
         await expect(inputManual).toBeVisible();
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Navigasi metode absensi diverifikasi');
     });
 
@@ -93,11 +126,17 @@ test.describe('E2E Suite 3: PWA ASN Presensi, Strict Rules & Pengajuan Tidak Had
 
         logAction.click('Tombol AMBIL ABSENSI KEGIATAN', 'button:has-text("AMBIL ABSENSI KEGIATAN")');
         const btnAmbilAbsen = page.locator('button:has-text("AMBIL ABSENSI KEGIATAN")');
+        await expect(btnAmbilAbsen).toBeVisible();
         await btnAmbilAbsen.click();
 
         logAction.verify('Memverifikasi halaman pilih metode terbuka');
         const viewPilihMetode = page.locator('#view-pilih-metode');
         await expect(viewPilihMetode).toBeVisible({ timeout: 10000 });
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('Halaman pilih metode absensi diverifikasi');
     });
 
@@ -128,9 +167,12 @@ test.describe('E2E Suite 3: PWA ASN Presensi, Strict Rules & Pengajuan Tidak Had
         logAction.verify('Memverifikasi kembali ke Dashboard');
         const dashView = page.locator('#view-dashboard');
         await expect(dashView).toBeVisible({ timeout: 5000 });
+
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+
         logAction.success('E-Ticket QR Code diverifikasi');
     });
 
 });
-
-
