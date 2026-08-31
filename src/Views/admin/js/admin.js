@@ -3480,7 +3480,7 @@ if (elModalImport) {
 let parsedImportData = [];
 
 function downloadTemplateCSV() {
-    const headers = "waktu;nip;nama_pegawai;jabatan;opd;lokasi;lat;lng;nama_file_foto\n";
+    const headers = "waktu;nip;nama_pegawai;jabatan;opd;lokasi;lat;lng;nama_file_foto;keterangan\n";
     // Get the first OPD for the sample if available, else a dummy one
     const sampleOpd = (allOpdList && allOpdList.length > 0) ? allOpdList[0] : "Dinas Komunikasi dan Informatika";
 
@@ -3489,9 +3489,9 @@ function downloadTemplateCSV() {
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} 07:30:00`;
 
     const rows = [
-        `${dateStr};198001012010011001;Budi Santoso;Staf;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_budi.jpg`,
-        `${dateStr};198502022015022002;Siti Aminah;Kasubag;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_siti.jpg`,
-        `${dateStr};199003032020031003;Andi Kurniawan;Kepala Bidang;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_andi.jpg`
+        `${dateStr};198001012010011001;Budi Santoso;Staf;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_budi.jpg;Hadir tepat waktu`,
+        `${dateStr};198502022015022002;Siti Aminah;Kasubag;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_siti.jpg;Hadir rapat`,
+        `${dateStr};199003032020031003;Andi Kurniawan;Kepala Bidang;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_andi.jpg;Tugas lapangan`
     ];
 
     const csvContent = "data:text/csv;charset=utf-8," + headers + rows.join("\n");
@@ -3530,10 +3530,13 @@ function handlePreviewCSV(event) {
         }
 
         // Ensure opd names are mapped correctly for validation
-        const validOpds = allOpdList.map(opd => opd.trim().toLowerCase());
+        const validOpds = (typeof allOpdList !== 'undefined' && Array.isArray(allOpdList)) ? allOpdList.map(opd => opd.trim().toLowerCase()) : [];
 
-        // Validasi waktu regex: YYYY-MM-DD HH:MM:SS
+        // Validasi regex
         const waktuRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+        const nipRegex = /^\d{8,18}$/;
+        const latRegex = /^-?([0-8]?\d(\.\d+)?|90(\.0+)?)$/;
+        const lngRegex = /^-?((1[0-7]\d|\d{1,2})(\.\d+)?|180(\.0+)?)$/;
 
         for (let i = 1; i < lines.length; i++) {
             const cols = lines[i].split(';');
@@ -3547,38 +3550,63 @@ function handlePreviewCSV(event) {
             const lat = cols[6] ? cols[6].trim() : '';
             const lng = cols[7] ? cols[7].trim() : '';
             const foto = cols[8] ? cols[8].trim() : '';
+            const keteranganCsv = cols[9] ? cols[9].trim() : '';
 
             let validationMsgs = [];
 
-            // Validasi
+            // Validasi Kolom 1: Waktu
             if (!waktu) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Waktu kosong</span>');
-            } else if (!waktuRegex.test(waktu)) {
+            } else if (!waktuRegex.test(waktu) || isNaN(Date.parse(waktu.replace(' ', 'T')))) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Format waktu harus YYYY-MM-DD HH:MM:SS</span>');
             }
+
+            // Validasi Kolom 2: NIP
             if (!nip) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> NIP kosong</span>');
+            } else if (!nipRegex.test(nip)) {
+                validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> NIP harus angka (8-18 digit)</span>');
             }
+
+            // Validasi Kolom 3: Nama Pegawai
             if (!nama) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Nama kosong</span>');
             }
+
+            // Validasi Kolom 4: Jabatan
             if (!jabatan) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Jabatan kosong</span>');
             }
+
+            // Validasi Kolom 5: OPD
             if (!opd) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> OPD kosong</span>');
             } else if (validOpds.length > 0 && !validOpds.includes(opd.toLowerCase())) {
                 validationMsgs.push('<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> OPD tidak terdaftar</span>');
             }
+
+            // Validasi Kolom 6: Lokasi
             if (!lokasi) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Lokasi kosong</span>');
             }
+
+            // Validasi Kolom 7: Latitude
+            const latNum = parseFloat(lat);
             if (!lat) {
-                validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Latitude kosong</span>');
+                validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Latitude (lat) kosong</span>');
+            } else if (isNaN(latNum) || !latRegex.test(lat) || latNum < -90 || latNum > 90) {
+                validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Lat tidak valid (-90 s/d 90)</span>');
             }
+
+            // Validasi Kolom 8: Longitude
+            const lngNum = parseFloat(lng);
             if (!lng) {
-                validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Longitude kosong</span>');
+                validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Longitude (lng) kosong</span>');
+            } else if (isNaN(lngNum) || !lngRegex.test(lng) || lngNum < -180 || lngNum > 180) {
+                validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Lng tidak valid (-180 s/d 180)</span>');
             }
+
+            // Validasi Kolom 9: Nama File Foto
             if (!foto) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Foto kosong</span>');
             }
@@ -3588,7 +3616,18 @@ function handlePreviewCSV(event) {
                 validationMsgs.push('<span class="text-success"><i class="bi bi-check-circle"></i> Valid</span>');
             }
 
-            const dataRow = { waktu, nip, nama_pegawai: nama, jabatan, opd, lokasi, lat, lng, nama_file_foto: foto };
+            const dataRow = {
+                waktu,
+                nip,
+                nama_pegawai: nama,
+                jabatan,
+                opd,
+                lokasi,
+                lat: isNaN(latNum) ? 0 : latNum,
+                lng: isNaN(lngNum) ? 0 : lngNum,
+                nama_file_foto: foto,
+                keterangan: keteranganCsv
+            };
             parsedImportData.push({ data: dataRow, valid: isValid });
 
             const idx = parsedImportData.length - 1;
@@ -3597,11 +3636,15 @@ function handlePreviewCSV(event) {
             tr.innerHTML = `
                 <td class="text-center"><input class="form-check-input import-row-check" type="checkbox" value="${idx}" ${isValid ? 'checked' : 'disabled'}></td>
                 <td>${validationMsgs.join('<br>')}</td>
-                <td>${waktu || '<em class="text-muted">Kosong</em>'}</td>
-                <td>${nip}</td>
-                <td>${nama}</td>
-                <td>${opd}</td>
-                <td>${foto}</td>
+                <td>${escapeHtml(waktu) || '<em class="text-muted">Kosong</em>'}</td>
+                <td>${escapeHtml(nip)}</td>
+                <td>${escapeHtml(nama)}</td>
+                <td>${escapeHtml(jabatan)}</td>
+                <td>${escapeHtml(opd)}</td>
+                <td>${escapeHtml(lokasi)}</td>
+                <td>${escapeHtml(lat)} / ${escapeHtml(lng)}</td>
+                <td>${escapeHtml(foto)}</td>
+                <td>${escapeHtml(keteranganCsv) || '<em class="text-muted">-</em>'}</td>
             `;
             tbody.appendChild(tr);
         }
@@ -3652,13 +3695,14 @@ async function submitImportAbsen(event) {
     const kodeAkses = document.getElementById('importKodeAkses').value;
     const statusKehadiran = document.getElementById('importStatusKehadiran').value;
     const statusVerifikasi = document.getElementById('importStatusVerifikasi').value;
-    const keterangan = document.getElementById('importKeterangan').value;
+    const keteranganAdminEl = document.getElementById('importKeteranganAdmin') || document.getElementById('importKeterangan');
+    const keteranganAdmin = keteranganAdminEl ? keteranganAdminEl.value.trim() : '';
 
     const payload = {
         kode_akses: kodeAkses,
         status_kehadiran: statusKehadiran,
         status_verifikasi: statusVerifikasi,
-        keterangan: keterangan,
+        keterangan_admin: keteranganAdmin,
         data: selectedData
     };
 

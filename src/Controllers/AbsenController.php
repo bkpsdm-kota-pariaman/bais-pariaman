@@ -1843,7 +1843,7 @@ class AbsenController {
         $kodeAkses = $input['kode_akses'] ?? null;
         $statusKehadiranDef = $input['status_kehadiran'] ?? 'Hadir';
         $statusVerifikasiDef = $input['status_verifikasi'] ?? 'Terverifikasi Oleh Admin';
-        $keteranganDef = $input['keterangan'] ?? '';
+        $keteranganAdminDef = $input['keterangan_admin'] ?? $input['keterangan'] ?? '';
         $dataRows = $input['data'] ?? [];
 
         if (!$kodeAkses || empty($dataRows)) {
@@ -1862,19 +1862,28 @@ class AbsenController {
                 $jabatan = trim($data['jabatan'] ?? '');
                 $opd = trim($data['opd'] ?? '');
                 $lokasi = trim($data['lokasi'] ?? '');
+                $lat = (isset($data['lat']) && is_numeric($data['lat'])) ? floatval($data['lat']) : 0;
+                $lng = (isset($data['lng']) && is_numeric($data['lng'])) ? floatval($data['lng']) : 0;
                 $foto = trim($data['nama_file_foto'] ?? '');
+                $keteranganCsv = trim($data['keterangan'] ?? '');
 
                 if (empty($nip)) continue;
                 if (empty($waktu)) $waktu = null;
 
                 $sql = "INSERT INTO app_absensi_data_absensi 
-                        (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan_verifikasi, status_verifikasi, status_kehadiran)
+                        (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, lat, lng, nama_file_foto, keterangan, keterangan_verifikasi, status_verifikasi, status_kehadiran)
                         VALUES 
-                        (:ka, :nip, :nama, :opd, :jabatan, :waktu, :lokasi, :foto, :ket, :sv, :sk)
+                        (:ka, :nip, :nama, :opd, :jabatan, :waktu, :lokasi, :lat, :lng, :foto, :ket_csv, :ket_admin, :sv, :sk)
                         ON DUPLICATE KEY UPDATE 
+                        nama_pegawai = VALUES(nama_pegawai),
+                        jabatan = VALUES(jabatan),
+                        opd = VALUES(opd),
                         waktu = VALUES(waktu),
                         lokasi = VALUES(lokasi),
+                        lat = VALUES(lat),
+                        lng = VALUES(lng),
                         nama_file_foto = VALUES(nama_file_foto),
+                        keterangan = VALUES(keterangan),
                         keterangan_verifikasi = VALUES(keterangan_verifikasi),
                         status_verifikasi = VALUES(status_verifikasi),
                         status_kehadiran = VALUES(status_kehadiran)";
@@ -1888,8 +1897,11 @@ class AbsenController {
                     ':jabatan' => $jabatan,
                     ':waktu' => $waktu,
                     ':lokasi' => $lokasi,
+                    ':lat' => $lat,
+                    ':lng' => $lng,
                     ':foto' => empty($foto) ? 'MANUAL_INPUT.jpg' : $foto,
-                    ':ket' => $keteranganDef,
+                    ':ket_csv' => $keteranganCsv,
+                    ':ket_admin' => $keteranganAdminDef,
                     ':sv' => $statusVerifikasiDef,
                     ':sk' => $statusKehadiranDef
                 ]);
@@ -1908,7 +1920,8 @@ class AbsenController {
                         'nip' => $nip,
                         'status_verifikasi' => $statusVerifikasiDef,
                         'status_kehadiran' => $statusKehadiranDef,
-                        'keterangan' => $keteranganDef,
+                        'keterangan' => $keteranganCsv,
+                        'keterangan_admin' => $keteranganAdminDef,
                         'sumber' => 'Import CSV'
                     ]
                 );

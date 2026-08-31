@@ -1581,17 +1581,19 @@
                   <li><code>waktu</code>: tanggal dan jam absensi, format <code>YYYY-MM-DD HH:MM:SS</code>. Contoh:
                     <code>2026-08-17 07:30:00</code>
                   </li>
-                  <li><code>nip</code>: NIP pegawai. Contoh: <code>198001012010011001</code></li>
+                  <li><code>nip</code>: NIP pegawai (hanya angka). Contoh: <code>198001012010011001</code></li>
                   <li><code>nama_pegawai</code>: nama lengkap pegawai. Contoh: <code>Budi Santoso</code></li>
                   <li><code>jabatan</code>: nama jabatan pegawai. Contoh: <code>Staf Analis</code></li>
                   <li><code>opd</code>: nama OPD atau instansi. Contoh: <code>Dinas Komunikasi dan Informatika</code>
                   </li>
                   <li><code>lokasi</code>: nama lokasi absensi. Contoh: <code>Kantor Walikota</code></li>
-                  <li><code>lat</code> dan <code>lng</code>: koordinat lokasi absensi. Contoh: <code>-0.6276</code> dan
+                  <li><code>lat</code> dan <code>lng</code>: koordinat lokasi absensi dalam angka desimal valid (-90 s/d 90 untuk lat, -180 s/d 180 untuk lng). Contoh: <code>-0.6276</code> dan
                     <code>100.1209</code>
                   </li>
                   <li><code>nama_file_foto</code>: nama file foto atau link Google Drive bukti absensi. Contoh:
                     <code>foto_budi.jpg</code> atau <code>https://drive.google.com/file/d/xxxx/view</code>
+                  </li>
+                  <li><code>keterangan</code>: keterangan absensi dari file CSV (opsional). Contoh: <code>Hadir tepat waktu</code>
                   </li>
                 </ul>
               </div>
@@ -1609,7 +1611,7 @@
             <div id="previewImportContainer" class="d-none">
               <h6 class="fw-bold mb-2">Preview Data CSV <span id="previewImportCount"
                   class="badge bg-secondary ms-2">0</span></h6>
-              <div class="table-responsive border rounded mb-3" style="max-height: 300px;">
+              <div class="table-responsive border rounded mb-3" style="max-height: 350px;">
                 <table class="table table-sm table-hover mb-0 text-nowrap">
                   <thead class="table-light sticky-top">
                     <tr>
@@ -1621,8 +1623,12 @@
                       <th>Waktu</th>
                       <th>NIP</th>
                       <th>Nama</th>
+                      <th>Jabatan</th>
                       <th>OPD</th>
+                      <th>Lokasi</th>
+                      <th>Lat / Lng</th>
                       <th>Nama File Foto</th>
+                      <th>Keterangan (CSV)</th>
                     </tr>
                   </thead>
                   <tbody id="previewImportBody">
@@ -1658,8 +1664,8 @@
                   </select>
                 </div>
                 <div class="col-md-12 mt-2">
-                  <label class="form-label fw-bold small">Keterangan Tambahan</label>
-                  <textarea id="importKeterangan" class="form-control" rows="2" placeholder="Opsional..."></textarea>
+                  <label class="form-label fw-bold small">Keterangan Admin (Universal)</label>
+                  <textarea id="importKeteranganAdmin" class="form-control" rows="2" placeholder="Catatan/keterangan verifikasi dari admin secara universal (opsional)..."></textarea>
                 </div>
               </div>
             </div>
