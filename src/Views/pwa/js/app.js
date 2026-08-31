@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.265'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.267'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -2217,8 +2217,9 @@ async function kirimAbsensi() {
         }
     }
 
-    const rawJadwal = (currentJadwal && currentJadwal.jadwal) ? currentJadwal.jadwal : currentJadwal;
-    const useQueue = Boolean(rawJadwal && Number(rawJadwal.aktifkan_antrian) === 1);
+    const rawJadwal = currentJadwal?.jadwal || currentJadwal?.data?.jadwal || currentJadwal?.data || currentJadwal;
+    const queueValue = rawJadwal?.aktifkan_antrian ?? currentJadwal?.aktifkan_antrian;
+    const useQueue = String(queueValue ?? '').trim() === '1';
 
     // Helper penampung FormData untuk server utama PHP
     const createPhpFormData = () => {
@@ -2753,6 +2754,9 @@ async function setupAbsenForm(jadwalData) {
     } else {
         currentJadwal = jadwalData;
     }
+
+    const queueValue = currentJadwal?.aktifkan_antrian ?? currentJadwal?.jadwal?.aktifkan_antrian ?? currentJadwal?.data?.aktifkan_antrian;
+    currentJadwal.aktifkan_antrian = String(queueValue ?? '').trim();
 
     if (typeof currentJadwal.is_terlambat !== 'undefined') {
         isTerlambat = Boolean(currentJadwal.is_terlambat);
