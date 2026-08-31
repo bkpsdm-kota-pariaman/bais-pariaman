@@ -2461,7 +2461,10 @@ async function hapusDataAbsensiMassal() {
             } else {
                 Swal.fire('Gagal', result.message, 'error');
             }
-        } catch (error) { }
+        } catch (error) {
+            console.error("Gagal menghapus data absensi massal:", error);
+            Swal.fire('Gagal', 'Terjadi kesalahan jaringan atau server saat menghapus data.', 'error');
+        }
     }
 }
 
@@ -3444,11 +3447,13 @@ function exportOpdToExcel() {
  * IMPORT CSV ABSEN MANUAL
  * =================================================
  */
-function bukaModalImportAbsen() {
+async function bukaModalImportAbsen() {
     if (!currentRekapData || !currentRekapData.jadwal) {
         Swal.fire('Kesalahan', 'Data jadwal tidak ditemukan.', 'error');
         return;
     }
+
+    await loadAllOpdList();
 
     document.getElementById('formImportAbsen').reset();
     document.getElementById('importKodeAkses').value = currentRekapData.jadwal.kode_akses;
@@ -3480,21 +3485,10 @@ if (elModalImport) {
 let parsedImportData = [];
 
 function downloadTemplateCSV() {
-    const headers = "waktu;nip;nama_pegawai;jabatan;opd;lokasi;lat;lng;nama_file_foto;keterangan\n";
-    // Get the first OPD for the sample if available, else a dummy one
     const sampleOpd = (allOpdList && allOpdList.length > 0) ? allOpdList[0] : "Dinas Komunikasi dan Informatika";
-
-    // Sample rows
-    const now = new Date();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} 07:30:00`;
-
-    const rows = [
-        `${dateStr};198001012010011001;Budi Santoso;Staf;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_budi.jpg;Hadir tepat waktu`,
-        `${dateStr};198502022015022002;Siti Aminah;Kasubag;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_siti.jpg;Hadir rapat`,
-        `${dateStr};199003032020031003;Andi Kurniawan;Kepala Bidang;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_andi.jpg;Tugas lapangan`
-    ];
-
-    const csvContent = "data:text/csv;charset=utf-8," + headers + rows.join("\n");
+    const header = "waktu;nip;nama_pegawai;jabatan;opd;lokasi;lat;lng;nama_file_foto;keterangan\n";
+    const sample = `2026-08-31 07:30:00;198001012005011001;Ahmad Fajar;Staf Analis;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_absen.jpg;Hadir tepat waktu\n`;
+    const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(header + sample);
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -3504,7 +3498,7 @@ function downloadTemplateCSV() {
     document.body.removeChild(link);
 }
 
-function handlePreviewCSV(event) {
+async function handlePreviewCSV(event) {
     const file = event.target.files[0];
     const previewContainer = document.getElementById('previewImportContainer');
     const tbody = document.getElementById('previewImportBody');
@@ -3515,6 +3509,8 @@ function handlePreviewCSV(event) {
         btnProses.classList.add('d-none');
         return;
     }
+
+    await loadAllOpdList();
 
     const reader = new FileReader();
     reader.onload = function (e) {
@@ -3578,11 +3574,11 @@ function handlePreviewCSV(event) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Jabatan kosong</span>');
             }
 
-            // Validasi Kolom 5: OPD
+            // Validasi Kolom 5: OPD (Ketat: Harus Terdaftar)
             if (!opd) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> OPD kosong</span>');
             } else if (validOpds.length > 0 && !validOpds.includes(opd.toLowerCase())) {
-                validationMsgs.push('<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> OPD tidak terdaftar</span>');
+                validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> OPD tidak terdaftar dalam sistem</span>');
             }
 
             // Validasi Kolom 6: Lokasi

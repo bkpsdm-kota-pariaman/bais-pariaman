@@ -66,8 +66,9 @@ function jsonResponse(success, statusCode, message, data = null, customHeaders =
 		message: message,
 		...(data !== null && { data })
 	};
+	const actualHttpStatus = statusCode >= 500 ? 500 : 200;
 	return new Response(JSON.stringify(body), {
-		status: 200,
+		status: actualHttpStatus,
 		headers: {
 			'Content-Type': 'application/json',
 			...corsHeaders,

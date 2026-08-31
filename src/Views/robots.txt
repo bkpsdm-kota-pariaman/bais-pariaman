@@ -1,0 +1,11 @@
+# Robots.txt untuk BAIS Pariaman - bais-pariaman.pariamankota.go.id
+User-agent: *
+Allow: /
+Allow: /index.html
+Allow: /images/
+Disallow: /pwa/
+Disallow: /admin/
+Disallow: /absensi-cadangan/
+Disallow: /api/
+
+Sitemap: https://bais-pariaman.pariamankota.go.id/sitemap.xml

@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.250'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.258'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -1028,11 +1028,12 @@ async function fetchWithAuth(url, options = {}) {
             const clone = response.clone();
             const resJson = await clone.json();
             if (resJson && resJson.code === 401) {
-                forceLogout();
-                throw new Error("Sesi habis.");
+                // Worker auth error tidak boleh langsung forceLogout karena Worker hanya secondary layer.
+                // Lemparkan error agar caller bisa melakukan fallback ke server utama PHP.
+                throw new Error("Worker sesi/token mismatch.");
             }
         } catch (e) {
-            if (e.message === "Sesi habis.") throw e;
+            if (e.message === "Worker sesi/token mismatch." || e.message === "Sesi habis.") throw e;
         }
     }
 
@@ -1810,7 +1811,7 @@ async function prosesQrCode(kodeOrJwt) {
     } catch (error) {
         showLoading(false);
         console.error("Error processing QR/Code:", error);
-        Swal.fire("Gagal", "Terjadi kesalahan saat memvalidasi jadwal.", "error").then(() => {
+        Swal.fire("Gagal", error.message || "Terjadi kesalahan saat memvalidasi jadwal.", "error").then(() => {
             batalAbsen();
         });
     }
@@ -2216,7 +2217,8 @@ async function kirimAbsensi() {
         }
     }
 
-    const useQueue = currentJadwal.aktifkan_antrian == 1;
+    const rawJadwal = (currentJadwal && currentJadwal.jadwal) ? currentJadwal.jadwal : currentJadwal;
+    const useQueue = Boolean(rawJadwal && Number(rawJadwal.aktifkan_antrian) === 1);
 
     showLoading(true, "Mengirim Absensi...");
 
@@ -2279,11 +2281,12 @@ async function kirimAbsensi() {
                     throw new Error(res.message || 'Worker mengembalikan status false (server error / limit exceeded)');
                 }
             } catch (workerError) {
-                // Respons validasi Worker (4xx) bersifat final; fallback hanya untuk error server Cloudflare (5xx) atau jaringan/timeout.
-                if (res && res.status === false && Number(res.code) >= 400 && Number(res.code) < 500) {
+                // Respons validasi bisnis Worker (400, 403, 409, dll) bersifat final.
+                // Namun jika Worker error 401 (token mismatch/sync) atau 5xx/network error, fallback ke Server Utama (PHP).
+                if (res && res.status === false && Number(res.code) >= 400 && Number(res.code) < 500 && Number(res.code) !== 401) {
                     throw new Error(res.message || `Absensi ditolak (kode ${res.code}).`);
                 }
-                // Jika Worker gagal (HTTP 5xx / timeout / network error), fallback otomatis ke Server Utama (PHP)
+                // Jika Worker gagal (HTTP 5xx / 401 sync / timeout / network error), fallback otomatis ke Server Utama (PHP)
                 console.warn("[PWA Fallback] Worker Cloudflare bermasalah, fallback ke server utama (PHP):", workerError.message);
                 res = await sendToOriginServer();
                 if (!res.status) throw new Error(res.message || "Fallback ke server utama juga gagal.");
@@ -2750,7 +2753,18 @@ async function setupAbsenForm(jadwalData) {
     cleanupAbsenForm();
 
     showLoading(false); // Pastikan loading disembunyikan
-    currentJadwal = jadwalData;
+    
+    // Normalisasikan currentJadwal agar properti dari API server PHP (res.data.jadwal) di-flatten secara konsisten
+    if (jadwalData && jadwalData.jadwal) {
+        currentJadwal = {
+            ...jadwalData.jadwal,
+            target_opd: jadwalData.target_opd || jadwalData.jadwal.target_opd,
+            is_terlambat: typeof jadwalData.is_terlambat !== 'undefined' ? jadwalData.is_terlambat : jadwalData.jadwal.is_terlambat,
+            server_time: jadwalData.server_time || jadwalData.jadwal.server_time
+        };
+    } else {
+        currentJadwal = jadwalData;
+    }
 
     if (typeof currentJadwal.is_terlambat !== 'undefined') {
         isTerlambat = Boolean(currentJadwal.is_terlambat);

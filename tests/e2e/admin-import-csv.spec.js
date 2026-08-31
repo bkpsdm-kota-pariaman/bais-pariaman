@@ -136,12 +136,19 @@ test.describe('E2E Suite: Admin Import Data Absensi CSV', () => {
 
         const modalBuat = page.locator('#modalBuatKegiatan');
         await expect(modalBuat).toHaveClass(/show/, { timeout: 10000 });
+        // Jeda sebentar agar animasi ditangani Bootstrap & event shown.bs.modal (mapGeofence) selesai
+        await page.waitForTimeout(500);
 
         const timestampStr = Date.now().toString().slice(-5);
         const judulKegiatan = `Kegiatan Import CSV E2E ${timestampStr}`;
 
         logAction.input('Judul Jadwal', '#newJudul', judulKegiatan);
-        await page.locator('#newJudul').pressSequentially(judulKegiatan, { delay: 100 });
+        const inputJudul = page.locator('#newJudul');
+        await expect(inputJudul).toBeVisible();
+        await inputJudul.click();
+        await inputJudul.press('Control+A');
+        await inputJudul.press('Backspace');
+        await inputJudul.pressSequentially(judulKegiatan, { delay: 100 });
 
         const todayStr = new Date().toISOString().split('T')[0];
         await page.evaluate((d) => {
@@ -191,14 +198,14 @@ test.describe('E2E Suite: Admin Import Data Absensi CSV', () => {
         const btnRekap = tableRow.locator('button:has-text("Rekap")').first();
         await btnRekap.click();
 
-        const rekapContainer = page.locator('#rekapAbsensiContainer');
+        const rekapContainer = page.locator('#rekapContainer');
         await expect(rekapContainer).toBeVisible({ timeout: 15000 });
         logAction.success('Halaman Rekap Absensi Kegiatan terbuka');
 
         // --- STEP 3: Import Data Absen Pakai CSV ---
         logAction.step('4. Buka Modal Import Absen & Upload CSV 20 Pegawai');
-        const btnImportCsv = page.locator('button:has-text("Import Data Absen")');
-        await expect(btnImportCsv).toBeVisible();
+        const btnImportCsv = rekapContainer.locator('button:has-text("Import Data Absen")');
+        await expect(btnImportCsv).toBeVisible({ timeout: 10000 });
         await btnImportCsv.click();
 
         const modalImport = page.locator('#modalImportAbsen');
@@ -239,6 +246,13 @@ test.describe('E2E Suite: Admin Import Data Absensi CSV', () => {
             btnProses.click()
         ]);
 
+        logAction.verify('Menekan tombol OK pada dialog Import Berhasil');
+        const successDialog = page.locator('.swal2-popup').filter({ hasText: 'Import Berhasil' });
+        await expect(successDialog).toBeVisible({ timeout: 10000 });
+        await expect(successDialog.locator('.swal2-confirm')).toHaveText('OK');
+        await successDialog.locator('.swal2-confirm').click();
+        await expect(successDialog).toBeHidden({ timeout: 10000 });
+
         logAction.verify('Memverifikasi modal import tertutup');
         await expect(modalImport).toBeHidden({ timeout: 15000 });
         logAction.success('Proses Import 20 Pegawai dari CSV berhasil diselesaikan');
@@ -262,7 +276,7 @@ test.describe('E2E Suite: Admin Import Data Absensi CSV', () => {
             await searchInputRekap.pressSequentially(p.nip, { delay: 100 });
 
             // Klik Tampilkan
-            const btnTampilkan = page.locator('#rekapAbsensiContainer button:has-text("Tampilkan")');
+            const btnTampilkan = page.locator('#rekapContainer button:has-text("Tampilkan")');
             await btnTampilkan.click();
 
             // Verifikasi baris pegawai muncul di tabel rekap
