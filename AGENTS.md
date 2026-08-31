@@ -700,7 +700,28 @@ Pastikan:
 
 ---
 
-## 23. Core Rules
+## 23. Bug Tracking
+
+Jika user melaporkan bug atau mengatakan ada bug:
+
+1. Identifikasi bug dan analisis seperlunya.
+2. JANGAN langsung menambahkan bug ke `BUGS.md`.
+3. Tanyakan kepada user apakah bug tersebut ingin dicatat di `BUGS.md`.
+4. Jika user menjawab YA:
+   - cari apakah bug sudah tercatat
+   - jika sudah ada, update entry existing
+   - jika belum ada, buat entry baru menggunakan template `BUGS.md`
+5. Jika user menjawab TIDAK:
+   - jangan membuat entry di `BUGS.md`
+6. Jika user sebelumnya sudah secara eksplisit meminta bug dicatat:
+   - tidak perlu bertanya lagi
+7. Jangan mengubah status menjadi `VERIFIED` sebelum user melakukan verifikasi.
+8. Jangan mengarang root cause.
+9. Simpan evidence asli jika bug dicatat.
+
+`BUGS.md` adalah persistent bug memory, tetapi hanya berisi bug yang disetujui user untuk dicatat.
+
+## 24. Core Rules
 
 ```text
 READ FIRST.
@@ -719,3 +740,4 @@ AI MUST NOT AUTOMATICALLY RUN TESTS.
 USER RUNS THE TESTS.
 ALWAYS PROVIDE THE EXACT TEST COMMAND.
 ```
+

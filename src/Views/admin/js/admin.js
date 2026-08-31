@@ -3487,7 +3487,7 @@ let parsedImportData = [];
 function downloadTemplateCSV() {
     const sampleOpd = (allOpdList && allOpdList.length > 0) ? allOpdList[0] : "Dinas Komunikasi dan Informatika";
     const header = "waktu;nip;nama_pegawai;jabatan;opd;lokasi;lat;lng;nama_file_foto;keterangan\n";
-    const sample = `2026-08-31 07:30:00;198001012005011001;Ahmad Fajar;Staf Analis;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_absen.jpg;Hadir tepat waktu\n`;
+    const sample = `20-08-2026 07:30:00;198001012005011001;Ahmad Fajar;Staf Analis;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_absen.jpg;Hadir tepat waktu\n`;
     const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(header + sample);
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -3528,8 +3528,8 @@ async function handlePreviewCSV(event) {
         // Ensure opd names are mapped correctly for validation
         const validOpds = (typeof allOpdList !== 'undefined' && Array.isArray(allOpdList)) ? allOpdList.map(opd => opd.trim().toLowerCase()) : [];
 
-        // Validasi regex
-        const waktuRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+        // Validasi regex format DD-MM-YYYY HH:ii:ss
+        const waktuRegex = /^(\d{2})-(\d{2})-(\d{4}) (\d{2}):(\d{2}):(\d{2})$/;
         const nipRegex = /^\d{8,18}$/;
         const latRegex = /^-?([0-8]?\d(\.\d+)?|90(\.0+)?)$/;
         const lngRegex = /^-?((1[0-7]\d|\d{1,2})(\.\d+)?|180(\.0+)?)$/;
@@ -3549,12 +3549,47 @@ async function handlePreviewCSV(event) {
             const keteranganCsv = cols[9] ? cols[9].trim() : '';
 
             let validationMsgs = [];
+            let waktuDb = '';
+            let waktuPreview = escapeHtml(waktu);
 
-            // Validasi Kolom 1: Waktu
+            // Validasi Kolom 1: Waktu (Format DD-MM-YYYY HH:ii:ss)
             if (!waktu) {
                 validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Waktu kosong</span>');
-            } else if (!waktuRegex.test(waktu) || isNaN(Date.parse(waktu.replace(' ', 'T')))) {
-                validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Format waktu harus YYYY-MM-DD HH:MM:SS</span>');
+            } else {
+                const match = waktu.match(waktuRegex);
+                if (!match) {
+                    validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Format waktu harus DD-MM-YYYY HH:ii:ss (contoh: 20-08-2026 07:30:00)</span>');
+                } else {
+                    const [, dayStr, monthStr, yearStr, hourStr, minuteStr, secondStr] = match;
+                    const d = parseInt(dayStr, 10);
+                    const m = parseInt(monthStr, 10);
+                    const y = parseInt(yearStr, 10);
+                    const hh = parseInt(hourStr, 10);
+                    const mm = parseInt(minuteStr, 10);
+                    const ss = parseInt(secondStr, 10);
+
+                    // Validasi ketat menggunakan new Date
+                    const dateObj = new Date(y, m - 1, d, hh, mm, ss);
+                    const isValidDate = !isNaN(dateObj.getTime()) &&
+                        dateObj.getFullYear() === y &&
+                        (dateObj.getMonth() + 1) === m &&
+                        dateObj.getDate() === d &&
+                        dateObj.getHours() === hh &&
+                        dateObj.getMinutes() === mm &&
+                        dateObj.getSeconds() === ss;
+
+                    if (!isValidDate) {
+                        validationMsgs.push('<span class="text-danger"><i class="bi bi-x-circle"></i> Tanggal/waktu tidak valid</span>');
+                    } else {
+                        // Formatter tampilan preview contoh: "20 Januari 2026 07:30:00"
+                        const namaBulanIndo = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+                        const pad2 = (n) => String(n).padStart(2, '0');
+                        waktuPreview = `${d} ${namaBulanIndo[m - 1]} ${y} ${pad2(hh)}:${pad2(mm)}:${pad2(ss)}`;
+
+                        // Formatter format database YYYY-MM-DD HH:mm:ss untuk dikirim ke backend
+                        waktuDb = `${y}-${pad2(m)}-${pad2(d)} ${pad2(hh)}:${pad2(mm)}:${pad2(ss)}`;
+                    }
+                }
             }
 
             // Validasi Kolom 2: NIP
@@ -3613,7 +3648,7 @@ async function handlePreviewCSV(event) {
             }
 
             const dataRow = {
-                waktu,
+                waktu: waktuDb || waktu,
                 nip,
                 nama_pegawai: nama,
                 jabatan,
@@ -3632,7 +3667,7 @@ async function handlePreviewCSV(event) {
             tr.innerHTML = `
                 <td class="text-center"><input class="form-check-input import-row-check" type="checkbox" value="${idx}" ${isValid ? 'checked' : 'disabled'}></td>
                 <td>${validationMsgs.join('<br>')}</td>
-                <td>${escapeHtml(waktu) || '<em class="text-muted">Kosong</em>'}</td>
+                <td>${waktuPreview || '<em class="text-muted">Kosong</em>'}</td>
                 <td>${escapeHtml(nip)}</td>
                 <td>${escapeHtml(nama)}</td>
                 <td>${escapeHtml(jabatan)}</td>

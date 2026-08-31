@@ -56,7 +56,7 @@ test.describe('E2E Suite: Admin Import Data Absensi CSV', () => {
         ];
 
         const now = new Date();
-        const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} 07:30:00`;
+        const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()} 07:30:00`;
 
         const csvHeaders = 'waktu;nip;nama_pegawai;jabatan;opd;lokasi;lat;lng;nama_file_foto;keterangan';
         const csvRows = [csvHeaders];
