@@ -389,6 +389,11 @@ async function fetchWithAuth(url, options = {}) {
         const response = await fetch(finalUrl, fetchOptions);
         clearTimeout(abortTimeout);
 
+        // Jika server mengembalikan HTTP Status 500 (Server Error / Crash)
+        if (response.status >= 500) {
+            throw new Error(`Terjadi kesalahan internal pada server (HTTP ${response.status}).`);
+        }
+
         let result = null;
         try {
             result = await response.json();
@@ -396,11 +401,19 @@ async function fetchWithAuth(url, options = {}) {
             throw new Error('Respons dari server tidak valid (Bukan JSON).');
         }
 
-        if (result && (result.code === 401 || (result.code === 403 && result.message && result.message.toLowerCase().includes('login')))) { // Token expired or invalid
+        // Token expired atau unauthorized
+        if (result && (result.code === 401 || (result.code === 403 && result.message && result.message.toLowerCase().includes('login')))) {
             Swal.fire('Sesi Berakhir', 'Waktu login Anda sudah habis. Silahkan login ulang.', 'warning');
             forceLogout();
             throw new Error('Unauthorized');
         }
+
+        // Hanya lempar exception ke catch block jika terjadi server error 500 di payload JSON
+        if (result && result.status === false && Number(result.code) >= 500) {
+            throw new Error(result.message || 'Terjadi kesalahan internal pada server (500).');
+        }
+
+        // Respon 200 OK (termasuk status: false untuk error 4xx data/validasi) dikembalikan utuh ke pemanggil
         return result;
     } catch (e) {
         throw e;

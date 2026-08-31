@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.259'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.265'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -2220,83 +2220,77 @@ async function kirimAbsensi() {
     const rawJadwal = (currentJadwal && currentJadwal.jadwal) ? currentJadwal.jadwal : currentJadwal;
     const useQueue = Boolean(rawJadwal && Number(rawJadwal.aktifkan_antrian) === 1);
 
+    // Helper penampung FormData untuk server utama PHP
+    const createPhpFormData = () => {
+        const formData = new FormData();
+        formData.append('kode_akses', kode);
+        formData.append('lat', lat);
+        formData.append('lng', lng);
+        formData.append('lokasi', alamat);
+        formData.append('keterangan', keterangan);
+        formData.append('status_kehadiran', statusKehadiran);
+        formData.append('status_verifikasi', statusVerifikasi);
+
+        if (window._isTidakHadir) {
+            const buktiIzinInput = document.getElementById('buktiIzin');
+            if (buktiIzinInput && buktiIzinInput.files.length > 0) {
+                formData.append('foto', buktiIzinInput.files[0]);
+            }
+        } else {
+            const buktiHadirInput = document.getElementById('buktiHadir');
+            if (buktiHadirInput && buktiHadirInput.files.length > 0) {
+                formData.append('foto', buktiHadirInput.files[0]);
+            } else if (b64) {
+                const isPdf = b64.includes('application/pdf');
+                const fileExt = isPdf ? 'pdf' : 'jpg';
+                const mimeType = isPdf ? 'application/pdf' : 'image/jpeg';
+                formData.append('foto', new File([dataURItoBlob(b64)], `absen_selfie.${fileExt}`, { type: mimeType }));
+            }
+        }
+        return formData;
+    };
+
+    // Variabel penampung URL server & mode pengiriman
+    const isHadir = !window._isTidakHadir;
+    const isUseWorker = Boolean(isHadir && useQueue);
+    const targetUrl = isUseWorker ? `${WORKER_URL}/api/absen/submit` : `${API_BASE_URL}/absen/submit`;
+
     showLoading(true, "Mengirim Absensi...");
 
     try {
         let response;
         let res;
 
-        // Fungsi internal untuk mengirim data ke server utama (PHP) sebagai fallback
-        const sendToOriginServer = async () => {
-            console.log("Mengirim absensi via: Direct API (Server Utama)");
-            const formData = new FormData();
-            formData.append('kode_akses', kode);
-            formData.append('lat', lat);
-            formData.append('lng', lng);
-            formData.append('lokasi', alamat);
-            formData.append('keterangan', keterangan);
-            formData.append('status_kehadiran', statusKehadiran);
-            formData.append('status_verifikasi', statusVerifikasi);
-
-            if (window._isTidakHadir) {
-                const buktiIzinInput = document.getElementById('buktiIzin');
-                if (buktiIzinInput && buktiIzinInput.files.length > 0) {
-                    formData.append('foto', buktiIzinInput.files[0]);
-                }
-            } else {
-                const buktiHadirInput = document.getElementById('buktiHadir');
-                if (buktiHadirInput && buktiHadirInput.files.length > 0) {
-                    formData.append('foto', buktiHadirInput.files[0]);
-                } else if (b64) {
-                    const isPdf = b64.includes('application/pdf');
-                    const fileExt = isPdf ? 'pdf' : 'jpg';
-                    const mimeType = isPdf ? 'application/pdf' : 'image/jpeg';
-                    formData.append('foto', new File([dataURItoBlob(b64)], `absen_selfie.${fileExt}`, { type: mimeType }));
-                }
-            }
-
-            const originResponse = await fetchWithAuth(`${API_BASE_URL}/absen/submit`, { method: "POST", body: formData, token: token });
-            return await originResponse.json();
-        };
-
-        if (useQueue && !(isTerlambat || isLuarRadius || window._isTidakHadir || isGpsError || isKameraError)) {
+        if (isUseWorker) {
             try {
-                // 1. Coba kirim ke Worker/Queue
-                console.log("Mengirim absensi via: Cloudflare Queue");
-                const workerBody = JSON.stringify({
+                console.log(`Mengirim absensi via: Cloudflare Queue (${targetUrl})`);
+                const workerPayload = {
                     kode_akses: kode, kategori: currentJadwal.kategori, lat: lat, lng: lng,
                     lokasi: alamat, keterangan: keterangan, foto_base64: b64,
                     status_kehadiran: statusKehadiran, status_verifikasi: statusVerifikasi
-                });
-                response = await fetchWithAuth(`${WORKER_URL}/api/absen/submit`, { method: "POST", body: workerBody, token: token });
+                };
+                response = await fetchWithAuth(targetUrl, { method: "POST", body: JSON.stringify(workerPayload), token: token });
                 if (!response.ok && response.status >= 500) {
-                    throw new Error(`Worker web server error HTTP ${response.status}`);
+                    throw new Error(`Worker server error HTTP ${response.status}`);
                 }
                 res = await response.json();
-                if (!res.status) {
-                    const workerCode = Number(res.code);
-                    if (Number.isFinite(workerCode) && workerCode >= 400 && workerCode < 500) {
-                        throw new Error(res.message || `Worker menolak absensi (kode ${workerCode}).`);
-                    }
-                    throw new Error(res.message || 'Worker mengembalikan status false (server error / limit exceeded)');
+                if (res && res.status === false && Number(res.code) >= 500) {
+                    throw new Error(res.message || 'Worker server error / limit exceeded');
                 }
             } catch (workerError) {
-                // Respons validasi bisnis Worker (400, 403, 409, dll) bersifat final.
-                // Namun jika Worker error 401 (token mismatch/sync) atau 5xx/network error, fallback ke Server Utama (PHP).
-                if (res && res.status === false && Number(res.code) >= 400 && Number(res.code) < 500 && Number(res.code) !== 401) {
-                    throw new Error(res.message || `Absensi ditolak (kode ${res.code}).`);
-                }
-                // Jika Worker gagal (HTTP 5xx / 401 sync / timeout / network error), fallback otomatis ke Server Utama (PHP)
-                console.warn("[PWA Fallback] Worker Cloudflare bermasalah, fallback ke server utama (PHP):", workerError.message);
-                res = await sendToOriginServer();
-                if (!res.status) throw new Error(res.message || "Fallback ke server utama juga gagal.");
-                response = { ok: true }; // Anggap OK karena sudah ditangani via fallback PHP
+                // Block catch HANYA menangani error 500 / network failure
+                console.warn("[PWA Fallback] Worker bermasalah (error 500/network), fallback ke server utama (PHP):", workerError.message);
+                const formData = createPhpFormData();
+                const originResponse = await fetchWithAuth(`${API_BASE_URL}/absen/submit`, { method: "POST", body: formData, token: token });
+                res = await originResponse.json();
+                response = { ok: originResponse.ok };
             }
         } else {
-            // Langsung kirim ke server utama jika antrian tidak aktif
-            res = await sendToOriginServer();
-            if (!res.status) throw new Error(res.message || "Gagal mengirim ke server utama.");
-            response = { ok: true }; // Anggap OK
+            console.log(`Mengirim absensi via: Direct API Server Utama (${targetUrl})`);
+            const formData = createPhpFormData();
+            const originResponse = await fetchWithAuth(targetUrl, { method: "POST", body: formData, token: token });
+            res = await originResponse.json();
+            response = { ok: originResponse.ok };
         }
 
         // Cek hasil akhir setelah semua logika
@@ -2370,18 +2364,12 @@ async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
                 throw new Error(`Worker web server error HTTP ${response.status}`);
             }
             res = await response.json();
-            if (!res.status) {
-                const workerCode = Number(res.code);
-                if (Number.isFinite(workerCode) && workerCode >= 400 && workerCode < 500) {
-                    throw new Error(res.message || `Absensi Cepat ditolak (kode ${workerCode}).`);
-                }
-                throw new Error(res.message || 'Worker mengembalikan status false');
+            if (res && res.status === false && Number(res.code) >= 500) {
+                throw new Error(res.message || 'Worker server error / limit exceeded');
             }
         } catch (workerError) {
-            if (res && res.status === false && Number(res.code) >= 400 && Number(res.code) < 500) {
-                throw new Error(res.message || `Absensi Cepat ditolak (kode ${res.code}).`);
-            }
-            console.warn("Gagal mengirim absensi cepat ke Worker, fallback ke server utama.", workerError.message);
+            // Block catch HANYA menangani error 500 / network error
+            console.warn("Gagal mengirim absensi cepat ke Worker (error 500/network), fallback ke server utama.", workerError.message);
 
             const fallbackUrl = `${API_BASE_URL}/absen-cepat/submit`;
             const fallbackBody = new FormData();
