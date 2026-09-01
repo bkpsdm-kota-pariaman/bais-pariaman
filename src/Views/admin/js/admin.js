@@ -213,9 +213,10 @@ async function prosesLogin() {
             body: JSON.stringify({ username, password })
         });
 
-        if (result.status && result.data.token) {
+        const adminToken = result?.data?.access_token || result?.data?.token;
+        if (result.status && adminToken) {
             // Jika login berhasil, simpan token ke localStorage
-            localStorage.setItem('admin_jwt_token', result.data.token);
+            localStorage.setItem('admin_jwt_token', adminToken);
 
             // Periksa role untuk menu navigasi super admin
             checkSuperAdminUI();
@@ -732,13 +733,14 @@ async function cetakQrCode(kodeAkses, judul, tanggal, jamMulai, jamSelesai) {
 
     try {
         const result = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal/generate-token/${kodeAkses}`);
-        if (result.status && result.data.token) {
-            qrContainer.dataset.qrText = result.data.token;
+        const qrToken = result?.data?.access_token || result?.data?.token;
+        if (result.status && qrToken) {
+            qrContainer.dataset.qrText = qrToken;
             qrContainer.innerHTML = '';
             try {
                 if (qrCodeInstance) qrCodeInstance.clear();
                 qrCodeInstance = new QRCode(qrContainer, {
-                    text: result.data.token,
+                    text: qrToken,
                     width: 256,
                     height: 256,
                     colorDark: "#000000",

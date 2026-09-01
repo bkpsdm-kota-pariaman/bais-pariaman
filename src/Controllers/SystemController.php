@@ -74,7 +74,7 @@ class SystemController {
             return;
         }
 
-        Response::json(true, 200, "OK", [
+        Response::json(true, 200, "Link absensi cadangan berhasil diambil.", [
             'link_absensi_cadangan' => $link
         ]);
     }

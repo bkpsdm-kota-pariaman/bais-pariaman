@@ -70,6 +70,8 @@ return function(RouteCollector $r) {
     // =========================================================================
     // Profil ASN
     $r->addRoute('GET', '/profil/refresh', ['App\Controllers\MasterDataController', 'refreshProfil']);
+    $r->addRoute('POST', '/profil/sync', ['App\Controllers\MasterDataController', 'refreshProfil']);
+    $r->addRoute('GET', '/profil/sync', ['App\Controllers\MasterDataController', 'refreshProfil']);
     $r->addRoute('POST', '/profil/refresh-token', ['App\Controllers\MasterDataController', 'refreshToken']);
     $r->addRoute('PUT', '/profil/update', ['App\Controllers\MasterDataController', 'updateProfil']);
 

@@ -605,7 +605,6 @@ class MasterDataController {
         $config = require APP_PATH . '/config/config.php';
         $secretKey = $config['jwt_secret'];
         $issuedAt = time();
-        // Token berlaku selama 1 bulan (3600 detik * 24 jam * 30 hari)
         $expirationTime = $issuedAt + (3600 * 24 * 30); 
         
         $payload = [
@@ -625,24 +624,14 @@ class MasterDataController {
         $jwtToken = JWT::encode($payload, $secretKey, 'HS256');
 
         $responseData = [
-            'token' => $jwtToken,
-            'user' => [
-                'nama' => $pegawai['nama_pegawai'],
-                'jabatan' => $pegawai['jabatan'],
-                'opd' => $pegawai['perangkat_daerah']
-            ],
-            // Sertakan data lengkap untuk di-cache oleh worker
-            'pegawai_to_cache' => $payloadForCache
+            'access_token' => $jwtToken
         ];
 
-        Response::json(true, 200, "Profil berhasil disegarkan dari server.", $responseData);
+        Response::json(true, 200, "Profil berhasil disinkronkan.", $responseData);
     }
 
     public function refreshToken() {
         try {
-            // Validasi token yang ada. Jika tidak valid (kedaluwarsa, format salah),
-            // AuthHelper akan mengembalikan response error dan menghentikan eksekusi.
-            // Ini memastikan hanya token yang valid yang bisa di-refresh.
             $pegawaiData = AuthHelper::validateToken();
             $nip = $pegawaiData['nip'];
 
@@ -659,22 +648,19 @@ class MasterDataController {
             $pegawai = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$pegawai) {
-                // Log kegagalan karena pegawai tidak ditemukan
                 LogHelper::write('warning', "Refresh token gagal: Pegawai dengan NIP '{$nip}' tidak ditemukan di database.", ['nip' => $nip]);
                 Response::json(false, 404, "Data pegawai tidak ditemukan di database.", null);
                 return;
             }
 
-            // Tentukan role berdasarkan kolom comma-separated
             $rolesStr = isset($pegawai['role']) ? trim($pegawai['role']) : '';
             $roles = $rolesStr !== '' ? array_map('trim', explode(',', $rolesStr)) : ['asn'];
 
             $config = require APP_PATH . '/config/config.php';
             $secretKey = $config['jwt_secret'];
             $issuedAt = time();
-            // Token berlaku selama 1 bulan
             $expirationTime = $issuedAt + (3600 * 24 * 30); 
-            
+
             $payload = [
                 'iat' => $issuedAt,
                 'exp' => $expirationTime,
@@ -692,18 +678,16 @@ class MasterDataController {
             $jwtToken = JWT::encode($payload, $secretKey, 'HS256');
 
             $responseData = [
-                'token' => $jwtToken,
+                'access_token' => $jwtToken,
             ];
 
             Response::json(true, 200, "Token berhasil diperbarui.", $responseData);
         } catch (\Exception $e) {
-            // Tangkap semua jenis exception (PDO, dll)
             $nipForLog = isset($pegawaiData['nip']) ? $pegawaiData['nip'] : 'N/A';
             LogHelper::write('error', "Refresh token gagal karena exception: " . $e->getMessage(), [
                 'nip' => $nipForLog,
                 'exception_trace' => $e->getTraceAsString()
             ]);
-            // Beri response error umum ke client
             Response::json(false, 500, "Terjadi kesalahan internal saat mencoba memperbarui token.");
         }
     }
@@ -720,6 +704,24 @@ class MasterDataController {
         $lastUpdateString = $pegawaiDbData['updated_at'] ?? null;
 
         $userRoles = isset($pegawaiData['role']) ? (array) $pegawaiData['role'] : ['asn'];
+        $userRoles = array_map('strtolower', array_map('trim', $userRoles));
+        $isAdminOrSuperAdmin = in_array('admin', $userRoles) || in_array('super admin', $userRoles);
+
+        if (!$isAdminOrSuperAdmin && !empty($lastUpdateString) && $lastUpdateString !== '0000-00-00 00:00:00' && strtolower((string)$lastUpdateString) !== 'null') {
+            try {
+                $now = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
+                $lastUpdate = new DateTime($lastUpdateString, new DateTimeZone('Asia/Jakarta'));
+                
+                $nextAllowedUpdate = (clone $lastUpdate)->modify('+1 month');
+
+                if ($now < $nextAllowedUpdate) {
+                    Response::json(false, 429, "Anda hanya dapat mengubah profil sekali dalam sebulan. Perubahan berikutnya dapat dilakukan setelah " . $nextAllowedUpdate->format('d F Y') . ". Hubungi BKPSDM Kota Pariaman jika perlu perubahan mendesak.");
+                    return;
+                }
+            } catch (\Exception $e) {
+                // Abaikan jika ada error parsing tanggal, biarkan user melanjutkan.
+            }
+        }
         $userRoles = array_map('strtolower', array_map('trim', $userRoles));
         $isAdminOrSuperAdmin = in_array('admin', $userRoles) || in_array('super admin', $userRoles);
 
@@ -787,8 +789,6 @@ class MasterDataController {
         
         $sql = "UPDATE app_absensi_data_pegawai SET " . implode(', ', $updates) . " WHERE nip = :nip";
         $stmt = $db->prepare($sql);
-        
-        // Eksekusi update.
         $stmt->execute($params);
 
         // --- LOGIKA BARU: Lakukan sinkronisasi SETELAH menulis ke DB ---
@@ -801,20 +801,17 @@ class MasterDataController {
             'jenis_asn' => $pegawaiDbData['jenis_asn'],
             'role' => $pegawaiData['role'] ?? ['asn']
         ];
-        $syncSuccess = $this->syncPegawaiToKv('PUT', $nip, $payloadForKv, true);
+        $syncSuccess = $this->syncPegawaiToKvFromProfil('PUT', $nip, $payloadForKv, true);
         
         if ($syncSuccess) {
             $db->prepare("UPDATE app_absensi_data_pegawai SET kv_sync_status = 1 WHERE nip = :nip")->execute([':nip' => $nip]);
         }
 
-        // --- LOGIKA BARU: Generate token baru secara langsung, tanpa memanggil refresh() ---
-        // Ini untuk menghindari sinkronisasi ganda ke KV.
         $config = require APP_PATH . '/config/config.php';
         $secretKey = $config['jwt_secret'];
         $issuedAt = time();
         $expirationTime = $issuedAt + (3600 * 24 * 30);
 
-        // Gunakan data yang sudah di-payload untuk KV karena itu yang paling baru.
         $payloadForToken = [
             'iat' => $issuedAt,
             'exp' => $expirationTime,
@@ -832,12 +829,7 @@ class MasterDataController {
         $jwtToken = JWT::encode($payloadForToken, $secretKey, 'HS256');
 
         $responseData = [
-            'token' => $jwtToken,
-            'user' => [
-                'nama' => $payloadForKv['nama_pegawai'],
-                'jabatan' => $payloadForKv['jabatan'],
-                'opd' => $payloadForKv['perangkat_daerah']
-            ]
+            'access_token' => $jwtToken
         ];
 
         $message = "Profil berhasil diperbarui.";
@@ -848,7 +840,6 @@ class MasterDataController {
 
     /**
      * Menjalankan permintaan ke Cloudflare Worker untuk menyinkronkan (PUT/DELETE) cache KV.
-     * Dapat berjalan dalam mode fire-and-forget atau blocking.
      *
      * @param string $method Metode HTTP (PUT atau DELETE).
      * @param string $nip NIP pegawai yang cache-nya akan disinkronkan.

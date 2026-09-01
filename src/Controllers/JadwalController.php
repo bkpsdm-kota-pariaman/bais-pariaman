@@ -32,25 +32,6 @@ class JadwalController {
         // 2. Dapatkan koneksi database
         $db = Database::getConnection();
 
-        // Cek absensi ganda untuk pengguna yang diidentifikasi dari token
-        $stmtCheck = $db->prepare("SELECT waktu FROM app_absensi_data_absensi WHERE nip = :nip AND kode_akses = :kode_akses");
-        $stmtCheck->execute([':nip' => $pegawaiData['nip'], ':kode_akses' => $kodeAkses]);
-        $existingAbsen = $stmtCheck->fetch(PDO::FETCH_ASSOC);
-
-        // Cek jika record ada DAN kolom 'waktu' tidak NULL.
-        if ($existingAbsen && $existingAbsen['waktu'] !== null) {
-            $waktuFormatted = $existingAbsen['waktu'];
-            try {
-                $date = new DateTime($existingAbsen['waktu']);
-                $bulan = array(1=>'Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember');
-                $namaBulan = $bulan[ (int)$date->format('n') ];
-                $waktuFormatted = $date->format('d') . ' ' . $namaBulan . ' ' . $date->format('Y H:i:s');
-            } catch (\Exception $e) {}
-
-            Response::json(false, 409, "Anda sudah tercatat melakukan absensi untuk kegiatan ini pada: " . $waktuFormatted);
-            return;
-        }
-
         $now = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
         $currentDate = $now->format('Y-m-d');
 
@@ -70,13 +51,13 @@ class JadwalController {
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
 
         if (!$jadwal) {
-            Response::json(false, 404, "Jadwal kegiatan tidak ditemukan atau sudah tidak berlaku untuk hari ini.");
+            Response::json(false, 404, "Jadwal kegiatan tidak ditemukan atau sudah tidak berlaku untuk hari ini.", null);
             return;
         }
 
         $startTime = new DateTime($jadwal['tanggal'] . ' ' . $jadwal['jam_mulai'], new DateTimeZone('Asia/Jakarta'));
         if ($now < $startTime) {
-            Response::json(false, 403, "Absensi untuk kegiatan ini belum dibuka. Silakan coba lagi pada atau setelah pukul " . $startTime->format('H:i') . " WIB.");
+            Response::json(false, 403, "Absensi untuk kegiatan ini belum dibuka. Silakan coba lagi pada atau setelah pukul " . $startTime->format('H:i') . " WIB.", null);
             return;
         }
 
@@ -89,12 +70,11 @@ class JadwalController {
         $endTime = new DateTime($jadwal['tanggal'] . ' ' . $jadwal['jam_selesai'], new DateTimeZone('Asia/Jakarta'));
         $isTerlambat = $now > $endTime;
 
-        $responsePayload = [
-            'jadwal' => $jadwal,
+        $responsePayload = array_merge($jadwal, [
             'target_opd' => $targetOpd,
             'is_terlambat' => $isTerlambat,
             'server_time' => $now->format('Y-m-d H:i:s')
-        ];
+        ]);
 
         Response::json(true, 200, "Jadwal kegiatan berhasil ditemukan", $responsePayload);
     }

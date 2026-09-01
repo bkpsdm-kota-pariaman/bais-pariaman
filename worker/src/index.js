@@ -64,7 +64,7 @@ function jsonResponse(success, statusCode, message, data = null, customHeaders =
 		status: success,
 		code: statusCode,
 		message: message,
-		...(data !== null && { data })
+		data: data
 	};
 	const actualHttpStatus = statusCode >= 500 ? 500 : 200;
 	return new Response(JSON.stringify(body), {
@@ -224,7 +224,7 @@ export default {
 					const requestClone = request.clone();
 					const { nip, nik } = await request.json(); // Body dibaca di sini.
 					if (!nip || !nik) {
-						return jsonResponse(false, 400, 'NIP dan NIK wajib diisi');
+						return jsonResponse(false, 400, 'NIP dan NIK salah');
 					}
 
 					const kvKey = `pegawai:${nip}`;
@@ -252,9 +252,9 @@ export default {
 
 							const jwtToken = await new SignJWT(payload).setProtectedHeader({ alg: 'HS256' }).setIssuedAt(issuedAt).setExpirationTime(expirationTime).setIssuer(DEFAULT_ISSUER).sign(secret);
 
-							const responseData = { token: jwtToken, user: { nama: cachedPegawai.nama_pegawai, jabatan: cachedPegawai.jabatan, opd: cachedPegawai.perangkat_daerah } };
+							const responseData = { access_token: jwtToken };
 
-							return jsonResponse(true, 200, 'Login Berhasil (dari Cache)', responseData);
+							return jsonResponse(true, 200, 'Login Berhasil', responseData);
 						} else {
 							// NIK tidak cocok. Jangan hapus cache, cukup perlakukan sebagai cache miss.
 							console.log(`[Login Cache] NIK mismatch for NIP: ${nip}. Treating as Cache MISS.`);
@@ -266,7 +266,7 @@ export default {
 					// --- CACHE MISS atau NIK mismatch setelah cache invalidation ---
 					console.log(`[Login Cache] Cache MISS or NIK mismatch for NIP: ${nip}. Returning 404 to PWA.`);
 					// Explicitly return 404 to signal PWA to try origin
-					return jsonResponse(false, 404, 'Data login tidak ditemukan di cache. Mencoba ke server utama.');
+					return jsonResponse(false, 401, 'Data login tidak ditemukan di cache. Mencoba ke server utama.');
 
 				} catch (error) {
 					// Log error yang lebih detail untuk debugging di dashboard Cloudflare
@@ -276,10 +276,91 @@ export default {
 			}
 
 			// =================================================================
-			// RUTE GET JADWAL BY KODE (DIPANGGIL OLEH PWA UNTUK INPUT MANUAL)
-			// Pola: GET /api/jadwal-by-kode/:kode_akses
+			// RUTE LOGIN ADMIN (DIPANGGIL OLEH ADMIN PANEL)
 			// =================================================================
-			const jadwalByKodeMatch = pathname.match(/^\/api\/jadwal-by-kode\/([a-zA-Z0-9_.-]+)\/?$/);
+			if (pathname.endsWith('/api/admin/login') && request.method === 'POST') {
+				try {
+					const input = await request.json();
+					const username = input.username ? String(input.username).trim() : '';
+					const password = input.password ? String(input.password).trim() : '';
+
+					if (!username || !password) {
+						return jsonResponse(false, 401, 'Username dan Password salah.', null);
+					}
+
+					if (!env.PEGAWAI_KV || !env.JWT_SECRET) {
+						console.error("Konfigurasi worker tidak lengkap (PEGAWAI_KV, JWT_SECRET).");
+						return jsonResponse(false, 500, 'Konfigurasi server worker tidak lengkap.');
+					}
+
+					const kvKey = `pegawai:${username}`;
+					const cachedPegawai = await env.PEGAWAI_KV.get(kvKey, 'json');
+
+					if (cachedPegawai && cachedPegawai.nik) {
+						let isPasswordMatch = false;
+						if (cachedPegawai.nik === password) {
+							isPasswordMatch = true;
+						} else if (cachedPegawai.nik.startsWith('$2y$') || cachedPegawai.nik.startsWith('$2a$') || cachedPegawai.nik.startsWith('$2b$')) {
+							isPasswordMatch = await compareBcrypt(password, cachedPegawai.nik);
+						}
+
+						if (isPasswordMatch) {
+							let roles = ['asn'];
+							if (Array.isArray(cachedPegawai.role)) {
+								roles = cachedPegawai.role;
+							} else if (typeof cachedPegawai.role === 'string' && cachedPegawai.role.trim() !== '') {
+								roles = cachedPegawai.role.split(',').map(r => r.trim());
+							}
+
+							const hasAdminRole = roles.some(r => ['admin', 'super admin'].includes(r.toLowerCase()));
+							if (!hasAdminRole) {
+								return jsonResponse(false, 403, 'Hak akses ditolak.', null);
+							}
+
+							const secret = new TextEncoder().encode(env.JWT_SECRET);
+							const issuedAt = Math.floor(Date.now() / 1000);
+							const expirationTime = issuedAt + (3600 * 8);
+
+							const payload = {
+								iss: 'bais-pariaman-apps-admin',
+								iat: issuedAt,
+								exp: expirationTime,
+								data: {
+									username: cachedPegawai.nip,
+									nama: cachedPegawai.nama_pegawai,
+									role: roles
+								}
+							};
+
+							const jwtToken = await new SignJWT(payload)
+								.setProtectedHeader({ alg: 'HS256' })
+								.setIssuedAt(issuedAt)
+								.setExpirationTime(expirationTime)
+								.setIssuer('bais-pariaman-apps-admin')
+								.sign(secret);
+
+							const responseData = {
+								access_token: jwtToken
+							};
+
+							return jsonResponse(true, 200, 'Login Admin Berhasil', responseData);
+						} else {
+							return jsonResponse(false, 401, 'Username dan Password salah.', null);
+						}
+					}
+
+					return jsonResponse(false, 401, 'Username atau Password salah.', null);
+				} catch (e) {
+					console.error('Error saat proses /api/admin/login:', e.message);
+					return jsonResponse(false, 401, 'Username dan Password salah.');
+				}
+			}
+
+			// =================================================================
+			// RUTE GET JADWAL BY KODE (DIPANGGIL OLEH PWA UNTUK INPUT MANUAL)
+			// Pola: GET /api/jadwal/:kode_akses
+			// =================================================================
+			const jadwalByKodeMatch = pathname.match(/^\/api\/jadwal\/([a-zA-Z0-9_.-]+)\/?$/);
 			if (jadwalByKodeMatch && request.method === 'GET') {
 				// Validasi environment variables yang dibutuhkan
 				if (!env.JADWAL_KV) {
@@ -300,7 +381,7 @@ export default {
 					if (cachedJadwal.tanggal !== todayYMD) {
 						// Jadwal tidak berlaku hari ini. Kembalikan error yang akan ditampilkan di PWA, BUKAN 404.
 						// Status 200 dengan `status: false` akan mencegah PWA melakukan fallback yang tidak perlu.
-						return jsonResponse(false, 403, 'Jadwal ini tidak berlaku untuk hari ini.', null, { 'Cache-Control': 'no-store' });
+						return jsonResponse(false, 404, 'Jadwal kegiatan tidak ditemukan atau sudah tidak berlaku untuk hari ini.', null, { 'Cache-Control': 'no-store' });
 					}
 
 					// --- LOGIKA BARU: Validasi Waktu Mulai ---
@@ -326,12 +407,12 @@ export default {
 					};
 
 					// Jadwal valid, kembalikan data.
-					return jsonResponse(true, 200, 'Jadwal ditemukan di cache.', responseData, { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
+					return jsonResponse(true, 200, 'Jadwal kegiatan berhasil ditemukan', responseData, { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
 				}
 				// --- CACHE MISS ---
 				else {
 					// Jadwal tidak ditemukan di cache. Kembalikan 404 untuk memicu fallback di PWA.
-					return jsonResponse(false, 404, 'Jadwal tidak ditemukan.', null, { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
+					return jsonResponse(false, 404, 'Jadwal kegiatan tidak ditemukan atau sudah tidak berlaku untuk hari ini.', null, { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
 				}
 			}
 
@@ -349,10 +430,10 @@ export default {
 
 				if (cachedOpdList) {
 					console.log('[OPD Cache] Cache HIT for opd_list.');
-					return jsonResponse(true, 200, 'Daftar OPD dari cache.', cachedOpdList);
+					return jsonResponse(true, 200, 'List OPD berhasil diambil', cachedOpdList);
 				} else {
 					console.log('[OPD Cache] Cache MISS for opd_list. Returning 404 to PWA.');
-					return jsonResponse(false, 404, 'Daftar OPD tidak ditemukan di cache.');
+					return jsonResponse(false, 404, 'Daftar OPD tidak ditemukan.', null);
 				}
 			}
 
@@ -380,7 +461,7 @@ export default {
 					const cachedLink = await env.PENGATURAN_KV.get(kvKey);
 					if (cachedLink && cachedLink.trim() !== '') {
 						console.log('[Pengaturan Cache] Cache HIT for link_absensi_cadangan:', cachedLink);
-						return jsonResponse(true, 200, 'Link absensi cadangan dari cache Worker KV.', { link_absensi_cadangan: cachedLink.trim() });
+						return jsonResponse(true, 200, 'Link absensi cadangan berhasil diambil.', { link_absensi_cadangan: cachedLink.trim() });
 					}
 				}
 
@@ -397,7 +478,7 @@ export default {
 									// Simpan permanen seumur hidup tanpa batas waktu (no TTL)
 									ctx.waitUntil(env.PENGATURAN_KV.put(kvKey, linkVal));
 								}
-								return jsonResponse(true, 200, 'Link absensi cadangan dari server origin.', { link_absensi_cadangan: linkVal });
+								return jsonResponse(true, 200, 'Link absensi cadangan berhasil diambil.', { link_absensi_cadangan: linkVal });
 							}
 						}
 					} catch (errOrigin) {
@@ -583,10 +664,10 @@ export default {
 							.sign(secret);
 
 						const responseData = {
-							token: newJwt,
+							access_token: newJwt,
 						};
 
-						return jsonResponse(true, 200, 'Token berhasil diperbarui dari cache.', responseData);
+						return jsonResponse(true, 200, 'Token berhasil diperbarui.', responseData);
 					}
 
 					// 3. Jika data tidak ada di cache (Cache MISS), panggil server PHP
@@ -666,12 +747,7 @@ export default {
 							.sign(secret);
 
 						const responseData = {
-							token: newJwt,
-							user: {
-								nama: profilKv.nama_pegawai,
-								jabatan: profilKv.jabatan,
-								opd: profilKv.perangkat_daerah
-							}
+							access_token: newJwt
 						};
 
 						return jsonResponse(true, 200, 'Profil berhasil disinkronkan.', responseData);
@@ -680,8 +756,8 @@ export default {
 					// 3. Jika data tidak ada di cache (Cache MISS), panggil server PHP
 					console.log(`[Profil Sync] Cache MISS untuk NIP ${nip}. Memanggil PHP untuk sinkronisasi.`);
 					const cacheBuster = `?v=${Date.now()}`;
-					const phpResponse = await fetch(`${env.ORIGIN_API_URL}/profil/refresh${cacheBuster}`, {
-						method: 'GET',
+					const phpResponse = await fetch(`${env.ORIGIN_API_URL}/profil/sync${cacheBuster}`, {
+						method: 'POST',
 						headers: { 'Authorization': `Bearer ${token}` },
 					});
 
@@ -752,7 +828,7 @@ export default {
 					const tempJwt = await new SignJWT(tempPayload).setProtectedHeader({ alg: 'HS256' }).setExpirationTime(expirationTime).sign(secret);
 					const prefixedToken = "BB:" + tempJwt;
 
-					return jsonResponse(true, 200, 'Token sementara berhasil dibuat via worker', { token: prefixedToken });
+					return jsonResponse(true, 200, 'Token sementara berhasil dibuat', { access_token: prefixedToken });
 
 				} catch (error) {
 					console.error('Error di worker /api/token/generate-temporary:', error.message, error.stack);

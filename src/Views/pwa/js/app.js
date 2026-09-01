@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.267'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.284'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -919,7 +919,7 @@ async function prosesLogin(e) {
             }
             res = await response.json();
             if (!res.status) {
-                if (res.code === 404 || res.code >= 500) {
+                if (res.code === 401 || res.code >= 500) {
                     throw new Error("Worker Cache MISS / Server Error");
                 }
                 Swal.fire('Gagal', res.message || 'Terjadi kesalahan saat login.', 'error');
@@ -936,8 +936,9 @@ async function prosesLogin(e) {
             res = await response.json();
         }
 
-        if (res && res.status && res.data && res.data.token) {
-            await handleSuccessfulLogin(res.data.token);
+        const accessToken = res?.data?.access_token || res?.data?.token;
+        if (res && res.status && accessToken) {
+            await handleSuccessfulLogin(accessToken);
         } else {
             Swal.fire('Gagal', res?.message || 'Terjadi kesalahan saat login.', 'error');
         }
@@ -1011,33 +1012,68 @@ async function fetchWithAuth(url, options = {}) {
     }
 
     const fetchOptions = { ...options, headers: { 'Authorization': `Bearer ${token}`, ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }), ...options.headers, }, };
-
     const finalUrl = appendCacheBuster(url);
     const response = await fetch(finalUrl, fetchOptions);
 
-    if (response.status === 401) {
-        // Jika server mengembalikan 401 (Unauthorized), berarti token
-        // tidak valid atau sesinya telah berakhir di server. Paksa logout.
-        forceLogout();
-        throw new Error("Sesi habis.");
+    if (response.status >= 500) {
+        let serverMessage = `HTTP ${response.status}`;
+        try {
+            const errorBody = await response.clone().json();
+            serverMessage = errorBody?.message || serverMessage;
+        } catch (jsonError) {
+            console.error("Response server 5xx bukan JSON:", jsonError);
+        }
+        throw new Error(`${serverMessage} (HTTP ${response.status})`);
     }
 
-    // Jika request ke Worker, cek apakah response JSON mengandung status code 401
-    if (url.startsWith(WORKER_URL)) {
+    // Semua HTTP 4xx adalah response data/auth/business untuk ditangani caller.
+    // Hanya HTTP 5xx atau kegagalan network yang boleh masuk block catch fallback.
+    return response;
+}
+
+/**
+ * Menangani response endpoint utama dan fallback secara konsisten.
+ * @param {object} data Request utama: body, fallbackBody, token, method, headers.
+ * @param {string} urlUtama Endpoint utama.
+ * @param {Function} callbackSuccess Callback sukses (json, response).
+ * @param {Function} callbackError Callback error (message, json, error).
+ * @param {string|null} urlFallback Endpoint fallback PHP untuk error 5xx/network.
+ */
+async function requestWithResponseHandler(data, urlUtama, callbackSuccess, callbackError, urlFallback = null) {
+    const request = data || {};
+    const requestOptions = {
+        method: request.method || 'POST',
+        body: typeof request.body === 'function' ? request.body() : request.body,
+        token: request.token,
+        headers: request.headers
+    };
+
+    try {
+        const response = await fetchWithAuth(urlUtama, requestOptions);
+        const json = await response.json();
+        if (json?.status === false && Number(json.code) >= 500) {
+            throw new Error(json.message || `HTTP ${json.code}`);
+        }
+        if (json?.status === false) return callbackError(json.message || 'Request ditolak.', json, null);
+        return callbackSuccess(json, response);
+    } catch (primaryError) {
+        if (!urlFallback) return callbackError(primaryError.message, null, primaryError);
+        console.warn('[PWA Fallback] Endpoint utama error 500/network, mencoba server PHP:', primaryError);
         try {
-            const clone = response.clone();
-            const resJson = await clone.json();
-            if (resJson && resJson.code === 401) {
-                // Worker auth error tidak boleh langsung forceLogout karena Worker hanya secondary layer.
-                // Lemparkan error agar caller bisa melakukan fallback ke server utama PHP.
-                throw new Error("Worker sesi/token mismatch.");
-            }
-        } catch (e) {
-            if (e.message === "Worker sesi/token mismatch." || e.message === "Sesi habis.") throw e;
+            const fallbackResponse = await fetchWithAuth(urlFallback, {
+                method: request.fallbackMethod || request.method || 'POST',
+                body: typeof request.fallbackBody === 'function' ? request.fallbackBody() : request.fallbackBody,
+                token: request.token,
+                headers: request.fallbackHeaders
+            });
+            const fallbackJson = await fallbackResponse.json();
+            if (fallbackJson?.status) return callbackSuccess(fallbackJson, fallbackResponse);
+            return callbackError(fallbackJson?.message || 'Server PHP menolak request.', fallbackJson, null);
+        } catch (fallbackError) {
+            console.error('[PWA Fallback] Server PHP error lengkap:', fallbackError);
+            return callbackError(fallbackError.message, null, fallbackError);
         }
     }
-
-    return response;
 }
 
 // Deduplicate OPD downloads in the same page and reject stale responses across tabs.
@@ -1165,8 +1201,9 @@ async function generateUserQrToken() {
             const response = await fetchWithAuth(url, { method: 'POST' });
             if (!response.ok) throw new Error(`Request to ${url} failed with status ${response.status}`);
             const res = await response.json();
-            if (!res.status || !res.data || !res.data.token) throw new Error(res.message || `Request to ${url} gagal.`);
-            return res.data.token;
+            const newToken = res?.data?.access_token || res?.data?.token;
+            if (!res.status || !res.data || !newToken) throw new Error(res.message || `Request to ${url} gagal.`);
+            return newToken;
         };
 
         try {
@@ -1210,7 +1247,7 @@ function playBeepSound() {
         const ctx = new AudioContext();
 
         if (ctx.state === 'suspended') {
-            ctx.resume().catch(() => {});
+            ctx.resume().catch(() => { });
         }
 
         const osc = ctx.createOscillator();
@@ -1226,7 +1263,7 @@ function playBeepSound() {
         // Bersihkan AudioContext agar tidak menumpuk di memori
         setTimeout(() => {
             if (ctx && typeof ctx.close === 'function') {
-                ctx.close().catch(() => {});
+                ctx.close().catch(() => { });
             }
         }, 300);
     } catch (e) {
@@ -1462,7 +1499,8 @@ async function silentlyRefreshTokenIfNeeded() {
                 // 1. Coba refresh via Worker. fetchWithAuth akan mengambil token dari localForage.
                 response = await fetchWithAuth(`${WORKER_URL}/api/profil/refresh-token`, { method: 'POST' });
                 res = await response.json();
-                if (!res.status || !res.data || !res.data.token) throw new Error(res.message || "Gagal refresh token di worker");
+                const newRefreshedToken = res?.data?.access_token || res?.data?.token;
+                if (!res.status || !res.data || !newRefreshedToken) throw new Error(res.message || "Gagal refresh token di worker");
             } catch (workerError) {
                 // 2. Jika worker gagal, fallback ke server PHP.
                 console.warn("Refresh token via Worker gagal, fallback ke server utama.", workerError.message);
@@ -1472,9 +1510,10 @@ async function silentlyRefreshTokenIfNeeded() {
                 }
             }
 
-            if (res && res.status && res.data && res.data.token) {
+            const tokenToSave = res?.data?.access_token || res?.data?.token;
+            if (res && res.status && res.data && tokenToSave) {
                 // Ganti token lama di localForage dengan yang baru.
-                await localforage.setItem("asn_jwt_token", res.data.token);
+                await localforage.setItem("asn_jwt_token", tokenToSave);
                 console.log("Token berhasil diperbarui di latar belakang.");
             } else {
                 console.warn("Gagal memperbarui token di latar belakang:", res?.message);
@@ -1506,15 +1545,16 @@ async function refreshProfil() {
             if (!res.status) throw new Error(res.message || "Gagal sinkronisasi profil di worker");
         } catch (workerError) {
             console.warn("Gagal sinkronisasi profil via Worker, fallback ke server utama:", workerError.message);
-            const fallbackResponse = await fetchWithAuth(`${API_BASE_URL}/profil/refresh`, { method: "GET" });
+            const fallbackResponse = await fetchWithAuth(`${API_BASE_URL}/profil/sync`, { method: "POST" });
             if (!fallbackResponse.ok) {
                 throw new Error(`Server utama merespon dengan status ${fallbackResponse.status}`);
             }
             res = await fallbackResponse.json();
         }
 
-        if (res && res.status && res.data && res.data.token) {
-            await localforage.setItem("asn_jwt_token", res.data.token);
+        const syncToken = res?.data?.access_token || res?.data?.token;
+        if (res && res.status && res.data && syncToken) {
+            await localforage.setItem("asn_jwt_token", syncToken);
             renderProfil();
             Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3500, icon: 'success', title: res.message || 'Profil berhasil diperbarui!' });
         } else {
@@ -1606,10 +1646,11 @@ async function simpanProfil(e) {
         const res = await response.json();
         // PERBAIKAN: Endpoint 'update' sekarang langsung mengembalikan token baru (karena memanggil refresh() di backend).
         // Tidak perlu lagi memanggil refreshProfil() secara terpisah.
-        if (res.status && res.data.token) {
+        const updatedToken = res?.data?.access_token || res?.data?.token;
+        if (res.status && updatedToken) {
             tutupModalEditProfil();
             // Langsung simpan token baru yang diterima dari response
-            await localforage.setItem("asn_jwt_token", res.data.token);
+            await localforage.setItem("asn_jwt_token", updatedToken);
             // Render ulang profil di dashboard
             renderProfil();
             // Tampilkan pesan sukses dari server
@@ -1887,7 +1928,7 @@ async function handleServerValidation(kode, bypassHistoryCheck = false) {
         try {
             // 1. Coba ambil dari Worker
             console.log("Mencoba validasi jadwal via Worker...");
-            response = await fetch(`${WORKER_URL}/api/jadwal-by-kode/${kode}${cacheBuster}`);
+            response = await fetch(`${WORKER_URL}/api/jadwal/${kode}${cacheBuster}`);
             if (!response.ok && response.status >= 500) {
                 throw new Error(`Worker web server error HTTP ${response.status}`);
             }
@@ -2256,61 +2297,39 @@ async function kirimAbsensi() {
     const isUseWorker = Boolean(isHadir && useQueue);
     const targetUrl = isUseWorker ? `${WORKER_URL}/api/absen/submit` : `${API_BASE_URL}/absen/submit`;
 
+    const workerPayload = {
+        kode_akses: kode, kategori: currentJadwal.kategori, lat: lat, lng: lng,
+        lokasi: alamat, keterangan: keterangan, foto_base64: b64,
+        status_kehadiran: statusKehadiran, status_verifikasi: statusVerifikasi
+    };
+    const requestData = isUseWorker
+        ? { body: JSON.stringify(workerPayload), fallbackBody: createPhpFormData, token, method: 'POST' }
+        : { body: createPhpFormData, token, method: 'POST' };
+    const fallbackUrl = isUseWorker ? `${API_BASE_URL}/absen/submit` : null;
+
     showLoading(true, "Mengirim Absensi...");
 
     try {
-        let response;
-        let res;
-
-        if (isUseWorker) {
-            try {
-                console.log(`Mengirim absensi via: Cloudflare Queue (${targetUrl})`);
-                const workerPayload = {
-                    kode_akses: kode, kategori: currentJadwal.kategori, lat: lat, lng: lng,
-                    lokasi: alamat, keterangan: keterangan, foto_base64: b64,
-                    status_kehadiran: statusKehadiran, status_verifikasi: statusVerifikasi
-                };
-                response = await fetchWithAuth(targetUrl, { method: "POST", body: JSON.stringify(workerPayload), token: token });
-                if (!response.ok && response.status >= 500) {
-                    throw new Error(`Worker server error HTTP ${response.status}`);
+        console.log(`Mengirim absensi via: ${isUseWorker ? 'Cloudflare Queue' : 'Direct API Server Utama'} (${targetUrl})`);
+        await requestWithResponseHandler(
+            requestData,
+            targetUrl,
+            async (res) => {
+                playBeepSound();
+                const userForHistory = await parseJwt(token);
+                if (userForHistory && userForHistory.nip && currentJadwal) {
+                    const waktuServer = res.data?.waktu || getCurrentServerTime().toISOString();
+                    await simpanRiwayatLokal(currentJadwal.judul, currentJadwal.kategori, waktuServer, currentJadwal.kode_akses, userForHistory.nip);
                 }
-                res = await response.json();
-                if (res && res.status === false && Number(res.code) >= 500) {
-                    throw new Error(res.message || 'Worker server error / limit exceeded');
-                }
-            } catch (workerError) {
-                // Block catch HANYA menangani error 500 / network failure
-                console.warn("[PWA Fallback] Worker bermasalah (error 500/network), fallback ke server utama (PHP):", workerError.message);
-                const formData = createPhpFormData();
-                const originResponse = await fetchWithAuth(`${API_BASE_URL}/absen/submit`, { method: "POST", body: formData, token: token });
-                res = await originResponse.json();
-                response = { ok: originResponse.ok };
-            }
-        } else {
-            console.log(`Mengirim absensi via: Direct API Server Utama (${targetUrl})`);
-            const formData = createPhpFormData();
-            const originResponse = await fetchWithAuth(targetUrl, { method: "POST", body: formData, token: token });
-            res = await originResponse.json();
-            response = { ok: originResponse.ok };
-        }
-
-        // Cek hasil akhir setelah semua logika
-        if (response.ok && res.status) {
-            playBeepSound();
-            const userForHistory = await parseJwt(token);
-            if (userForHistory && userForHistory.nip && currentJadwal) {
-                const waktuServer = res.data?.waktu || getCurrentServerTime().toISOString();
-                await simpanRiwayatLokal(currentJadwal.judul, currentJadwal.kategori, waktuServer, currentJadwal.kode_akses, userForHistory.nip);
-            }
-            Swal.fire('BERHASIL!', res.message || 'Data Absensi telah diterima.', 'success');
-            batalAbsen();
-        } else {
-            // Error ini akan ditangkap oleh blok catch di bawah
-            throw new Error(res.message || "Terjadi kesalahan dari server.");
-        }
-    } catch (finalError) {
-        console.error("Error saat kirim absensi:", finalError);
-        Swal.fire("Gagal Mengirim", "Tidak dapat mengirim data absensi. Periksa koneksi internet Anda dan coba lagi.", "error");
+                Swal.fire('BERHASIL!', res.message || 'Data Absensi telah diterima.', 'success');
+                batalAbsen();
+            },
+            (message, res, error) => {
+                if (error) console.error('Error saat kirim absensi:', error);
+                Swal.fire('Gagal Mengirim', message || res?.message || 'Data absensi ditolak.', 'error');
+            },
+            fallbackUrl
+        );
     } finally {
         window._isSubmittingAbsen = false;
         showLoading(false);
@@ -2546,7 +2565,7 @@ async function mulaiKameraSelfie() {
 
     // Hentikan stream yang mungkin masih berjalan sebelum memulai yang baru
     if (videoStream) {
-        try { videoStream.getTracks().forEach(track => track.stop()); } catch (e) {}
+        try { videoStream.getTracks().forEach(track => track.stop()); } catch (e) { }
         videoStream = null;
     }
 
@@ -2554,7 +2573,7 @@ async function mulaiKameraSelfie() {
     const startStream = async (deviceId) => {
         const currentGen = ++selfieCameraGeneration;
         if (videoStream) {
-            try { videoStream.getTracks().forEach(track => track.stop()); } catch (e) {}
+            try { videoStream.getTracks().forEach(track => track.stop()); } catch (e) { }
             videoStream = null;
         }
         const constraints = {
@@ -2569,7 +2588,7 @@ async function mulaiKameraSelfie() {
                 return;
             }
             if (videoStream) {
-                try { videoStream.getTracks().forEach(track => track.stop()); } catch (e) {}
+                try { videoStream.getTracks().forEach(track => track.stop()); } catch (e) { }
             }
             videoStream = stream;
             if (v) v.srcObject = videoStream;
@@ -2742,7 +2761,7 @@ async function setupAbsenForm(jadwalData) {
     cleanupAbsenForm();
 
     showLoading(false); // Pastikan loading disembunyikan
-    
+
     // Normalisasikan currentJadwal agar properti dari API server PHP (res.data.jadwal) di-flatten secara konsisten
     if (jadwalData && jadwalData.jadwal) {
         currentJadwal = {

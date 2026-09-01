@@ -18,7 +18,7 @@ class AuthController {
 
         // Validasi input kosong
         if (!isset($input['nip']) || !isset($input['nik'])) {
-            Response::json(false, 400, "NIP dan NIK wajib diisi", null);
+            Response::json(false, 400, "NIP dan NIK salah", null);
         }
 
         $nip = trim($input['nip']);
@@ -98,22 +98,7 @@ class AuthController {
 
         // 5. Kembalikan Response Sukses ke PWA dengan format kaku
         $responseData = [
-            'token' => $jwtToken,
-            'user' => [
-                'nama' => $pegawai['nama_pegawai'],
-                'jabatan' => $pegawai['jabatan'],
-                'opd' => $pegawai['perangkat_daerah']
-            ],
-            // Data ini akan ditangkap oleh Worker dan disimpan di KV
-            'pegawai_to_cache' => [
-                'nip' => $pegawai['nip'],
-                'nik' => $pegawai['nik'], // NIK sangat penting untuk validasi di cache
-                'nama_pegawai' => $pegawai['nama_pegawai'],
-                'perangkat_daerah' => $pegawai['perangkat_daerah'],
-                'jabatan' => $pegawai['jabatan'], // Jabatan diperlukan untuk cache
-                'role' => $roles,
-                'jenis_asn' => $pegawai['jenis_asn']
-            ]
+            'access_token' => $jwtToken
         ];
 
         Response::json(true, 200, "Login Berhasil", $responseData);
@@ -144,7 +129,7 @@ class AuthController {
 
         $jwtToken = JWT::encode($payload, $secretKey, 'HS256');
 
-        Response::json(true, 200, "Token sementara berhasil dibuat", ['token' => "BB:" . $jwtToken]);
+        Response::json(true, 200, "Token sementara berhasil dibuat", ['access_token' => "BB:" . $jwtToken]);
     }
 
     /**
@@ -194,7 +179,7 @@ class AuthController {
 
         // Validasi input kosong
         if (!isset($input['username']) || !isset($input['password'])) {
-            Response::json(false, 400, "Username dan Password wajib diisi.", null);
+            Response::json(false, 401, "Username dan Password salah.", null);
         }
 
         $username = trim($input['username']);
@@ -249,7 +234,7 @@ class AuthController {
 
         $jwtToken = JWT::encode($payload, $secretKey, 'HS256');
 
-        // 5. Kembalikan Response Sukses dengan token
-        Response::json(true, 200, "Login Admin Berhasil", ['token' => $jwtToken]);
+        // 5. Kembalikan Response Sukses dengan access_token
+        Response::json(true, 200, "Login Admin Berhasil", ['access_token' => $jwtToken]);
     }
 }

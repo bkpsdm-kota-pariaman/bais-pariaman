@@ -16,6 +16,7 @@ Setiap sesi AI baru harus membaca file dokumentasi yang relevan dari project.
 
 ```text
 AGENTS.md
+.agents/api.md  # Dokumentasi seluruh API, WAJIB pahami endpoint dan behavior sebelum edit apapun terkait API!
 TASK_INSTRUCTION.md
 ARCHITECTURE.md
 ```
@@ -224,6 +225,7 @@ fetch()
 - Jangan menonaktifkan validation hanya untuk development/test.
 - Jangan mengekspos secret ke frontend.
 - Jangan memasukkan credential production ke source code.
+- Dilarang menaruh URL asli, domain produksi/staging asli, atau data sensitif asli (seperti NIP/NIK asli) di dalam file `.agents/api.md`. Selalu gunakan contoh URL dummy (misal `https://worker-example.domain.dev` dan `https://api-origin.domain.go.id/api`) serta data dummy.
 - Semua query SQL menggunakan prepared statements.
 - Security check backend adalah security boundary.
 - Jangan mengandalkan validasi frontend sebagai satu-satunya protection.
@@ -727,6 +729,7 @@ Jika user melaporkan bug atau mengatakan ada bug:
 READ FIRST.
 UNDERSTAND EXISTING CODE.
 FOLLOW PROJECT DOCUMENTATION.
+READ & UNDERSTAND .agents/api.md BEFORE TOUCHING ANY API ENDPOINT OR BUSINESS LOGIC.
 MAKE THE SMALLEST CORRECT CHANGE.
 DO NOT GUESS.
 DO NOT HIDE BUGS.
@@ -741,3 +744,40 @@ USER RUNS THE TESTS.
 ALWAYS PROVIDE THE EXACT TEST COMMAND.
 ```
 
+> [!IMPORTANT]
+> `.agents/api.md` berisi dokumentasi **SELURUH ENDPOINT API (Worker & Controller)**. Sebelum membuat, mengubah, atau menghapus kode di area API, endpoint, handler, controller, middleware, atau worker: **WAJIB baca, pahami, dan verifikasi rute, behavior, serta kontrak endpoint yang terdokumentasi di `api.md`**. Dilarang mengubah atau meng-override behavior API yang tidak terdokumentasi tanpa konfirmasi product owner.
+
+
+## Implementation Planning
+
+Sebelum coding untuk task yang mengubah source code:
+
+1. Analisis source code dan dokumentasi relevan.
+2. Buat Implementation Plan singkat.
+3. Jangan coding.
+4. Tampilkan plan di chat.
+5. Tunggu user meminta implementasi.
+6. Plan harus bisa langsung diberikan ke model AI lain.
+
+### Format Implementation Plan
+
+Maksimal 10 baris.
+
+```text
+GOAL:
+[tujuan]
+
+FILES:
+[file yang perlu diubah]
+
+CHANGES:
+[perubahan utama, maksimal 3 poin]
+
+FLOW:
+[flow singkat setelah perubahan]
+
+TEST:
+[test yang perlu dibuat/dijalankan]
+
+DO NOT CHANGE:
+[hal penting yang tidak boleh berubah]
