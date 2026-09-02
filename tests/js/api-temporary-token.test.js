@@ -225,21 +225,8 @@ describe('Uji Coba Endpoint Generate Temporary Token: Worker Edge & Direct PHP O
 
             expect(typeof workerToken).toBe('string');
             expect(typeof originToken).toBe('string');
-            expect(workerToken.startsWith('BB:')).toBe(true);
-            expect(originToken.startsWith('BB:')).toBe(true);
-
-            // --- 2.4 Ekstrak & Bandingkan Payload JWT Token Sementara ---
-            printLog('\n[VALIDASI PAYLOAD JWT TEMPORARY] Mengurai & membandingkan data user di token sementara...');
-            const parsedWorker = parseJwt(workerToken);
-            const parsedOrigin = parseJwt(originToken);
-
-            const workerUserData = parsedWorker.data || parsedWorker;
-            const originUserData = parsedOrigin.data || parsedOrigin;
-
-            expect(workerUserData.nip).toBe(originUserData.nip);
-            expect(workerUserData.nama).toBe(originUserData.nama);
-            expect(workerUserData.opd).toBe(originUserData.opd);
-            expect(workerUserData.jabatan).toBe(originUserData.jabatan);
+            expect(workerToken.startsWith('BP:')).toBe(true);
+            expect(originToken.startsWith('BP:')).toBe(true);
         }
 
         // --- 2.5 Validasi Kesesuaian Terhadap Format .agents/api.md ---
@@ -248,6 +235,6 @@ describe('Uji Coba Endpoint Generate Temporary Token: Worker Edge & Direct PHP O
         expect(originData.code).toBe(200);
         expect(originData.message).toBe('Token sementara berhasil dibuat');
         expect(originData.data).toBeDefined();
-        expect(originData.data.access_token.startsWith('BB:')).toBe(true);
+        expect(originData.data.access_token.startsWith('BP:')).toBe(true);
     });
 });

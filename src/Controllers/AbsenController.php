@@ -433,37 +433,93 @@ class AbsenController {
             return;
         }
 
-        // 2. Ambil token pegawai dari body request (bukan dari header)
-        $userToken = $_POST['user_token'] ?? null;
+        // 2. Ambil data request (JSON / POST multipart)
+        $inputJSON = file_get_contents('php://input');
+        $input = json_decode($inputJSON, true) ?: [];
+
+        $userToken = $_POST['user_token'] ?? $input['user_token'] ?? null;
         if (!$userToken) {
             Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
             return;
         }
 
-        // 3. Validasi token pegawai yang di-scan
         $config = require APP_PATH . '/config/config.php';
         $secretKey = $config['jwt_secret'];
-        $pegawaiData = null;
-        try {
-            $decoded = JWT::decode($userToken, new \Firebase\JWT\Key($secretKey, 'HS256'));
-            if (isset($decoded->exp) && $decoded->exp < time()) {
-                 Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
-                 return;
+        $db = Database::getConnection();
+
+        $nip = null;
+        $nama = null;
+        $opd = null;
+        $jabatan = null;
+
+        // 3. Dekripsi User Token (Format Baru BP: AES-256-GCM atau Fallback BB: JWT)
+        if (strpos($userToken, 'BP:') === 0) {
+            $b64 = substr($userToken, 3);
+            $b64Padded = strtr($b64, '-_', '+/') . str_repeat('=', (4 - strlen($b64) % 4) % 4);
+            $binary = base64_decode($b64Padded);
+            if (!$binary || strlen($binary) < 29) {
+                Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
+                return;
             }
-            $pegawaiData = (array) $decoded->data;
-        } catch (\Exception $e) {
-            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
-            return;
+            $iv = substr($binary, 0, 12);
+            $tag = substr($binary, -16);
+            $ciphertext = substr($binary, 12, -16);
+            $key = hash('sha256', $secretKey, true);
+            $plaintext = openssl_decrypt($ciphertext, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
+            if ($plaintext === false) {
+                Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
+                return;
+            }
+            $parts = explode(':', $plaintext);
+            if (count($parts) < 2 || time() > (int)$parts[1]) {
+                Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
+                return;
+            }
+            $nip = $parts[0];
+
+            // Ambil detail profil pegawai dari DB MySQL master
+            $stmtPeg = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_pegawai WHERE nip = :nip LIMIT 1");
+            $stmtPeg->execute([':nip' => $nip]);
+            $pegRow = $stmtPeg->fetch(PDO::FETCH_ASSOC);
+            if ($pegRow) {
+                $nama = $pegRow['nama_pegawai'];
+                $opd = $pegRow['perangkat_daerah'];
+                $jabatan = $pegRow['jabatan'];
+            }
+        } else {
+            // Format Legacy BB: JWT
+            $cleanJwt = strpos($userToken, 'BB:') === 0 ? substr($userToken, 3) : $userToken;
+            try {
+                $decoded = JWT::decode($cleanJwt, new \Firebase\JWT\Key($secretKey, 'HS256'));
+                if (isset($decoded->exp) && $decoded->exp < time()) {
+                     Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
+                     return;
+                }
+                $pegawaiData = (array) $decoded->data;
+                $nip = $pegawaiData['nip'] ?? null;
+                $nama = $pegawaiData['nama'] ?? null;
+                $opd = $pegawaiData['opd'] ?? null;
+                $jabatan = $pegawaiData['jabatan'] ?? null;
+            } catch (\Exception $e) {
+                Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
+                return;
+            }
         }
 
+        // Fallback jika NIP dari payload/input dikirim
+        $nip = $nip ?? $_POST['nip'] ?? $input['nip'] ?? null;
+        $nama = $nama ?? $_POST['nama'] ?? $input['nama'] ?? 'Pegawai ASN';
+        $opd = $opd ?? $_POST['opd'] ?? $input['opd'] ?? '-';
+        $jabatan = $jabatan ?? $_POST['jabatan'] ?? $input['jabatan'] ?? '-';
+
         // 4. Ambil sisa data dari request
-        $kodeAkses = $_POST['kode_akses'] ?? null;
-        $lat = $_POST['lat'] ?? null;
-        $lng = $_POST['lng'] ?? null;
-        $lokasi = $_POST['lokasi'] ?? null;
-        $keteranganVerifikasi = $_POST['keterangan_verifikasi'] ?? $_POST['keterangan'] ?? 'Absensi Cepat oleh Admin';
-        $statusKehadiran = $_POST['status_kehadiran'] ?? 'Hadir';
-        $statusVerifikasi = $_POST['status_verifikasi'] ?? 'Terverifikasi Oleh Admin';
+        $kodeAkses = $_POST['kode_akses'] ?? $input['kode_akses'] ?? null;
+        $lat = (isset($_POST['lat']) && $_POST['lat'] !== '') ? $_POST['lat'] : ($input['lat'] ?? null);
+        $lng = (isset($_POST['lng']) && $_POST['lng'] !== '') ? $_POST['lng'] : ($input['lng'] ?? null);
+        $lokasi = $_POST['lokasi'] ?? $input['lokasi'] ?? null;
+        $keteranganVerifikasi = $_POST['keterangan_verifikasi'] ?? $input['keterangan_verifikasi'] ?? $_POST['keterangan'] ?? $input['keterangan'] ?? 'Absensi Cepat oleh Admin';
+        $statusKehadiran = $_POST['status_kehadiran'] ?? $input['status_kehadiran'] ?? 'Hadir';
+        $statusVerifikasi = $_POST['status_verifikasi'] ?? $input['status_verifikasi'] ?? 'Terverifikasi Oleh Admin';
 
         // 5. Validasi input dasar
         if (empty($kodeAkses) || $lat === null || $lng === null || empty($lokasi)) {
@@ -471,14 +527,13 @@ class AbsenController {
             return;
         }
 
-        $db = Database::getConnection();
         $newFileName = 'NO_PHOTO_ADMIN_FAST_INPUT.jpg'; // Default untuk absen cepat
-        $fotoBase64 = $_POST['foto_base64'] ?? null;
+        $fotoBase64 = $_POST['foto_base64'] ?? $input['foto_base64'] ?? null;
         if (!empty($fotoBase64)) {
             $cleaned = preg_replace('#^data:image/\w+;base64,#i', '', $fotoBase64);
             $decodedFoto = base64_decode($cleaned);
             if ($decodedFoto !== false) {
-                $uniqueName = 'absen_admin_' . ($_POST['nip'] ?? time()) . '_' . time() . '.jpg';
+                $uniqueName = 'absen_admin_' . ($nip ?? time()) . '_' . time() . '.jpg';
                 $uploadDir = APP_PATH . '/public_html/uploads/foto_absensi/';
                 if (!is_dir($uploadDir)) {
                     @mkdir($uploadDir, 0755, true);
@@ -502,14 +557,10 @@ class AbsenController {
         $now = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
         $waktu = $now->format('Y-m-d H:i:s');
 
-        $nip = $pegawaiData['nip'] ?? null;
-        $nama = $pegawaiData['nama'] ?? null;
-        $opd = $pegawaiData['opd'] ?? null;
-        $jabatan = $pegawaiData['jabatan'] ?? null;
-
-        if (!$nip || !$nama) {
+        if (!$nip) {
             Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
             return;
+        }
         }
 
         $sql = "INSERT INTO app_absensi_data_absensi 

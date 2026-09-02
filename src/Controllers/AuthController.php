@@ -108,28 +108,28 @@ class AuthController {
         // 1. Validasi token pengguna saat ini untuk mendapatkan datanya
         $pegawaiData = AuthHelper::validateToken();
 
-        // 2. Buat JWT baru dengan masa berlaku singkat
+        // 2. Buat Compact AES-256-GCM Token dengan prefix BP:
         $config = require APP_PATH . '/config/config.php';
         $secretKey = $config['jwt_secret'];
         $issuedAt = time();
         $expirationTime = $issuedAt + 1800; // Berlaku 30 menit (1800 detik)
+        $nip = $pegawaiData['nip'] ?? '';
 
-        $payload = [
-            'exp' => $expirationTime,
-            // Format Objek Lengkap, sama seperti token login
-            'data' => [
-                'nip' => $pegawaiData['nip'],
-                'nama' => $pegawaiData['nama'],
-                'opd' => $pegawaiData['opd'],
-                'jabatan' => $pegawaiData['jabatan'],
-                'role' => $pegawaiData['role'] ?? ['asn'], // Sertakan role, dengan fallback
-                'jenis_asn' => $pegawaiData['jenis_asn'] ?? null
-            ]
-        ];
+        if (empty($nip)) {
+            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
+            return;
+        }
 
-        $jwtToken = JWT::encode($payload, $secretKey, 'HS256');
+        $plaintext = $nip . ':' . $expirationTime;
+        $key = hash('sha256', $secretKey, true);
+        $iv = random_bytes(12);
+        $tag = '';
+        $ciphertext = openssl_encrypt($plaintext, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag, '', 16);
+        $combined = $iv . $ciphertext . $tag;
+        $base64Url = rtrim(strtr(base64_encode($combined), '+/', '-_'), '=');
+        $token = "BP:" . $base64Url;
 
-        Response::json(true, 200, "Token sementara berhasil dibuat", ['access_token' => "BB:" . $jwtToken]);
+        Response::json(true, 200, "Token sementara berhasil dibuat", ['access_token' => $token]);
     }
 
     /**

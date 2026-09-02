@@ -56,6 +56,62 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 	return R * c; // in metres
 }
 
+// Helper AES-256-GCM untuk Token QR Code Profil Sementara (Prefix BP:)
+async function encryptBpToken(nip, exp, secretStr) {
+	const encoder = new TextEncoder();
+	const secretBytes = encoder.encode(secretStr);
+	const keyHash = await crypto.subtle.digest('SHA-256', secretBytes);
+	const key = await crypto.subtle.importKey('raw', keyHash, { name: 'AES-GCM' }, false, ['encrypt']);
+	const iv = crypto.getRandomValues(new Uint8Array(12));
+	const plaintext = encoder.encode(`${nip}:${exp}`);
+	const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv, tagLength: 128 }, key, plaintext);
+	const encryptedArray = new Uint8Array(encrypted);
+	const combined = new Uint8Array(iv.length + encryptedArray.length);
+	combined.set(iv, 0);
+	combined.set(encryptedArray, iv.length);
+	
+	let binaryString = '';
+	for (let i = 0; i < combined.length; i++) {
+		binaryString += String.fromCharCode(combined[i]);
+	}
+	const base64 = btoa(binaryString);
+	const base64Url = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+	return 'BP:' + base64Url;
+}
+
+async function decryptBpToken(token, secretStr) {
+	if (!token || typeof token !== 'string') return null;
+	if (!token.startsWith('BP:')) return null;
+	try {
+		const b64Url = token.substring(3);
+		let b64 = b64Url.replace(/-/g, '+').replace(/_/g, '/');
+		while (b64.length % 4) b64 += '=';
+		const binaryStr = atob(b64);
+		const combined = new Uint8Array(binaryStr.length);
+		for (let i = 0; i < binaryStr.length; i++) {
+			combined[i] = binaryStr.charCodeAt(i);
+		}
+		if (combined.length < 29) return null;
+		const iv = combined.subarray(0, 12);
+		const ciphertextWithTag = combined.subarray(12);
+		
+		const encoder = new TextEncoder();
+		const secretBytes = encoder.encode(secretStr);
+		const keyHash = await crypto.subtle.digest('SHA-256', secretBytes);
+		const key = await crypto.subtle.importKey('raw', keyHash, { name: 'AES-GCM' }, false, ['decrypt']);
+		const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv, tagLength: 128 }, key, ciphertextWithTag);
+		const text = new TextDecoder().decode(decrypted);
+		const parts = text.split(':');
+		if (parts.length < 2) return null;
+		const nip = parts[0];
+		const exp = parseInt(parts[1], 10);
+		if (Math.floor(Date.now() / 1000) > exp) return null;
+		return { nip, exp };
+	} catch (e) {
+		return null;
+	}
+}
+
 // Helper untuk format JSON Response terstandarisasi.
 // PENTING: Selalu mengembalikan HTTP status 200 di tingkat protokol HTTP agar browser tidak menampilkan log error merah di DevTools Console.
 // Status keberhasilan (true/false) dan kode error riil (400, 401, 403, 500, dll) dikirim melalui body JSON (status & code).
@@ -828,26 +884,17 @@ export default {
 				}
 
 				try {
-					// Buat JWT baru dengan masa berlaku singkat
 					const issuedAt = Math.floor(Date.now() / 1000);
 					const expirationTime = issuedAt + 1800; // Berlaku 30 menit (1800 detik)
-					const pegawaiData = decodedToken.data;
+					const pegawaiNip = decodedToken?.data?.nip;
 
-					const tempPayload = {
-						data: {
-							nip: pegawaiData.nip,
-							nama: pegawaiData.nama,
-							opd: pegawaiData.opd,
-							jabatan: pegawaiData.jabatan,
-							role: pegawaiData.role || ['asn'],
-							jenis_asn: pegawaiData.jenis_asn
-						}
-					};
+					if (!pegawaiNip) {
+						return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+					}
 
-					const tempJwt = await new SignJWT(tempPayload).setProtectedHeader({ alg: 'HS256' }).setExpirationTime(expirationTime).sign(secret);
-					const prefixedToken = "BB:" + tempJwt;
+					const bpToken = await encryptBpToken(pegawaiNip, expirationTime, env.JWT_SECRET);
 
-					return jsonResponse(true, 200, 'Token sementara berhasil dibuat', { access_token: prefixedToken });
+					return jsonResponse(true, 200, 'Token sementara berhasil dibuat', { access_token: bpToken });
 
 				} catch (error) {
 					console.error('Error di worker /api/token/generate-temporary:', error.message, error.stack);
@@ -1046,6 +1093,52 @@ export default {
 					if (!userToken) {
 						return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
 					}
+
+					let pegawaiNip = null;
+					let pegawaiNama = null;
+					let pegawaiOpd = null;
+					let pegawaiJabatan = null;
+
+					if (typeof userToken === 'string' && userToken.startsWith('BP:')) {
+						const decryptedBp = await decryptBpToken(userToken, env.JWT_SECRET);
+						if (!decryptedBp || !decryptedBp.nip) {
+							return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+						}
+						pegawaiNip = decryptedBp.nip;
+						if (env.PEGAWAI_KV) {
+							const cachedPegawai = await env.PEGAWAI_KV.get(`pegawai:${pegawaiNip}`, 'json');
+							if (cachedPegawai) {
+								pegawaiNama = cachedPegawai.nama_pegawai;
+								pegawaiOpd = cachedPegawai.perangkat_daerah;
+								pegawaiJabatan = cachedPegawai.jabatan;
+							}
+						}
+					} else {
+						// Fallback legacy JWT / BB:
+						let cleanToken = userToken;
+						if (typeof cleanToken === 'string' && cleanToken.startsWith('BB:')) {
+							cleanToken = cleanToken.substring(3);
+						}
+						try {
+							const secret = new TextEncoder().encode(env.JWT_SECRET);
+							const { payload: userDecoded } = await jwtVerify(cleanToken, secret, { issuer: ALLOWED_ISSUERS });
+							pegawaiNip = userDecoded?.data?.nip;
+							pegawaiNama = userDecoded?.data?.nama;
+							pegawaiOpd = userDecoded?.data?.opd;
+							pegawaiJabatan = userDecoded?.data?.jabatan;
+						} catch (e) {
+							return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+						}
+					}
+
+					if (!pegawaiNip) {
+						return jsonResponse(false, 401, 'Waktu login Anda sudah habis. Silahkan login ulang.');
+					}
+
+					payload.nip = pegawaiNip;
+					payload.nama = pegawaiNama || payload.nama || 'Pegawai ASN';
+					payload.opd = pegawaiOpd || payload.opd || '-';
+					payload.jabatan = pegawaiJabatan || payload.jabatan || '-';
 
 					// Validasi aturan ketat (waktu dan lokasi)
 					const validationError = await validateJadwalAbsen(payload.kode_akses, payload);

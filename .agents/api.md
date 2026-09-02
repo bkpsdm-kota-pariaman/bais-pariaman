@@ -159,7 +159,7 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
 - **Status Test:** ✅ SUKSES TERUJI (2026-09-01 14:06:28 WIB)
 - **File Test:** `ROOT_PROJECT/tests/js/api-temporary-token.test.js`
 - **Perintah Test:** `npx cross-env WORKER_URL="https://worker-example.domain.dev" ORIGIN_URL="https://api-origin.domain.go.id/api" TEST_NIP="123456789012345678" TEST_NIK="1234567890123456" jest tests/js/api-temporary-token.test.js`
-- **Deskripsi:** Membuat token JWT sementara (berlaku 30 menit) dengan prefix `BB:` dari klaim token PWA aktif.
+- **Deskripsi:** Membuat token QR Code profil sementara pegawai (berlaku 30 menit) dengan format Compact AES-256-GCM stateless ber-prefix `BP:` (~79 karakter) dari klaim token PWA aktif.
 
 **Input Payload:**
 - Header: `Authorization: Bearer <jwt_token>`
@@ -172,7 +172,7 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
   "code": 200,
   "message": "Token sementara berhasil dibuat",
   "data": {
-    "access_token": "BB:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "access_token": "BP:a3K8m9..."
   }
 }
 ```
@@ -494,12 +494,15 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
 - **Method:** `POST`
 - **Path:** `/api/absen-cepat/submit`
 - **Akses:** Bearer Token (Admin/Super Admin)
-- **Deskripsi:** Menerima pengiriman absensi cepat hasil scan QR oleh Admin ke Cloudflare Queue (`MY_QUEUE`).
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02 13:55:00 WIB)
+- **File Test:** `ROOT_PROJECT/tests/js/api-absen-cepat.test.js`
+- **Perintah Test:** `npx cross-env WORKER_URL="https://worker-example.domain.dev" ORIGIN_URL="https://api-origin.domain.go.id/api" TEST_NIP="123456789012345678" TEST_NIK="1234567890123456" TEST_ADMIN_USERNAME="admin" TEST_ADMIN_PASSWORD="password" jest tests/js/api-absen-cepat.test.js`
+- **Deskripsi:** Menerima pengiriman absensi cepat hasil scan QR `BP:` oleh Admin ke Cloudflare Queue (`MY_QUEUE`).
 
 **Input Payload (JSON):**
 ```json
 {
-  "user_token": "BB:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user_token": "BP:a3K8m9...",
   "kode_akses": "KODE12",
   "lat": "-0.6264",
   "lng": "100.1187",
@@ -514,7 +517,7 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
 ```json
 {
   "status": true,
-  "code": 202,
+  "code": 200,
   "message": "Absensi Cepat telah diterima dan akan segera diproses.",
   "data": null
 }

@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.298'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.1.301'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -1777,19 +1777,36 @@ function handleDecodedQrText(decodedText) {
         history.back();
     }
 
-    const isProfileToken = decodedText.startsWith("BB:");
-    const isJadwalJwt = (decodedText.match(/\./g) || []).length === 2 && !isProfileToken;
+    const trimmed = typeof decodedText === 'string' ? decodedText.trim() : '';
 
-    // HANYA proses QR Jadwal (baik JWT atau kode manual)
-    if (isJadwalJwt) {
-        prosesQrCode(decodedText);
-    } else if (isProfileToken) {
-        // Beri peringatan jika QR profil dipindai di alur normal
-        Swal.fire("Tidak Sesuai", "QR Code Profil hanya dapat digunakan pada alur 'Absen Cepat' oleh Admin.", "warning").then(batalAbsen);
-    } else {
-        // Tangani QR code yang tidak valid
-        Swal.fire("Gagal", "QR Code tidak valid atau tidak dikenali. Pastikan Anda memindai QR Code jadwal format baru.", "error").then(batalAbsen);
+    // 1. Format Baru QR Jadwal Kegiatan: BP-JADWAL:<KODE_AKSES>
+    if (trimmed.startsWith("BP-JADWAL:")) {
+        const kodeAkses = trimmed.replace("BP-JADWAL:", "").trim().toUpperCase();
+        if (kodeAkses) {
+            const elInput1 = document.getElementById('inputKodeManual');
+            const elInput2 = document.getElementById('inputKodeManualScanner');
+            if (elInput1) elInput1.value = kodeAkses;
+            if (elInput2) elInput2.value = kodeAkses;
+            prosesQrCode(kodeAkses);
+            return;
+        }
     }
+
+    // 2. Format Legacy JWT Jadwal Kegiatan (kompatibilitas transisi)
+    const isJadwalJwt = (trimmed.match(/\./g) || []).length === 2 && !trimmed.startsWith("BP:") && !trimmed.startsWith("BB:");
+    if (isJadwalJwt) {
+        prosesQrCode(trimmed);
+        return;
+    }
+
+    // 3. Peringatan jika QR Profil ASN dipindai pada alur jadwal biasa
+    if (trimmed.startsWith("BP:") || trimmed.startsWith("BB:")) {
+        Swal.fire("Tidak Sesuai", "QR Code Profil hanya dapat digunakan pada alur 'Absen Cepat' oleh Admin.", "warning").then(batalAbsen);
+        return;
+    }
+
+    // 4. QR Code tidak sesuai format jadwal
+    Swal.fire("Gagal", "QR Code jadwal tidak valid.", "error").then(batalAbsen);
 }
 
 async function tutupScanner(fromPopState = false) {
@@ -3024,11 +3041,11 @@ async function handleScanSuccess(decodedText) {
             await html5QrCode.stop().catch(err => console.warn("Gagal menghentikan scanner setelah sukses.", err));
         }
 
-        const isProfileToken = decodedText.startsWith("BB:");
+        const isProfileToken = decodedText.startsWith("BP:") || decodedText.startsWith("BB:");
         if (isProfileToken) {
-            const token = decodedText.replace("BB:", "");
+            const token = decodedText;
             const modeFoto = adminCepatState.mode_foto || 'tidak';
-            const userData = parseJwt(token, true) || { nama: 'Pegawai ASN', nip: '-' };
+            const userData = decodedText.startsWith("BB:") ? (parseJwt(decodedText.replace("BB:", ""), true) || { nama: 'Pegawai ASN', nip: '-' }) : { nama: 'Pegawai ASN (E-Presensi Pass)', nip: '-' };
 
             try {
                 let fotoBase64 = null;
@@ -3090,7 +3107,7 @@ async function handleScanSuccess(decodedText) {
             // 5. Jika QR tidak valid, tampilkan pesan error yang memblokir.
             Swal.fire({
                 title: "QR Code Tidak Sesuai",
-                text: "Harap pindai QR Code Profil Pegawai yang valid (diawali dengan 'BB:').",
+                text: "Harap pindai QR Code Profil Pegawai yang valid (diawali dengan 'BP:').",
                 icon: "error",
                 confirmButtonText: "Coba Lagi"
             }).then(() => {
