@@ -4,7 +4,7 @@ const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite: Admin CRUD Jadwal Kegiatan', () => {
 
-    const activeAdmin = adminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+    const activeAdmin = adminUser || { nip: '198501012000011001', nik: '1377010101850001' };
     let consoleErrors = [];
     let pageErrors = [];
 
@@ -107,7 +107,7 @@ test.describe('E2E Suite: Admin CRUD Jadwal Kegiatan', () => {
 
         logAction.click('Tombol Simpan Jadwal', '#btnSimpanKegiatan');
         await Promise.all([
-            page.waitForResponse(resp => resp.url().includes('/admin/jadwal') && resp.status() === 200 || resp.status() === 201),
+            page.waitForResponse(resp => resp.url().includes('/admin/jadwal') && resp.status() === 200 || resp.status() === 200),
             page.click('#btnSimpanKegiatan')
         ]);
 

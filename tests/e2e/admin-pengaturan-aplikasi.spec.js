@@ -5,7 +5,7 @@ const { attachLogger, logAction } = require('./test-logger');
 test.describe('E2E Suite: Admin Manajemen Pengaturan Aplikasi (Super Admin)', () => {
 
     const activeAdmin = superAdminUser || {
-        nip: '199510102020121011',
+        nip: '199510102020021011',
         nik: '1371061010950019',
         nama: 'EGO DAFMA DASA'
     };

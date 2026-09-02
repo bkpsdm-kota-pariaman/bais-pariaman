@@ -34,7 +34,7 @@ test.describe('E2E Live Full Cycle: Realtime Activity Schedule, Cloudflare Worke
     });
 
     test('1. Live Schedule Creation — Login Admin Nyata & Buat Jadwal Aktif via UI Modal Form', async ({ page }) => {
-        const activeAdmin = superAdminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+        const activeAdmin = superAdminUser || { nip: '198501012000011001', nik: '1377010101850001' };
 
         logAction.navigate('admin/index.html');
         await page.goto('admin/index.html');
@@ -69,7 +69,7 @@ test.describe('E2E Live Full Cycle: Realtime Activity Schedule, Cloudflare Worke
         logAction.step('3. Isi judul kegiatan dan simpan');
         const judul = `Apel Live Test ${Date.now()}`;
         const todayStr = new Date().toISOString().split('T')[0];
-        
+
         logAction.input('Judul Kegiatan', '#newJudul', judul);
         await page.locator('#newJudul').pressSequentially(judul, { delay: 100 });
         await page.evaluate((valDate) => {
@@ -88,7 +88,7 @@ test.describe('E2E Live Full Cycle: Realtime Activity Schedule, Cloudflare Worke
         }, todayStr);
 
         logAction.click('Pilih Semua OPD', '#modalBuatKegiatan button:has-text("Pilih Semua")');
-        await page.waitForFunction(() => typeof selectAllOpd === 'function' && (opdState.add.available.length > 0 || opdState.add.selected.length > 0), { timeout: 10000 }).catch(() => {});
+        await page.waitForFunction(() => typeof selectAllOpd === 'function' && (opdState.add.available.length > 0 || opdState.add.selected.length > 0), { timeout: 10000 }).catch(() => { });
         await page.evaluate(() => selectAllOpd('add'));
 
         logAction.click('Tombol Simpan Kegiatan', '#btnSimpanKegiatan');

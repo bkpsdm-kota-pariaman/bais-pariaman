@@ -31,9 +31,7 @@ class AbsenController {
      * Menerima dan menyimpan data absensi dari PWA, termasuk foto selfie.
      */
     public function submit() {
-        // 1. Validasi token JWT secara manual untuk menangani dua jenis token:
-        //    - Token login lengkap (payload data adalah objek)
-        //    - Token QR temporer (payload data adalah array)
+        // 1. Validasi token JWT & ekstraksi identitas
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? null;
         $token = $authHeader ? str_replace('Bearer ', '', $authHeader) : null;
         if (!$token) {
@@ -45,9 +43,7 @@ class AbsenController {
         $secretKey = $config['jwt_secret'];
         $pegawaiData = null;
         try {
-            // Gunakan Firebase\JWT\JWT dan Key
             $decoded = JWT::decode($token, new \Firebase\JWT\Key($secretKey, 'HS256'));
-            // Validasi masa berlaku (exp) secara manual
             if (isset($decoded->exp) && $decoded->exp < time()) {
                  Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
                  return;
@@ -58,101 +54,94 @@ class AbsenController {
             return;
         }
 
-        // 2. Ambil data dari request (tipe multipart/form-data)
-        $kodeAkses = $_POST['kode_akses'] ?? null;
-        $lat = (isset($_POST['lat']) && $_POST['lat'] !== '') ? $_POST['lat'] : null;
-        $lng = (isset($_POST['lng']) && $_POST['lng'] !== '') ? $_POST['lng'] : null;
-        $lokasi = (isset($_POST['lokasi']) && $_POST['lokasi'] !== '') ? $_POST['lokasi'] : null;
-        $keterangan = $_POST['keterangan'] ?? null;
+        // 2. Ambil data request (JSON / multipart)
+        $inputJSON = file_get_contents('php://input');
+        $input = json_decode($inputJSON, true) ?: [];
+
+        $kodeAkses = $_POST['kode_akses'] ?? $input['kode_akses'] ?? null;
+        $lat = (isset($_POST['lat']) && $_POST['lat'] !== '') ? $_POST['lat'] : ($input['lat'] ?? null);
+        $lng = (isset($_POST['lng']) && $_POST['lng'] !== '') ? $_POST['lng'] : ($input['lng'] ?? null);
+        $lokasi = (isset($_POST['lokasi']) && $_POST['lokasi'] !== '') ? $_POST['lokasi'] : ($input['lokasi'] ?? null);
+        $keteranganInput = $_POST['keterangan'] ?? $input['keterangan'] ?? null;
         $foto = $_FILES['foto'] ?? null;
-        $statusKehadiran = $_POST['status_kehadiran'] ?? 'Hadir';
-        $statusVerifikasi = $_POST['status_verifikasi'] ?? 'Terverifikasi Sistem';
+        $base64Foto = $input['foto_absensi'] ?? $input['foto_base64'] ?? $input['foto'] ?? null;
+        $statusKehadiranInput = $_POST['status_kehadiran'] ?? $input['status_kehadiran'] ?? 'Hadir';
+        $statusVerifikasiInput = $_POST['status_verifikasi'] ?? $input['status_verifikasi'] ?? 'Terverifikasi Sistem';
+        $submittedAtInput = $input['submittedAt'] ?? $input['submitted_at'] ?? $_POST['submittedAt'] ?? null;
 
-        // Untuk fallback dari 'Absensi Cepat', foto bersifat opsional.
-        // Kita identifikasi ini dengan memeriksa status_verifikasi yang dikirim.
-        $is_admin_cepat_fallback = ($statusVerifikasi === 'Terverifikasi Oleh Admin');
+        // Tentukan Waktu Resmi Presensi ($waktu)
+        if (!empty($submittedAtInput)) {
+            try {
+                $now = new DateTime($submittedAtInput, new DateTimeZone('Asia/Jakarta'));
+            } catch (\Exception $ex) {
+                $now = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
+            }
+        } else {
+            $now = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
+        }
+        $waktu = $now->format('Y-m-d H:i:s');
+        $tanggalServer = $now->format('Y-m-d');
 
-        // Validasi role pengguna: jika role asn, foto/bukti dukung bersifat wajib. Jika admin/super admin, opsional.
+        // Identifikasi Role Pengirim
+        $is_admin_cepat_fallback = ($statusVerifikasiInput === 'Terverifikasi Oleh Admin');
         $userRoles = isset($pegawaiData['role']) ? (array) $pegawaiData['role'] : ['asn'];
         $userRoles = array_map('strtolower', array_map('trim', $userRoles));
         $isAdminOrSuperAdmin = in_array('admin', $userRoles) || in_array('super admin', $userRoles) || $is_admin_cepat_fallback;
 
-        // 3. Validasi input dasar
-        $is_izin = (strtolower($statusKehadiran) !== 'hadir');
-        $is_lokasi_valid = $is_izin ? true : ($lat !== null && $lng !== null && !empty($lokasi));
-
-        if (empty($kodeAkses) || !$is_lokasi_valid || 
-            (!$isAdminOrSuperAdmin && (empty($foto) || $foto['error'] === UPLOAD_ERR_NO_FILE))
-        ) {
-            Response::json(false, 400, "Data tidak lengkap. Kode, lokasi, dan foto/bukti dukung wajib diisi.");
+        // 3. Validasi Input Dasar (Semua Role)
+        if (empty($kodeAkses)) {
+            Response::json(false, 422, "Kode akses kegiatan wajib diisi.", null);
+            return;
+        }
+        if (empty($statusKehadiranInput)) {
+            Response::json(false, 422, "Status kehadiran wajib dipilih.", null);
             return;
         }
 
+        $nip = $pegawaiData['nip'] ?? null;
+        $nama = $pegawaiData['nama'] ?? null;
+        $opd = $pegawaiData['opd'] ?? null;
+        $jabatan = $pegawaiData['jabatan'] ?? null;
+
+        if (!$nip || !$nama) {
+            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
+            return;
+        }
+
+        // 4. Dapatkan detail jadwal dari DB
         $db = Database::getConnection();
-
-        $newFileName = 'NO_PHOTO_ADMIN_FAST_INPUT.jpg'; // Default jika tidak ada foto
-        $uploadPath = null;
-
-        // 4. Proses unggah foto jika ada
-        if ($foto && $foto['error'] === UPLOAD_ERR_OK) {
-            $uploadDir = '../uploads/foto_absensi/';
-
-            if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
-                Response::json(false, 500, "Server Error: Gagal membuat direktori upload.");
-                return;
-            }
-
-            // Get extension
-            $ext = 'jpg';
-            if ($foto['type'] === 'application/pdf') {
-                $ext = 'pdf';
-            }
-            
-            // Buat nama file yang unik dengan string acak
-            $timestamp = time();
-            $randomStr = bin2hex(random_bytes(4));
-            $newFileName = $pegawaiData['nip'] . '_' . $kodeAkses . '_' . $timestamp . '_' . $randomStr . '.' . $ext;
-            $uploadPath = $uploadDir . $newFileName;
-
-            if (!move_uploaded_file($foto['tmp_name'], $uploadPath)) {
-                Response::json(false, 500, "Gagal menyimpan file foto di server.");
-                return;
-            }
-        } elseif ($foto && $foto['error'] !== UPLOAD_ERR_NO_FILE) {
-            // Jika ada file tapi error selain "tidak ada file", laporkan error.
-            Response::json(false, 500, "Gagal mengunggah foto. Error code: " . $foto['error']);
-            return;
-        }
-
-        // 5. Dapatkan detail jadwal untuk disimpan di log absensi
-        $stmtJadwal = $db->prepare("SELECT judul, kategori, tanggal, jam_selesai, koordinat, radius_meter, is_strict_time, is_strict_location FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses LIMIT 1");
+        $stmtJadwal = $db->prepare("SELECT judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, is_strict_time, is_strict_location FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses LIMIT 1");
         $stmtJadwal->bindParam(':kode_akses', $kodeAkses);
         $stmtJadwal->execute();
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
 
         if (!$jadwal) {
-            if ($uploadPath && file_exists($uploadPath)) {
-                unlink($uploadPath);
-            }
-            Response::json(false, 404, "Jadwal kegiatan tidak valid atau sudah berakhir.");
+            Response::json(false, 404, "Jadwal kegiatan tidak valid atau tidak ditemukan.");
             return;
         }
 
-        $now = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
-
-        // 5b. Pengecekan server-side: tentukan kondisi terlambat & luar lokasi
-        // Jika user terlambat atau di luar lokasi, status verifikasi di-override menjadi
-        // "Menunggu Verifikasi Admin" agar admin bisa mengecek bukti dukung.
-        $isTerlambat = false;
-        $isLuarRadius = false;
-
-        // Cek keterlambatan (pakai waktu server Jakarta)
-        $endTime = new DateTime($jadwal['tanggal'] . ' ' . $jadwal['jam_selesai'], new DateTimeZone('Asia/Jakarta'));
-        if ($now > $endTime) {
-            $isTerlambat = true;
+        // 5. Validasi Hari & Jam Mulai Pembukaan Kegiatan
+        if ($tanggalServer !== $jadwal['tanggal']) {
+            if ($tanggalServer > $jadwal['tanggal']) {
+                Response::json(false, 403, "Gagal: Jadwal kegiatan ini sudah berlalu.", null);
+                return;
+            } else {
+                Response::json(false, 403, "Gagal: Jadwal kegiatan ini belum dimulai.", null);
+                return;
+            }
         }
 
-        // Cek radius lokasi
+        $startTime = new DateTime($jadwal['tanggal'] . ' ' . $jadwal['jam_mulai'], new DateTimeZone('Asia/Jakarta'));
+        if ($now < $startTime) {
+            Response::json(false, 403, "Absensi untuk kegiatan ini belum dibuka. Silakan coba lagi pada atau setelah pukul " . substr($jadwal['jam_mulai'], 0, 5) . " WIB.", null);
+            return;
+        }
+
+        // 6 & 7. Pengecekan Keterlambatan & Radius Lokasi
+        $endTime = new DateTime($jadwal['tanggal'] . ' ' . $jadwal['jam_selesai'], new DateTimeZone('Asia/Jakarta'));
+        $isTerlambat = ($now > $endTime);
+
+        $isLuarRadius = false;
         if (!empty($jadwal['koordinat']) && $jadwal['koordinat'] !== '-') {
             $tParts = explode(',', str_replace("'", '', $jadwal['koordinat']));
             if (count($tParts) >= 2) {
@@ -170,51 +159,168 @@ class AbsenController {
             }
         }
 
-        // 5c. Validasi Server-side Strict Mode
-        if (strtolower($statusKehadiran) === 'hadir') {
+        $is_izin = (strtolower($statusKehadiranInput) !== 'hadir');
+
+        // Validasi Strict Time & Location (Khusus Hadir)
+        if (!$is_izin) {
             if ($isTerlambat && !empty($jadwal['is_strict_time']) && $jadwal['is_strict_time'] == 1) {
-                if ($uploadPath && file_exists($uploadPath)) {
-                    unlink($uploadPath);
-                }
-                Response::json(false, 403, "Gagal: Waktu Berakhir. Anda melanggar Aturan Waktu Berlaku.");
+                Response::json(false, 403, "Gagal: Waktu Berakhir. Anda melanggar Aturan Waktu Berlaku.", null);
                 return;
             }
             if ($isLuarRadius && !empty($jadwal['is_strict_location']) && $jadwal['is_strict_location'] == 1) {
-                if ($uploadPath && file_exists($uploadPath)) {
-                    unlink($uploadPath);
-                }
-                Response::json(false, 403, "Gagal: Di Luar Lokasi. Anda melanggar Aturan Wajib Sesuai Lokasi.");
+                Response::json(false, 403, "Gagal: Di Luar Lokasi. Anda melanggar Aturan Wajib Sesuai Lokasi.", null);
                 return;
             }
         }
 
-        $isGpsError = ($lat === null || $lng === null || (float)$lat == 0 || (float)$lng == 0 || stripos((string)$lokasi, 'GPS') !== false);
+        // 8, 9 & 10. Logika Penentuan Status Verifikasi & Keterangan Sesuai Role
+        $statusKehadiran = $statusKehadiranInput;
+        $statusVerifikasi = 'Terverifikasi Sistem';
+        $keteranganPegawai = null;
+        $keteranganVerifikasiAdmin = null;
 
-        // Override status verifikasi jika terlambat, luar lokasi, GPS error, atau tidak hadir (izin/sakit/dll)
-        if (strtolower($statusKehadiran) !== 'hadir' || $isTerlambat || $isLuarRadius || $isGpsError) {
-            if ($statusVerifikasi !== 'Terverifikasi Oleh Admin') {
+        $has_file_foto = ($foto && $foto['error'] === UPLOAD_ERR_OK);
+        $has_base64_foto = (!empty($base64Foto) && trim((string)$base64Foto) !== '');
+
+        if ($isAdminOrSuperAdmin) {
+            // ADMIN / SUPER ADMIN (ABSENSI CEPAT)
+            $statusKehadiran = $statusKehadiranInput;
+            $statusVerifikasi = $statusVerifikasiInput;
+            $keteranganVerifikasiAdmin = $_POST['keterangan_verifikasi'] ?? $input['keterangan_verifikasi'] ?? $_POST['keterangan_admin'] ?? $input['keterangan_admin'] ?? 'Absensi Cepat oleh Admin';
+            
+            // Validasi file foto (jika ada)
+            if ($has_base64_foto) {
+                $cleanBase64 = preg_replace('#^data:(image|application)/\w+;base64,#i', '', $base64Foto);
+                if (strlen(base64_decode($cleanBase64)) > 100 * 1024) {
+                    Response::json(false, 422, "Ukuran foto terlalu besar. Maksimal 100 KB.", null);
+                    return;
+                }
+            } elseif ($has_file_foto && $foto['size'] > 100 * 1024) {
+                Response::json(false, 422, "Ukuran foto terlalu besar. Maksimal 100 KB.", null);
+                return;
+            }
+        } else {
+            // ROLE ASN
+            $keteranganPegawai = trim((string)$keteranganInput);
+
+            if (!$is_izin) {
+                // ASN HADIR
+                $is_lokasi_valid = ($lat !== null && $lng !== null && (float)$lat != 0 && (float)$lng != 0 && !empty($lokasi) && stripos((string)$lokasi, 'GPS') === false);
+                if (!$is_lokasi_valid) {
+                    Response::json(false, 422, "Lokasi GPS wajib diisi untuk presensi Hadir.", null);
+                    return;
+                }
+                if (!$has_file_foto && !$has_base64_foto) {
+                    Response::json(false, 422, "Foto / bukti dukung wajib diisi.", null);
+                    return;
+                }
+
+                // Cek ukuran foto selfie Hadir (< 100 KB)
+                if ($has_base64_foto) {
+                    $cleanBase64 = preg_replace('#^data:(image|application)/\w+;base64,#i', '', $base64Foto);
+                    if (strlen(base64_decode($cleanBase64)) > 100 * 1024) {
+                        Response::json(false, 422, "Ukuran foto terlalu besar. Maksimal 100 KB.", null);
+                        return;
+                    }
+                } elseif ($has_file_foto && $foto['size'] > 100 * 1024) {
+                    Response::json(false, 422, "Ukuran foto terlalu besar. Maksimal 100 KB.", null);
+                    return;
+                }
+
+                // Penentuan status verifikasi & validasi keterangan terlambat/luar radius
+                if ($isTerlambat || $isLuarRadius) {
+                    if (empty($keteranganPegawai)) {
+                        Response::json(false, 422, "Anda terlambat atau berada di luar radius lokasi. Kolom keterangan wajib diisi.", null);
+                        return;
+                    }
+                    $statusVerifikasi = 'Menunggu Verifikasi Admin';
+                } else {
+                    $statusVerifikasi = 'Terverifikasi Sistem';
+                }
+            } else {
+                // ASN TIDAK HADIR (IZIN / SAKIT / CUTI / DINAS LUAR / LAINNYA)
+                if (empty($keteranganPegawai)) {
+                    Response::json(false, 422, "Keterangan alasan tidak hadir wajib diisi.", null);
+                    return;
+                }
+
+                // Cek ukuran bukti dukung (< 1 MB)
+                if ($has_base64_foto) {
+                    $cleanBase64 = preg_replace('#^data:(image|application)/\w+;base64,#i', '', $base64Foto);
+                    if (strlen(base64_decode($cleanBase64)) > 1024 * 1024) {
+                        Response::json(false, 422, "Ukuran file bukti dukung terlalu besar. Maksimal 1 MB.", null);
+                        return;
+                    }
+                } elseif ($has_file_foto && $foto['size'] > 1024 * 1024) {
+                    Response::json(false, 422, "Ukuran file bukti dukung terlalu besar. Maksimal 1 MB.", null);
+                    return;
+                }
+
                 $statusVerifikasi = 'Menunggu Verifikasi Admin';
             }
         }
 
-        // 6. UPDATE atau INSERT data absensi di database
-        $waktu = $now->format('Y-m-d H:i:s');
+        // Proses simpan berkas biner foto/dokumen ke disk
+        $newFileName = 'NO_PHOTO_ADMIN_FAST_INPUT.jpg';
+        $uploadPath = null;
+        $uploadDir = '../uploads/foto_absensi/';
 
-        // Payload data dari token sekarang selalu dalam format objek
-        $nip = $pegawaiData['nip'] ?? null;
-        $nama = $pegawaiData['nama'] ?? null;
-        $opd = $pegawaiData['opd'] ?? null;
-        $jabatan = $pegawaiData['jabatan'] ?? null;
+        if ($has_base64_foto) {
+            if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
+                error_log("[AbsenController] Gagal membuat direktori upload: " . $uploadDir);
+                Response::json(false, 500, "Server error. Silahkan hubungi BKPSDM Kota Pariaman.");
+                return;
+            }
+            $cleanBase64 = preg_replace('#^data:(image|application)/\w+;base64,#i', '', $base64Foto);
+            $binaryData = base64_decode($cleanBase64);
+            $timestamp = time();
+            $randomStr = bin2hex(random_bytes(4));
+            $newFileName = $nip . '_' . $kodeAkses . '_' . $timestamp . '_' . $randomStr . '.jpg';
+            $uploadPath = $uploadDir . $newFileName;
 
-        if (!$nip || !$nama) {
-            Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
-            return;
+            if (file_put_contents($uploadPath, $binaryData) === false) {
+                error_log("[AbsenController] Gagal menyimpan file foto Base64 di path: " . $uploadPath);
+                Response::json(false, 500, "Server error. Silahkan hubungi BKPSDM Kota Pariaman.");
+                return;
+            }
+        } elseif ($has_file_foto) {
+            if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
+                error_log("[AbsenController] Gagal membuat direktori upload: " . $uploadDir);
+                Response::json(false, 500, "Server error. Silahkan hubungi BKPSDM Kota Pariaman.");
+                return;
+            }
+            $ext = ($foto['type'] === 'application/pdf') ? 'pdf' : 'jpg';
+            $timestamp = time();
+            $randomStr = bin2hex(random_bytes(4));
+            $newFileName = $nip . '_' . $kodeAkses . '_' . $timestamp . '_' . $randomStr . '.' . $ext;
+            $uploadPath = $uploadDir . $newFileName;
+
+            if (!move_uploaded_file($foto['tmp_name'], $uploadPath)) {
+                error_log("[AbsenController] Gagal memindahkan uploaded file ke path: " . $uploadPath);
+                Response::json(false, 500, "Server error. Silahkan hubungi BKPSDM Kota Pariaman.");
+                return;
+            }
         }
 
+        // 11. Proteksi Celah 2: Cek apakah data existing sudah diverifikasi/ditolak admin
+        $stmtCheck = $db->prepare("SELECT status_verifikasi, status_kehadiran FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip LIMIT 1");
+        $stmtCheck->execute([':ka' => $kodeAkses, ':nip' => $nip]);
+        $existingRecord = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+
+        if ($existingRecord && !$isAdminOrSuperAdmin) {
+            $existingSv = $existingRecord['status_verifikasi'] ?? '';
+            if (in_array($existingSv, ['Terverifikasi Oleh Admin', 'Ditolak Oleh Admin'])) {
+                // Pertahankan keputusan Admin
+                $statusVerifikasi = $existingRecord['status_verifikasi'];
+                $statusKehadiran = $existingRecord['status_kehadiran'];
+            }
+        }
+
+        // 11b. UPDATE atau INSERT data absensi di database
         $sql = "INSERT INTO app_absensi_data_absensi 
-                    (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, waktu, lokasi, lat, lng, nama_file_foto, keterangan, status_verifikasi, status_kehadiran) 
+                    (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, waktu, lokasi, lat, lng, nama_file_foto, keterangan, keterangan_verifikasi, status_verifikasi, status_kehadiran) 
                 VALUES 
-                    (:kode_akses, :nip, :nama_pegawai, :opd, :jabatan, :kategori, :waktu, :lokasi, :lat, :lng, :nama_file_foto, :keterangan, :status_verifikasi, :status_kehadiran)
+                    (:kode_akses, :nip, :nama_pegawai, :opd, :jabatan, :kategori, :waktu, :lokasi, :lat, :lng, :nama_file_foto, :keterangan, :keterangan_verifikasi, :status_verifikasi, :status_kehadiran)
                 ON DUPLICATE KEY UPDATE
                     waktu = VALUES(waktu),
                     lokasi = VALUES(lokasi),
@@ -223,6 +329,7 @@ class AbsenController {
                     nama_file_foto = VALUES(nama_file_foto),
                     kategori = VALUES(kategori),
                     keterangan = VALUES(keterangan),
+                    keterangan_verifikasi = VALUES(keterangan_verifikasi),
                     status_verifikasi = VALUES(status_verifikasi),
                     status_kehadiran = VALUES(status_kehadiran),
                     nama_pegawai = VALUES(nama_pegawai),
@@ -237,56 +344,62 @@ class AbsenController {
             ':opd' => $opd,
             ':jabatan' => $jabatan,
             ':kategori' => $jadwal['kategori'],
-            ':waktu' => $waktu, // Waktu dari server
-            ':lokasi' => $lokasi ?? '-', // Lokasi sudah diformat oleh PWA, default '-' jika null
+            ':waktu' => $waktu,
+            ':lokasi' => $lokasi ?? '-',
             ':lat' => $lat ?? 0,
             ':lng' => $lng ?? 0,
             ':nama_file_foto' => $newFileName,
-            ':keterangan' => $keterangan,
+            ':keterangan' => $keteranganPegawai,
+            ':keterangan_verifikasi' => $keteranganVerifikasiAdmin,
             ':status_verifikasi' => $statusVerifikasi,
             ':status_kehadiran' => $statusKehadiran
         ]);
 
-        // PERBAIKAN: Cek return value dari execute() untuk memastikan query berhasil.
         if ($isSuccess) {
-            // PATCH: logging absensi
-            $jenisAksi = $stmt->rowCount() > 1 ? 'edit' : 'tambah';
-            LogAbsensi::log(
-                $db,
-                $kodeAkses,
-                $nip,
-                $nama,
-                $jenisAksi,
-                $pegawaiData['nip'] ?? '',
-                $pegawaiData['nama'] ?? '',
-                $_SERVER['REMOTE_ADDR'] ?? '',
-                [
-                    'kode_akses' => $kodeAkses,
-                    'nip' => $nip,
-                    'nama_pegawai' => $nama,
-                    'opd' => $opd,
-                    'jabatan' => $jabatan,
-                    'kategori' => $jadwal['kategori'],
-                    'waktu' => $waktu,
-                    'lokasi' => $lokasi ?? '-',
-                    'lat' => $lat ?? 0,
-                    'lng' => $lng ?? 0,
-                    'nama_file_foto' => $newFileName,
-                    'keterangan' => $keterangan,
-                    'status_verifikasi' => $statusVerifikasi,
-                    'status_kehadiran' => $statusKehadiran,
-                    'mode' => 'submit-absen',
-                ]
-            );
+            // 12. FITUR AUDIT LOG: HANYA DIJALANKAN JIKA PENGIRIM ADALAH ADMIN / SUPER ADMIN
+            if ($isAdminOrSuperAdmin) {
+                $jenisAksi = ($stmt->rowCount() > 1) ? 'edit' : 'tambah';
+                LogAbsensi::log(
+                    $db,
+                    $kodeAkses,
+                    $nip,
+                    $nama,
+                    $jenisAksi,
+                    $pegawaiData['nip'] ?? '',
+                    $pegawaiData['nama'] ?? '',
+                    $_SERVER['REMOTE_ADDR'] ?? '',
+                    [
+                        'kode_akses' => $kodeAkses,
+                        'nip' => $nip,
+                        'nama_pegawai' => $nama,
+                        'opd' => $opd,
+                        'jabatan' => $jabatan,
+                        'kategori' => $jadwal['kategori'],
+                        'waktu' => $waktu,
+                        'lokasi' => $lokasi ?? '-',
+                        'lat' => $lat ?? 0,
+                        'lng' => $lng ?? 0,
+                        'nama_file_foto' => $newFileName,
+                        'keterangan' => $keteranganPegawai,
+                        'keterangan_verifikasi' => $keteranganVerifikasiAdmin,
+                        'status_verifikasi' => $statusVerifikasi,
+                        'status_kehadiran' => $statusKehadiran,
+                        'mode' => 'submit-absen-admin',
+                    ]
+                );
+            }
+
+            // 13. Output Response JSON
             $pesanSukses = ($statusVerifikasi === 'Menunggu Verifikasi Admin') 
                 ? "Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda." 
                 : "Absen sudah terkirim.";
-            Response::json(true, 200, $pesanSukses, ['waktu' => $waktu]);
+            Response::json(true, 200, $pesanSukses);
         } else {
             if ($uploadPath && file_exists($uploadPath)) {
-                unlink($uploadPath); // Hapus foto yang sudah terunggah jika DB gagal
+                unlink($uploadPath);
             }
-            Response::json(false, 500, "Gagal menyimpan absensi ke database.", ['db_error' => $stmt->errorInfo()]);
+            error_log("[AbsenController] Gagal DB execute: " . json_encode($stmt->errorInfo()));
+            Response::json(false, 500, "Server error. Silahkan hubungi BKPSDM Kota Pariaman.");
         }
     }
 
@@ -1585,7 +1698,7 @@ class AbsenController {
                     'keterangan' => $keterangan
                 ]
             );
-            Response::json(true, 201, "Peserta berhasil ditambahkan ke dalam rekap.");
+            Response::json(true, 200, "Peserta berhasil ditambahkan ke dalam rekap.");
         } else {
             Response::json(false, 500, "Gagal menambahkan peserta ke dalam rekap.");
         }
@@ -1747,7 +1860,7 @@ class AbsenController {
             if ($dilewati > 0) $message .= " $dilewati peserta dilewati (sudah ada).";
             if ($gagal > 0) $message .= " $gagal peserta gagal diproses.";
             
-            Response::json(true, 201, $message);
+            Response::json(true, 200, $message);
 
         } catch (\Exception $e) {
             $db->rollBack();

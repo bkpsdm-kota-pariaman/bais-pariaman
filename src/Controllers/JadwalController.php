@@ -275,7 +275,7 @@ class JadwalController {
 
             $message = "Jadwal berhasil dibuat.";
             if (!$syncSuccess) { $message .= " Gagal sinkronisasi ke cache."; }
-            Response::json(true, 201, $message, ['kode_akses' => $kodeAkses]);
+            Response::json(true, 200, $message, ['kode_akses' => $kodeAkses]);
 
         } catch (\Exception $e) {
             $db->rollBack();

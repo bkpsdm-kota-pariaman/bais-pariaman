@@ -4,7 +4,7 @@ const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite 4: Admin Absensi Cepat, QR Scan & Siklus Penuh Presensi', () => {
 
-    const activeAdmin = superAdminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+    const activeAdmin = superAdminUser || { nip: '198501012000011001', nik: '1377010101850001' };
     let consoleErrors = [];
     let pageErrors = [];
 

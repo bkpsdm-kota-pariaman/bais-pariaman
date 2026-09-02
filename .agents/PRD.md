@@ -125,3 +125,27 @@ LocalStorage
 - Jangan mengubah flow utama user tanpa kebutuhan.
 - Jangan menganggap detail implementation sebagai requirement jika belum ditentukan.
 - Jika requirement baru muncul, evaluasi impact terhadap architecture, security, design, dan testing.
+
+---
+
+## 7. Standardisasi Pesan Respon User-Facing
+
+Semua pesan (`message`) dalam respon JSON yang ditujukan kepada pengguna (ASN maupun Admin) wajib mematuhi panduan ramah pengguna:
+
+1. **Dilarang Menggunakan Istilah Teknis Internal:**
+   - Dilarang menyertakan istilah teknis seperti *"server utama"*, *"binding queue"*, *"KV miss"*, *"fallback"*, *"database query error"*, atau *"exception"*.
+   - Gunakan kalimat manusiawi, lugas, dan mudah dipahami oleh ASN.
+   - Contoh pesan penolakan umum: `"Data ditolak."`.
+
+2. **Standardisasi Pesan Internal Server Error (HTTP 500):**
+   - Respon HTTP 500 untuk pengguna wajib menggunakan pesan seragam:
+     `"Server error. Silahkan hubungi BKPSDM Kota Pariaman."`
+   - Detail error teknis sesungguhnya wajib dicatat di log server internal (`console.error` di Worker atau `error_log` di PHP), **tidak diekspos ke payload JSON client**.
+
+3. **Standarisasi Status Code Response JSON:**
+   - **200 (Sukses):** Semua response berhasil (termasuk create/update/delete/get) wajib menggunakan code `200` (`status: true`).
+   - **401 (Unauthorized):** Error otentikasi, token tidak ada, kedaluwarsa, atau tidak valid.
+   - **403 (Forbidden):** Error karena akses dilarang, jadwal belum dibuka, jadwal sudah berlalu, strict time berakhir, strict location di luar radius, atau penolakan pengiriman ASN ke Worker.
+   - **404 (Not Found):** Data atau jadwal kegiatan tidak ditemukan.
+   - **422 (Unprocessable Entity):** Error validasi input, data tidak lengkap, ukuran file melebihi batas, atau format tidak sesuai.
+   - **500 (Internal Server Error):** Error internal server, kegagalan antrian/limit Cloudflare, kesalahan database, atau filesystem disk failure.

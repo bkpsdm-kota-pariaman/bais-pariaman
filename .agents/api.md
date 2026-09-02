@@ -5,11 +5,29 @@ Setiap endpoint dilengkapi dengan **Contoh Input Payload/Query**, **Contoh Outpu
 
 ---
 
-## Ringkasan Arsitektur Endpoint
+## Ringkasan Arsitektur Endpoint & Pemetaan Fallback Client-Side
 
 Sistem BAIS Pariaman menggunakan arsitektur **Hybrid Edge-Origin**:
-- **Bagian 1 — Worker Endpoints (Cloudflare Worker / Node.js Edge):** Caching KV (login, profil, jadwal, OPD, pengaturan) dan penanganan antrian skala besar (*Producer Queue*). Jika data miss, Worker mengembalikan HTTP 404 agar PWA fallback ke PHP origin.
+- **Bagian 1 — Worker Endpoints (Cloudflare Worker / Node.js Edge):** Caching KV (login, profil, jadwal, OPD, pengaturan) dan penanganan antrian skala besar (*Producer Queue*).
 - **Bagian 2 — Controller Endpoints (Backend PHP Native / FastRoute):** Server origin utama (database MySQL). Menangani logika bisnis, otentikasi fallback, pengelolaan data master, manipulasi jadwal, rekapitulasi absensi, dan penanganan batch antrian (*Queue Consumer Target*).
+
+> **PENTING Mengenai Mekanisme Fallback:**
+> Server Worker **TIDAK AKAN PERNAH melakukan fallback secara langsung di dalam server worker** ke server PHP origin. Mekanisme fallback diatur 100% di sisi **Frontend (PWA / Client)**. Jika Worker mengembalikan respon Error (misal 404 / 401 / 500 / Network Failure), Frontend PWA akan secara otomatis mencoba request ulang ke URL Fallback Server PHP Origin.
+
+### Tabel Pemetaan Fallback Endpoint Worker ke Server PHP (Client-Side Fallback)
+
+| Endpoint Worker (`[WORKER]`) | Method | Ada Fallback? | URL Path Fallback Server PHP Origin (`[CONTROLLER]`) | Keterangan Pemicu Fallback di Frontend |
+|---|---|---|---|---|
+| `/api/login-asn` | POST | YES | `/api/login` | Cache MISS di KV / Respon Worker 401/404/500 |
+| `/api/jadwal/{kode_akses}` | GET | YES | `/api/jadwal/{kode_akses}` | Cache MISS di KV / Respon Worker 404/500 |
+| `/api/absen/submit` | POST | YES | `/api/absen/submit` | Worker Error 500 / Network Error / Queue Limit Exceeded |
+| `/api/absen-cepat/submit` | POST | YES | `/api/absen-cepat/submit` | Worker Error 500 / Network Error / Queue Limit Exceeded |
+| `/api/opd/list` | GET | YES | `/api/opd/list` | Cache MISS di KV / Respon Worker 404/500 |
+| `/api/pengaturan/link-absensi-cadangan` | GET | YES | `/api/pengaturan/link-absensi-cadangan` | Cache MISS di KV / Respon Worker 404/500 |
+| `/api/admin/login` | POST | NO | *(Tidak Ada)* | Otorisasi login admin langsung via Edge KV |
+| `/api/opd-list/sync` | PUT | NO | *(Tidak Ada)* | Internal sync khusus dari Admin Panel ke Worker KV |
+| `/api/pengaturan/sync` | POST/PUT | NO | *(Tidak Ada)* | Internal sync khusus dari Admin Panel ke Worker KV |
+| `/api/jadwal/sync` | POST/PUT | NO | *(Tidak Ada)* | Internal sync khusus dari Admin Panel ke Worker KV |
 
 ---
 
@@ -419,7 +437,10 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
 - **Method:** `POST`
 - **Path:** `/api/absen/submit`
 - **Akses:** Bearer Token (ASN)
-- **Deskripsi:** Menerima absensi ASN, memvalidasi aturan ketat, lalu memasukkan pesan ke Cloudflare Queue (`MY_QUEUE`).
+- **File Test Hadir:** `ROOT_PROJECT/tests/js/api-absen-submit-hadir.test.js`
+- **File Test Tidak Hadir:** `ROOT_PROJECT/tests/js/api-absen-submit-tidakhadir.test.js`
+- **Perintah Test:** `npx cross-env WORKER_URL="https://worker-example.domain.dev" ORIGIN_URL="https://api-origin.domain.go.id/api" TEST_NIP="123456789012345678" TEST_NIK="1234567890123456" TEST_KODE_AKSES="KODE12" jest tests/js/api-absen-submit-hadir.test.js tests/js/api-absen-submit-tidakhadir.test.js`
+- **Deskripsi:** Menerima absensi ASN, memvalidasi aturan ketat (waktu, radius, batasan foto Base64 < 100 KB), lalu memasukkan pesan ke Cloudflare Queue (`MY_QUEUE`).
 
 **Input Payload (JSON):**
 ```json
@@ -429,7 +450,7 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
   "lng": "100.1187",
   "lokasi": "Kantor Walikota",
   "status_kehadiran": "Hadir",
-  "foto_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+  "foto_absensi": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
   "keterangan": "Hadir tepat waktu"
 }
 ```
@@ -439,10 +460,18 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
 {
   "status": true,
   "code": 202,
-  "message": "Absensi Anda telah diterima dan akan segera diproses.",
-  "data": {
-    "waktu": "2026-09-01T07:35:00.000Z"
-  }
+  "message": "Absen sudah terkirim.",
+  "data": null
+}
+```
+
+**Output Berhasil Menunggu Verifikasi Admin (Terlambat / Luar Radius / Izin):**
+```json
+{
+  "status": true,
+  "code": 202,
+  "message": "Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.",
+  "data": null
 }
 ```
 
@@ -450,8 +479,8 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
 ```json
 {
   "status": false,
-  "code": 403,
-  "message": "Gagal: Anda di luar lokasi. Anda hanya bisa mengirim Izin/Keterangan karena Aturan Wajib Sesuai Lokasi aktif.",
+  "code": 422,
+  "message": "Ukuran foto terlalu besar. Maksimal 100 KB.",
   "data": null
 }
 ```
@@ -1369,7 +1398,7 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 ```json
 {
   "status": true,
-  "code": 201,
+  "code": 200,
   "message": "Jadwal berhasil dibuat.",
   "data": {
     "kode_akses": "KODE12"
@@ -2518,7 +2547,7 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 ```json
 {
   "status": true,
-  "code": 201,
+  "code": 200,
   "message": "Pegawai berhasil ditambahkan.",
   "data": null
 }
@@ -2724,7 +2753,7 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 ```json
 {
   "status": true,
-  "code": 201,
+  "code": 200,
   "message": "OPD berhasil ditambahkan.",
   "data": null
 }

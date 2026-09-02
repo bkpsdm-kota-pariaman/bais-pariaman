@@ -4,7 +4,7 @@ const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite: Admin CRUD Data Pegawai Master', () => {
 
-    const activeAdmin = adminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+    const activeAdmin = adminUser || { nip: '198501012000011001', nik: '1377010101850001' };
     let consoleErrors = [];
     let pageErrors = [];
 
@@ -79,7 +79,7 @@ test.describe('E2E Suite: Admin CRUD Data Pegawai Master', () => {
 
         // NIP harus pas 18 digit angka, NIK pas 16 digit angka
         const rand3Digits = (Math.floor(100 + Math.random() * 900)).toString();
-        const nipBaru = `199801012022011${rand3Digits}`; // 18 digit (4+4+6+1+3)
+        const nipBaru = `199801012022001${rand3Digits}`; // 18 digit (4+4+6+1+3)
         const nikBaru = `1371061001980${rand3Digits}`;  // 16 digit (8+4+1+3)
         const namaBaru = `Pegawai Test ${rand3Digits}`;
 

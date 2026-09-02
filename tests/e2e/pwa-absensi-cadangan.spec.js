@@ -45,11 +45,11 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
         await expect(formView).toBeVisible({ timeout: 15000 });
 
         logAction.step('2. Mengisi Biodata Diri & Alasan Absensi Cadangan (Awal)');
-        
+
         const testData = {
             kode: '1F0442',
             namaKegiatan: 'Apel Gabungan ASN Pemko Pariaman',
-            nip: '199510102020121011',
+            nip: '199510102020021011',
             nama: 'EGO DAFMA DASA',
             jabatan: 'Analis SDM Aparatur Ahli Pertama',
             opd: 'BADAN KEPEGAWAIAN DAN PENGEMBANGAN SUMBER DAYA MANUSIA',

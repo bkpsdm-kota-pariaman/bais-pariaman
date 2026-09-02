@@ -187,7 +187,7 @@ class MasterDataController {
         if ($isSuccess) {
             $message = "Pegawai berhasil ditambahkan.";
             if (!$syncSuccess) { $message .= " Gagal sinkronisasi ke cache."; }
-            Response::json(true, 201, $message);
+            Response::json(true, 200, $message);
         } else {
             Response::json(false, 500, "Gagal menambahkan pegawai.");
         }
@@ -440,7 +440,7 @@ class MasterDataController {
 
         $stmt = $db->prepare("INSERT INTO app_absensi_list_opd (nama_opd) VALUES (?)");
         if ($stmt->execute([$namaOpd])) {
-            Response::json(true, 201, "OPD berhasil ditambahkan.");
+            Response::json(true, 200, "OPD berhasil ditambahkan.");
         } else {
             Response::json(false, 500, "Gagal menambahkan OPD ke database.");
         }

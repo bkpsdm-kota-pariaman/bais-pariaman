@@ -141,15 +141,19 @@ export default {
 				const cachedJadwal = await env.JADWAL_KV.get(`jadwal:${kodeAkses}`, 'json');
 				if (!cachedJadwal) return null;
 
-				const now = new Date();
+				const now = payload.submittedAt ? new Date(payload.submittedAt) : new Date();
 				const todayYMD = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 				if (cachedJadwal.tanggal !== todayYMD) {
-					return { error: true, code: 403, message: "Gagal: Jadwal ini tidak berlaku untuk hari ini." };
+					if (todayYMD > cachedJadwal.tanggal) {
+						return { error: true, code: 403, message: "Gagal: Jadwal kegiatan ini sudah berlalu." };
+					} else {
+						return { error: true, code: 403, message: "Gagal: Jadwal kegiatan ini belum dimulai." };
+					}
 				}
 
 				const startTime = new Date(`${cachedJadwal.tanggal}T${cachedJadwal.jam_mulai}+07:00`);
 				if (now < startTime) {
-					return { error: true, code: 403, message: `Gagal: Absensi belum dibuka. Silakan tunggu hingga pukul ${cachedJadwal.jam_mulai} WIB.` };
+					return { error: true, code: 403, message: `Absensi untuk kegiatan ini belum dibuka. Silakan coba lagi pada atau setelah pukul ${String(cachedJadwal.jam_mulai).substring(0, 5)} WIB.` };
 				}
 
 				const status = (payload.status_kehadiran || "hadir").toLowerCase();
@@ -181,12 +185,17 @@ export default {
 				if (status === "hadir") {
 					// Validasi Strict Time
 					if (cachedJadwal.is_strict_time && cachedJadwal.is_strict_time == 1 && isTerlambat) {
-						return { error: true, code: 403, message: "Gagal: Waktu Berakhir. Anda hanya bisa mengirim Izin/Keterangan karena Aturan Waktu Berlaku aktif." };
+						return { error: true, code: 403, message: "Gagal: Waktu Berakhir. Anda melanggar Aturan Waktu Berlaku." };
 					}
 
 					// Validasi Strict Location
 					if (cachedJadwal.is_strict_location && cachedJadwal.is_strict_location == 1 && isLuarRadius) {
-						return { error: true, code: 403, message: `Gagal: Anda di luar lokasi. Anda hanya bisa mengirim Izin/Keterangan karena Aturan Wajib Sesuai Lokasi aktif.` };
+						return { error: true, code: 403, message: "Gagal: Di Luar Lokasi. Anda melanggar Aturan Wajib Sesuai Lokasi." };
+					}
+
+					// Jika terlambat atau luar radius, keterangan wajib diisi
+					if ((isTerlambat || isLuarRadius) && (!payload.keterangan || String(payload.keterangan).trim() === '')) {
+						return { error: true, code: 422, message: "Anda terlambat atau berada di luar radius lokasi. Kolom keterangan wajib diisi." };
 					}
 				}
 
@@ -1054,7 +1063,7 @@ export default {
 					delete queuePayload.keterangan; // Jangan timpa kolom keterangan pegawai
 					await env.MY_QUEUE.send(queuePayload);
 
-					return jsonResponse(true, 202, 'Absensi Cepat telah diterima dan akan segera diproses.');
+					return jsonResponse(true, 200, 'Absensi Cepat telah diterima dan akan segera diproses.');
 				} catch (error) {
 					console.error('Error di fetch handler (producer absen-cepat) worker / queue limit:', error);
 					return jsonResponse(false, 500, 'Server worker / Queue limit exceeded: ' + (error.message || 'Gagal memproses permintaan Absensi Cepat Anda.'));
@@ -1080,6 +1089,7 @@ export default {
 				}
 
 				const token = authHeader.substring(7);
+				const secret = new TextEncoder().encode(env.JWT_SECRET);
 				let jwtPayload;
 				try {
 					const { payload: decodedPayload } = await jwtVerify(token, secret, { issuer: ALLOWED_ISSUERS });
@@ -1091,18 +1101,59 @@ export default {
 				try {
 					const payload = await request.json();
 
-					// Validasi role: jika role = asn (bukan admin/super admin), foto_base64 / bukti dukung wajib diisi
+					if (!payload.kode_akses || String(payload.kode_akses).trim() === '') {
+						return jsonResponse(false, 422, 'Kode akses kegiatan wajib diisi.');
+					}
+					if (!payload.status_kehadiran || String(payload.status_kehadiran).trim() === '') {
+						return jsonResponse(false, 422, 'Status kehadiran wajib dipilih.');
+					}
+
 					const userRoles = Array.isArray(jwtPayload?.data?.role)
 						? jwtPayload.data.role
 						: (jwtPayload?.data?.role ? [jwtPayload.data.role] : ['asn']);
 					const isAdminOrSuperAdmin = userRoles.some(r => ['admin', 'super admin'].includes(String(r).trim().toLowerCase()));
+					const isHadir = String(payload.status_kehadiran).toLowerCase() === 'hadir';
+
+					// TOLAK KHUSUS CELAH 6: ASN yang mencoba kirim opsi 'Tidak Hadir' ke Worker
+					if (!isAdminOrSuperAdmin && !isHadir) {
+						return jsonResponse(false, 403, 'Data ditolak.');
+					}
+
+					// Isolasi identitas pegawai dari JWT jika pengirim adalah ASN (Proteksi Celah 3)
+					if (!isAdminOrSuperAdmin) {
+						payload.nip = jwtPayload?.data?.nip || payload.nip;
+						payload.nama = jwtPayload?.data?.nama || payload.nama;
+						payload.opd = jwtPayload?.data?.opd || payload.opd;
+						payload.jabatan = jwtPayload?.data?.jabatan || payload.jabatan;
+					}
+
 					const isSubmittedByAdmin = isAdminOrSuperAdmin || payload.status_verifikasi === 'Terverifikasi Oleh Admin';
 
-					const hasFoto = Boolean(payload.foto_base64 && String(payload.foto_base64).trim() !== '');
+					const rawFoto = payload.foto_absensi || payload.foto_base64 || payload.foto || '';
+					const hasFoto = Boolean(rawFoto && String(rawFoto).trim() !== '');
 
-					if (!isSubmittedByAdmin && !hasFoto) {
-						return jsonResponse(false, 400, 'Foto / bukti dukung wajib diisi.');
+					if (isHadir) {
+						const pLat = parseFloat(payload.lat);
+						const pLng = parseFloat(payload.lng);
+						const isGpsKosong = isNaN(pLat) || isNaN(pLng) || pLat === 0 || pLng === 0 || !payload.lokasi || String(payload.lokasi).trim() === '';
+						if (!isSubmittedByAdmin && isGpsKosong) {
+							return jsonResponse(false, 422, 'Lokasi GPS wajib diisi untuk presensi Hadir.');
+						}
+
+						if (!isSubmittedByAdmin && !hasFoto) {
+							return jsonResponse(false, 422, 'Foto / bukti dukung wajib diisi.');
+						}
+						if (hasFoto) {
+							const cleanBase64 = String(rawFoto).replace(/^data:(image|application)\/\w+;base64,/, '');
+							const estimatedBytes = Math.ceil(cleanBase64.length * 3 / 4);
+							if (estimatedBytes > 100 * 1024) {
+								return jsonResponse(false, 422, 'Ukuran foto terlalu besar. Maksimal 100 KB.', null);
+							}
+						}
 					}
+
+					// Sediakan Edge Timestamping presisi
+					payload.submittedAt = new Date().toISOString();
 
 					// Validasi jadwal (waktu mulai, strict time, strict location)
 					const validationError = await validateJadwalAbsen(payload.kode_akses, payload);
@@ -1112,20 +1163,20 @@ export default {
 
 					if (!env.MY_QUEUE) {
 						console.error("Binding MY_QUEUE belum dikonfigurasi.");
-						return jsonResponse(false, 500, 'Server worker error: Binding Queue belum dikonfigurasi di Cloudflare.');
+						return jsonResponse(false, 500, 'Server error. Silahkan hubungi BKPSDM Kota Pariaman.');
 					}
 
-					const queuePayload = { ...payload, jwt_token: token, submittedAt: new Date().toISOString() };
+					const queuePayload = { ...payload, jwt_token: token };
 					await env.MY_QUEUE.send(queuePayload);
 
 					const pesanSukses = (payload.status_verifikasi === 'Menunggu Verifikasi Admin')
 						? 'Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.'
-						: 'Absensi Anda telah diterima dan akan segera diproses.';
+						: 'Absen sudah terkirim.';
 
-					return jsonResponse(true, 202, pesanSukses, { waktu: new Date().toISOString() });
+					return jsonResponse(true, 200, pesanSukses);
 				} catch (error) {
 					console.error('Error di fetch handler (producer) worker / queue limit:', error);
-					return jsonResponse(false, 500, 'Server worker / Queue limit exceeded: ' + (error.message || 'Gagal memproses permintaan Anda.'));
+					return jsonResponse(false, 500, 'Server error. Silahkan hubungi BKPSDM Kota Pariaman.');
 				}
 			}
 

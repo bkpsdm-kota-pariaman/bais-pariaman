@@ -1192,3 +1192,34 @@ E2E PASS
 **Jangan mengubah aplikasi agar test PASS.**
 
 **Perbaiki akar masalah.**
+
+---
+
+## 25. Standarisasi Logging pada Test Code
+
+Dalam pembuatan atau pembaruan kode pengujian (Jest Unit/Integration maupun Playwright E2E), setiap skenario pengujian **WAJIB mencantumkan log terstruktur** yang informatif saat test dijalankan.
+
+### Komponen Log Wajib:
+
+1. **Log Langkah (`step_number` / `step_title`):** Nomor atau urutan langkah pengujian yang sedang dieksekusi.
+2. **Nama Aksi (`action_name`):** Deskripsi aksi spesifik yang dilakukan (contoh: `"Submit Absensi Hadir Tanpa Foto"`, `"Login Admin via API"`).
+3. **Data yang Dikirim ke Server (`request_payload` / `headers`):** Menampilkan payload JSON dan header HTTP yang dikirim (string Base64 gambar/berkas wajib dipangkas agar log tidak memenuhkan layar).
+4. **Response Fetch Data dari Server (`response_status` & `response_body`):** HTTP status code riil dan payload JSON yang dikembalikan oleh server backend / Worker.
+5. **Output Harapan (`expected_output`):** Ekspektasi status code, status boolean (`true`/`false`), dan pesan error/sukses yang diharapkan dari kontrak API.
+6. **Output yang Muncul (`actual_output` / `match_status`):** Menampilkan hasil riil perbandingan antara ekspektasi dan respon aktual beserta indikator status (`✅ LULUS / PASS` atau `❌ GAGAL / FAIL`).
+
+### Format Log Baku Contoh:
+
+```text
+=================================================================
+LANGKAH TEST  : 1 / 10
+NAMA AKSI     : Submit Absensi Hadir Tanpa Foto Selfie
+SERVER TARGET : WORKER EDGE (https://worker.domain.dev/api/absen/submit)
+HTTP METHOD   : POST
+DATA DIKIRIM  : { "kode_akses": "KODETEST", "status_kehadiran": "Hadir" }
+RESPON SERVER : HTTP 422 - { "status": false, "code": 422, "message": "Foto / bukti dukung wajib diisi." }
+OUTPUT HARAPAN: { "status": false, "code": 422, "message": "Foto / bukti dukung wajib diisi." }
+OUTPUT MUNCUL : { "status": false, "code": 422, "message": "Foto / bukti dukung wajib diisi." }
+STATUS TEST   : ✅ LULUS (PASS)
+=================================================================
+```

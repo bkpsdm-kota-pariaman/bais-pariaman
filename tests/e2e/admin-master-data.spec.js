@@ -4,7 +4,7 @@ const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite 1: Admin Authentication & Master Data Management', () => {
 
-    const activeAdmin = adminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+    const activeAdmin = adminUser || { nip: '198501012000011001', nik: '1377010101850001' };
     let consoleErrors = [];
     let pageErrors = [];
 

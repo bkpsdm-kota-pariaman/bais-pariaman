@@ -6,7 +6,7 @@ const { attachLogger, logAction } = require('./test-logger');
 
 test.describe('E2E Suite: Admin Import Data Absensi CSV', () => {
 
-    const activeAdmin = adminUser || { nip: '198501012010011001', nik: '1377010101850001' };
+    const activeAdmin = adminUser || { nip: '198501012000011001', nik: '1377010101850001' };
     let consoleErrors = [];
     let pageErrors = [];
     const tempCsvPath = path.join(__dirname, '../fixtures/temp_import_20.csv');
@@ -172,7 +172,7 @@ test.describe('E2E Suite: Admin Import Data Absensi CSV', () => {
 
         logAction.click('Tombol Simpan Jadwal', '#btnSimpanKegiatan');
         await Promise.all([
-            page.waitForResponse(resp => resp.url().includes('/admin/jadwal') && (resp.status() === 200 || resp.status() === 201)),
+            page.waitForResponse(resp => resp.url().includes('/admin/jadwal') && (resp.status() === 200 || resp.status() === 200)),
             page.click('#btnSimpanKegiatan')
         ]);
         await expect(modalBuat).toBeHidden({ timeout: 15000 });

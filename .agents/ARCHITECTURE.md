@@ -58,7 +58,7 @@ firebase/php-jwt
 
 Backend menyediakan RESTful API.
 
-### Background Layer
+### Background & Edge Layer (Cloudflare Worker)
 
 Node.js worker berada di:
 
@@ -66,7 +66,10 @@ Node.js worker berada di:
 worker/
 ```
 
-Worker menangani proses background, cache, dan queue sesuai implementasi aplikasi.
+Worker menangani proses background, caching KV, dan antrean queue.
+
+> **Aturan Penting Mekanisme Fallback:**
+> Server Worker **TIDAK AKAN PERNAH melakukan fallback secara langsung di dalam server worker** ke server PHP origin. Mekanisme fallback diatur 100% di sisi **Frontend (PWA / Client)** berdasarkan HTTP response code dari Worker (misal Error 500 / Network Error). Selain itu, **tidak semua endpoint worker memiliki fallback** ke server PHP origin (hanya endpoint publik tertentu yang didukung).
 
 ### Data Access Layer
 
