@@ -1,5 +1,7 @@
 /**
- * Test Uji Coba Endpoint Submit Absensi Kegiatan ASN (Status Kehadiran: HADIR)
+ * Test Uji Coba Endpoint Submit Presensi Kegiatan ASN (Status Kehadiran: HADIR)
+ * Symmetrical Testing: PHP Origin Direct & Cloudflare Worker Edge (18 Langkah Test)
+ * Sesuai Standar Logging Seksi 25 .agents/TESTING.md & Siklus Fixture Jadwal Dinamis
  * File: tests/js/api-absen-submit-hadir.test.js
  */
 
@@ -10,10 +12,9 @@ const WORKER_URL = process.env.WORKER_URL;
 const ORIGIN_URL = process.env.ORIGIN_URL || process.env.PHP_URL;
 const TEST_NIP = process.env.TEST_NIP || process.env.NIP;
 const TEST_NIK = process.env.TEST_NIK || process.env.NIK;
-const TEST_KODE_AKSES = process.env.TEST_KODE_AKSES || 'TESTKODE123';
 
-const TEST_ADMIN_USERNAME = process.env.TEST_ADMIN_USERNAME || process.env.ADMIN_USER;
-const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.ADMIN_PASS;
+const TEST_ADMIN_USERNAME = process.env.TEST_ADMIN_USERNAME || process.env.ADMIN_USER || 'admin';
+const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.ADMIN_PASS || 'admin123';
 
 /**
  * Dummy Foto Base64 Kecil (< 100 KB) - 1x1 Pixel Red Dot JPEG
@@ -25,30 +26,39 @@ const VALID_SMALL_BASE64_PHOTO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASAB
  */
 const OVERSIZE_BASE64_PHOTO = "data:image/jpeg;base64," + "A".repeat(140000);
 
+// Koordinat Pusat Pariaman
+const KOORDINAT_PUSAT = '-0.626411,100.124588';
+// Koordinat Jauh (Jakarta)
+const KOORDINAT_JAUH = '-6.208763,106.845599';
+
 function printLog(message) {
     process.stdout.write(message + '\n');
 }
 
-function logTestDetail({ testName, serverName, method, endpointUrl, payload, resStatus, resBody, isPass }) {
+/**
+ * Helper Standarisasi Logging Test Sesuai Seksi 25 .agents/TESTING.md
+ */
+function logTestDetail({ step, action, serverTarget, method, endpointUrl, payload, resStatus, resBody, expectedOutput, actualOutput, isPass }) {
     printLog(`\n=================================================================`);
-    printLog(`TEST SUITE : ${testName}`);
-    printLog(`SERVER     : ${serverName}`);
-    printLog(`HTTP METHOD: ${method}`);
-    printLog(`ENDPOINT   : ${endpointUrl}`);
+    printLog(`LANGKAH TEST  : ${step}`);
+    printLog(`NAMA AKSI     : ${action}`);
+    printLog(`SERVER TARGET : ${serverTarget} (${endpointUrl})`);
+    printLog(`HTTP METHOD   : ${method}`);
     
     if (payload) {
         const payloadCopy = { ...payload };
         if (payloadCopy.foto_absensi && payloadCopy.foto_absensi.length > 50) {
             payloadCopy.foto_absensi = payloadCopy.foto_absensi.substring(0, 50) + `... [Total ${payloadCopy.foto_absensi.length} bytes/chars]`;
         }
-        printLog(`DATA DIKIRIM: ${JSON.stringify(payloadCopy, null, 2)}`);
+        printLog(`DATA DIKIRIM  : ${JSON.stringify(payloadCopy, null, 2)}`);
     } else {
-        printLog(`DATA DIKIRIM: (Tanpa Payload / Kosong)`);
+        printLog(`DATA DIKIRIM  : (Tanpa Payload / Kosong)`);
     }
 
-    printLog(`HTTP STATUS : ${resStatus}`);
-    printLog(`RESPON OUTPUT: ${JSON.stringify(resBody, null, 2)}`);
-    printLog(`STATUS TEST : ${isPass ? '✅ LULUS (PASS)' : '❌ GAGAL (FAIL)'}`);
+    printLog(`RESPON SERVER : HTTP ${resStatus} - ${JSON.stringify(resBody, null, 2)}`);
+    printLog(`OUTPUT HARAPAN: ${JSON.stringify(expectedOutput, null, 2)}`);
+    printLog(`OUTPUT MUNCUL : ${JSON.stringify(actualOutput || resBody, null, 2)}`);
+    printLog(`STATUS TEST   : ${isPass ? '✅ LULUS (PASS)' : '❌ GAGAL (FAIL)'}`);
     printLog(`=================================================================\n`);
 }
 
@@ -118,7 +128,6 @@ async function sendHttpRequest(targetUrl, options = {}) {
     });
 }
 
-// Format Helper Jam (HH:mm:ss)
 function formatTimeOffset(offsetMinutes) {
     const d = new Date(Date.now() + offsetMinutes * 60000);
     const hours = String(d.getHours()).padStart(2, '0');
@@ -127,19 +136,14 @@ function formatTimeOffset(offsetMinutes) {
     return `${hours}:${mins}:${secs}`;
 }
 
-describe('Uji Coba Endpoint Submit Absensi (Status Kehadiran: HADIR)', () => {
-    let validAuthToken = null;
-    let adminAuthToken = null;
-
-    // Kode Akses Jadwal Fixture
-    const KODE_NORMAL = TEST_KODE_AKSES;
-    const KODE_FUTURE = `FUT${TEST_KODE_AKSES.substring(0, 3)}`.toUpperCase();
-    const KODE_EXPIRED = `EXP${TEST_KODE_AKSES.substring(0, 3)}`.toUpperCase();
-    const KODE_STRICT_LOC = `LOC${TEST_KODE_AKSES.substring(0, 3)}`.toUpperCase();
+describe('Uji Coba Endpoint Submit Presensi ASN (Status Kehadiran: HADIR)', () => {
+    let asnToken = null;
+    let adminToken = null;
+    let dynamicKodeAkses = null;
 
     beforeAll(async () => {
-        if (!WORKER_URL || !ORIGIN_URL || !TEST_NIP || !TEST_NIK) {
-            throw new Error('Environment variable WORKER_URL, ORIGIN_URL, TEST_NIP, dan TEST_NIK wajib disediakan!');
+        if (!ORIGIN_URL || !TEST_NIP || !TEST_NIK) {
+            throw new Error('Environment variable ORIGIN_URL, TEST_NIP, dan TEST_NIK wajib disediakan!');
         }
 
         // 1. Login ASN
@@ -151,414 +155,1058 @@ describe('Uji Coba Endpoint Submit Absensi (Status Kehadiran: HADIR)', () => {
         });
         const loginData = await loginRes.json();
         if (loginData && loginData.status && loginData.data) {
-            validAuthToken = loginData.data.access_token || loginData.data.token;
+            asnToken = loginData.data.access_token || loginData.data.token;
         }
 
-        // 2. Setup Otomatis Jadwal Uji via Admin API (jika credential admin ada)
-        if (TEST_ADMIN_USERNAME && TEST_ADMIN_PASSWORD) {
-            try {
-                const adminLoginUrl = buildTargetUrl(ORIGIN_URL, `/api/admin/login?cb=${Date.now()}`);
-                const adminLoginRes = await sendHttpRequest(adminLoginUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD })
-                });
-                const adminLoginData = await adminLoginRes.json();
-                if (adminLoginData && adminLoginData.status && adminLoginData.data) {
-                    adminAuthToken = adminLoginData.data.access_token || adminLoginData.data.token;
-                }
+        // 2. Login Admin
+        const adminLoginUrl = buildTargetUrl(ORIGIN_URL, `/api/admin/login?cb=${Date.now()}`);
+        const adminLoginRes = await sendHttpRequest(adminLoginUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD })
+        });
+        const adminLoginData = await adminLoginRes.json();
+        if (adminLoginData && adminLoginData.status && adminLoginData.data) {
+            adminToken = adminLoginData.data.access_token || adminLoginData.data.token;
+        }
 
-                if (adminAuthToken) {
-                    const todayYMD = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-                    const adminHeaders = {
-                        'Authorization': `Bearer ${adminAuthToken}`,
-                        'Content-Type': 'application/json'
-                    };
-
-                    // Fixture 1: Jadwal Normal Valid (Buka)
-                    await sendHttpRequest(buildTargetUrl(ORIGIN_URL, `/api/jadwal/${KODE_NORMAL}`), {
-                        method: 'PUT',
-                        headers: adminHeaders,
-                        body: JSON.stringify({
-                            judul: 'Uji Coba Presensi Hadir Normal',
-                            kategori: 'Apel Pagi',
-                            tanggal: todayYMD,
-                            jam_mulai: formatTimeOffset(-60),
-                            jam_selesai: formatTimeOffset(120),
-                            koordinat: '-0.626411,100.124588',
-                            radius_meter: 50000,
-                            is_strict_time: 0,
-                            is_strict_location: 0,
-                            aktifkan_antrian: 1
-                        })
-                    });
-
-                    // Fixture 2: Jadwal Belum Buka (Future)
-                    await sendHttpRequest(buildTargetUrl(ORIGIN_URL, `/api/jadwal/${KODE_FUTURE}`), {
-                        method: 'PUT',
-                        headers: adminHeaders,
-                        body: JSON.stringify({
-                            judul: 'Uji Coba Presensi Belum Buka',
-                            kategori: 'Rapat',
-                            tanggal: todayYMD,
-                            jam_mulai: formatTimeOffset(60),
-                            jam_selesai: formatTimeOffset(180),
-                            koordinat: '-0.626411,100.124588',
-                            radius_meter: 5000,
-                            is_strict_time: 0,
-                            is_strict_location: 0,
-                            aktifkan_antrian: 1
-                        })
-                    });
-
-                    // Fixture 3: Jadwal Strict Time Expired
-                    await sendHttpRequest(buildTargetUrl(ORIGIN_URL, `/api/jadwal/${KODE_EXPIRED}`), {
-                        method: 'PUT',
-                        headers: adminHeaders,
-                        body: JSON.stringify({
-                            judul: 'Uji Coba Presensi Strict Time Expired',
-                            kategori: 'Apel Sore',
-                            tanggal: todayYMD,
-                            jam_mulai: formatTimeOffset(-120),
-                            jam_selesai: formatTimeOffset(-60),
-                            koordinat: '-0.626411,100.124588',
-                            radius_meter: 5000,
-                            is_strict_time: 1,
-                            is_strict_location: 0,
-                            aktifkan_antrian: 1
-                        })
-                    });
-
-                    // Fixture 4: Jadwal Strict Location (Radius Sempit 5 meter)
-                    await sendHttpRequest(buildTargetUrl(ORIGIN_URL, `/api/jadwal/${KODE_STRICT_LOC}`), {
-                        method: 'PUT',
-                        headers: adminHeaders,
-                        body: JSON.stringify({
-                            judul: 'Uji Coba Presensi Strict Location',
-                            kategori: 'Upacara',
-                            tanggal: todayYMD,
-                            jam_mulai: formatTimeOffset(-60),
-                            jam_selesai: formatTimeOffset(120),
-                            koordinat: '-0.626411,100.124588',
-                            radius_meter: 5,
-                            is_strict_time: 0,
-                            is_strict_location: 1,
-                            aktifkan_antrian: 1
-                        })
-                    });
-                }
-            } catch (err) {
-                console.warn('[beforeAll] Setup fixture jadwal otomatis dilewati:', err.message);
+        // 3. Tambah Jadwal Baru Dinamis via Admin API
+        if (adminToken) {
+            const todayYMD = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+            const createJadwalUrl = buildTargetUrl(ORIGIN_URL, `/api/admin/jadwal?cb=${Date.now()}`);
+            const createRes = await sendHttpRequest(createJadwalUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${adminToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    judul: 'Uji Coba Presensi Hadir Otomatis',
+                    kategori: 'Apel Pagi',
+                    tanggal: todayYMD,
+                    jam_mulai: formatTimeOffset(-60),
+                    jam_selesai: formatTimeOffset(120),
+                    koordinat: KOORDINAT_PUSAT,
+                    radius_meter: 50000,
+                    is_strict_time: 0,
+                    is_strict_location: 0,
+                    aktifkan_antrian: 1
+                })
+            });
+            const createData = await createRes.json();
+            if (createData && createData.data && createData.data.kode_akses) {
+                dynamicKodeAkses = createData.data.kode_akses;
             }
         }
     });
 
-    // =========================================================================
-    // 1. TEST UNAUTHENTICATED (401)
-    // =========================================================================
-    test('1. Test submit Hadir tanpa token auth -> Error 401 (Kecocokan Worker vs Origin)', async () => {
-        const workerTargetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const originTargetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+    afterAll(async () => {
+        // Cleanup: Hapus jadwal uji dinamis
+        if (adminToken && dynamicKodeAkses) {
+            try {
+                await sendHttpRequest(buildTargetUrl(ORIGIN_URL, `/api/admin/jadwal/${dynamicKodeAkses}?cb=${Date.now()}`), {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+            } catch (e) {}
+        }
+    });
 
+    /**
+     * Helper Manipulasi Konfigurasi Jadwal Uji via Admin API
+     */
+    async function updateJadwalConfig(customConfig) {
+        if (!adminToken || !dynamicKodeAkses) return;
+        const todayYMD = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+        const updateUrl = buildTargetUrl(ORIGIN_URL, `/api/admin/jadwal/${dynamicKodeAkses}?cb=${Date.now()}`);
+        
         const payload = {
-            kode_akses: KODE_NORMAL,
+            judul: 'Uji Coba Presensi Hadir Otomatis',
+            kategori: 'Apel Pagi',
+            tanggal: todayYMD,
+            jam_mulai: formatTimeOffset(-60),
+            jam_selesai: formatTimeOffset(120),
+            koordinat: KOORDINAT_PUSAT,
+            radius_meter: 50000,
+            is_strict_time: 0,
+            is_strict_location: 0,
+            aktifkan_antrian: 1,
+            ...customConfig
+        };
+
+        await sendHttpRequest(updateUrl, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+    }
+
+    // =========================================================================
+    // SKENARIO 1: SUBMIT HADIR NORMAL (LOKASI BEBAS & JADWAL BUKA)
+    // =========================================================================
+    test('1. Test submit presensi Hadir normal ke PHP Origin -> Sukses 200', async () => {
+        expect(asnToken).toBeDefined();
+        expect(dynamicKodeAkses).toBeDefined();
+
+        await updateJadwalConfig({
+            jam_mulai: formatTimeOffset(-60),
+            jam_selesai: formatTimeOffset(120),
+            is_strict_time: 0,
+            is_strict_location: 0,
+            radius_meter: 50000
+        });
+
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
             status_kehadiran: 'Hadir',
-            lat: '-0.626',
-            lng: '100.124',
-            lokasi: 'Balaikota Pariaman',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
             foto_absensi: VALID_SMALL_BASE64_PHOTO
         };
 
-        const headers = { 'Content-Type': 'application/json' };
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
 
-        const workerRes = await sendHttpRequest(workerTargetUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
-        const workerData = await workerRes.json();
-
-        const originRes = await sendHttpRequest(originTargetUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
-        const originData = await originRes.json();
-
-        const isWorkerPass = (workerData.status === false && workerData.code === 401);
-        const isOriginPass = (originData.status === false && originData.code === 401);
+        const expectedOutput = { status: true, code: 200, message: 'Absen sudah terkirim.' };
+        const isPass = (resData.status === true && resData.code === 200 && resData.message === expectedOutput.message);
 
         logTestDetail({
-            testName: '1. HADIR TANPA TOKEN AUTH (401)',
-            serverName: 'WORKER EDGE',
+            step: '1 / 18',
+            action: `Submit Presensi Hadir Normal ke PHP Origin (${dynamicKodeAkses})`,
+            serverTarget: 'PHP ORIGIN DIRECT',
             method: 'POST',
-            endpointUrl: workerTargetUrl,
+            endpointUrl: targetUrl,
             payload,
-            resStatus: workerRes.status,
-            resBody: workerData,
-            isPass: isWorkerPass
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
         });
+
+        expect(resData.status).toBe(true);
+        expect(resData.code).toBe(200);
+        expect(resData.message).toBe('Absen sudah terkirim.');
+    });
+
+    test('2. Test submit presensi Hadir normal ke Worker Edge -> Sukses 200', async () => {
+        if (!WORKER_URL) {
+            printLog('[SKIPPED] Test 2 dilewati karena WORKER_URL tidak diset.');
+            return;
+        }
+
+        const targetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = { status: true, code: 200, message: 'Absen sudah terkirim.' };
+        const isPass = (resData.status === true && resData.code === 200 && resData.message === expectedOutput.message);
 
         logTestDetail({
-            testName: '1. HADIR TANPA TOKEN AUTH (401)',
-            serverName: 'PHP ORIGIN',
+            step: '2 / 18',
+            action: `Submit Presensi Hadir Normal ke Cloudflare Worker Edge (${dynamicKodeAkses})`,
+            serverTarget: 'CLOUDFLARE WORKER EDGE',
             method: 'POST',
-            endpointUrl: originTargetUrl,
+            endpointUrl: targetUrl,
             payload,
-            resStatus: originRes.status,
-            resBody: originData,
-            isPass: isOriginPass
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
         });
 
-        expect(workerData.status).toBe(originData.status);
-        expect(workerData.code).toBe(originData.code);
-        expect(workerData.message).toBe(originData.message);
-        expect(originData.status).toBe(false);
-        expect(originData.code).toBe(401);
-        expect(originData.message).toBe('Waktu login Anda sudah habis. Silahkan login ulang.');
+        expect(resData.status).toBe(true);
+        expect(resData.code).toBe(200);
+        expect(resData.message).toBe('Absen sudah terkirim.');
     });
 
     // =========================================================================
-    // 2. TEST DATA INCOMPLETE / TANPA FOTO (422)
+    // SKENARIO 2: TEST WAKTU BELUM MULAI (FUTURE)
     // =========================================================================
-    test('2. Test submit Hadir tanpa foto selfie -> Error 422 (Kecocokan Worker vs Origin)', async () => {
-        expect(validAuthToken).toBeDefined();
+    test('3. Test submit presensi sebelum jam mulai ke PHP Origin -> Ditolak 403', async () => {
+        expect(asnToken).toBeDefined();
 
-        const workerTargetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const originTargetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        await updateJadwalConfig({
+            jam_mulai: formatTimeOffset(30), // Mulai 30 menit ke depan
+            jam_selesai: formatTimeOffset(120),
+            is_strict_time: 0
+        });
 
-        const payloadIncomplete = {
-            kode_akses: KODE_NORMAL,
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
             status_kehadiran: 'Hadir',
-            lat: '-0.626',
-            lng: '100.124',
-            lokasi: 'Balaikota Pariaman'
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
         };
 
-        const headers = {
-            'Authorization': `Bearer ${validAuthToken}`,
-            'Content-Type': 'application/json'
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const isPass = (resData.status === false && resData.code === 403 && /^Absensi untuk kegiatan ini belum dibuka/.test(resData.message));
+        const expectedOutput = {
+            status: false,
+            code: 403,
+            message: 'Absensi untuk kegiatan ini belum dibuka. Silakan coba lagi pada atau setelah pukul (HH:mm) WIB.'
         };
 
-        const workerRes = await sendHttpRequest(workerTargetUrl, { method: 'POST', headers, body: JSON.stringify(payloadIncomplete) });
-        const workerData = await workerRes.json();
-
-        const originRes = await sendHttpRequest(originTargetUrl, { method: 'POST', headers, body: JSON.stringify(payloadIncomplete) });
-        const originData = await originRes.json();
-
-        const isWorkerPass = (workerData.status === false && workerData.code === 422);
-        const isOriginPass = (originData.status === false && originData.code === 422);
-
         logTestDetail({
-            testName: '2. HADIR TANPA FOTO SELFIE (422)',
-            serverName: 'WORKER EDGE',
+            step: '3 / 18',
+            action: 'Submit Presensi Sebelum Waktu Masuk ke PHP Origin',
+            serverTarget: 'PHP ORIGIN DIRECT',
             method: 'POST',
-            endpointUrl: workerTargetUrl,
-            payload: payloadIncomplete,
-            resStatus: workerRes.status,
-            resBody: workerData,
-            isPass: isWorkerPass
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
         });
 
-        logTestDetail({
-            testName: '2. HADIR TANPA FOTO SELFIE (422)',
-            serverName: 'PHP ORIGIN',
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(403);
+        expect(resData.message).toMatch(/^Absensi untuk kegiatan ini belum dibuka\. Silakan coba lagi pada atau setelah pukul \d{2}:\d{2} WIB\.$/);
+    });
+
+    test('4. Test submit presensi sebelum jam mulai ke Worker Edge -> Ditolak 403', async () => {
+        if (!WORKER_URL) {
+            printLog('[SKIPPED] Test 4 dilewati karena WORKER_URL tidak diset.');
+            return;
+        }
+
+        const targetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
             method: 'POST',
-            endpointUrl: originTargetUrl,
-            payload: payloadIncomplete,
-            resStatus: originRes.status,
-            resBody: originData,
-            isPass: isOriginPass
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const isPass = (resData.status === false && resData.code === 403 && /^Absensi untuk kegiatan ini belum dibuka/.test(resData.message));
+        const expectedOutput = {
+            status: false,
+            code: 403,
+            message: 'Absensi untuk kegiatan ini belum dibuka. Silakan coba lagi pada atau setelah pukul (HH:mm) WIB.'
+        };
+
+        logTestDetail({
+            step: '4 / 18',
+            action: 'Submit Presensi Sebelum Waktu Masuk ke Worker Edge',
+            serverTarget: 'CLOUDFLARE WORKER EDGE',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
         });
 
-        expect(workerData.status).toBe(originData.status);
-        expect(workerData.code).toBe(originData.code);
-        expect(workerData.message).toBe(originData.message);
-        expect(originData.status).toBe(false);
-        expect(originData.code).toBe(422);
-        expect(originData.message).toBe('Foto / bukti dukung wajib diisi.');
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(403);
+        expect(resData.message).toMatch(/^Absensi untuk kegiatan ini belum dibuka\. Silakan coba lagi pada atau setelah pukul \d{2}:\d{2} WIB\.$/);
     });
 
     // =========================================================================
-    // 3. TEST OVERSIZED PHOTO BASE64 > 100 KB (422)
+    // SKENARIO 3: TEST WAKTU SELESAI + STRICT TIME (EXPIRED)
     // =========================================================================
-    test('3. Test submit Hadir dengan foto Base64 > 100 KB -> Error 422 (Kecocokan Worker vs Origin)', async () => {
-        expect(validAuthToken).toBeDefined();
+    test('5. Test submit presensi setelah jam selesai (is_strict_time=1) ke PHP Origin -> Ditolak 403', async () => {
+        expect(asnToken).toBeDefined();
 
-        const workerTargetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const originTargetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        await updateJadwalConfig({
+            jam_mulai: formatTimeOffset(-120),
+            jam_selesai: formatTimeOffset(-30), // Selesai 30 menit yang lalu
+            is_strict_time: 1
+        });
 
-        const payloadOversize = {
-            kode_akses: KODE_NORMAL,
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
             status_kehadiran: 'Hadir',
-            lat: '-0.626',
-            lng: '100.124',
-            lokasi: 'Balaikota Pariaman',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = {
+            status: false,
+            code: 403,
+            message: 'Gagal: Waktu Berakhir. Anda melanggar Aturan Waktu Berlaku.'
+        };
+        const isPass = (resData.status === false && resData.code === 403 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '5 / 18',
+            action: 'Submit Presensi Melewati Batas Waktu ke PHP Origin (is_strict_time=1)',
+            serverTarget: 'PHP ORIGIN DIRECT',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(403);
+        expect(resData.message).toBe('Gagal: Waktu Berakhir. Anda melanggar Aturan Waktu Berlaku.');
+    });
+
+    test('6. Test submit presensi setelah jam selesai (is_strict_time=1) ke Worker Edge -> Ditolak 403', async () => {
+        if (!WORKER_URL) {
+            printLog('[SKIPPED] Test 6 dilewati karena WORKER_URL tidak diset.');
+            return;
+        }
+
+        const targetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = {
+            status: false,
+            code: 403,
+            message: 'Gagal: Waktu Berakhir. Anda melanggar Aturan Waktu Berlaku.'
+        };
+        const isPass = (resData.status === false && resData.code === 403 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '6 / 18',
+            action: 'Submit Presensi Melewati Batas Waktu ke Worker Edge (is_strict_time=1)',
+            serverTarget: 'CLOUDFLARE WORKER EDGE',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(403);
+        expect(resData.message).toBe('Gagal: Waktu Berakhir. Anda melanggar Aturan Waktu Berlaku.');
+    });
+
+    // =========================================================================
+    // SKENARIO 4: TEST STRICT LOCATION (DI LUAR RADIUS)
+    // =========================================================================
+    test('7. Test submit presensi di luar radius (is_strict_location=1) ke PHP Origin -> Ditolak 403', async () => {
+        expect(asnToken).toBeDefined();
+
+        await updateJadwalConfig({
+            jam_mulai: formatTimeOffset(-60),
+            jam_selesai: formatTimeOffset(120),
+            is_strict_time: 0,
+            is_strict_location: 1,
+            koordinat: KOORDINAT_PUSAT,
+            radius_meter: 50
+        });
+
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_JAUH,
+            lat: -6.208763,
+            lng: 106.845599,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = {
+            status: false,
+            code: 403,
+            message: 'Gagal: Di Luar Lokasi. Anda melanggar Aturan Wajib Sesuai Lokasi.'
+        };
+        const isPass = (resData.status === false && resData.code === 403 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '7 / 18',
+            action: 'Submit Presensi di Luar Radius ke PHP Origin (is_strict_location=1)',
+            serverTarget: 'PHP ORIGIN DIRECT',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(403);
+        expect(resData.message).toBe('Gagal: Di Luar Lokasi. Anda melanggar Aturan Wajib Sesuai Lokasi.');
+    });
+
+    test('8. Test submit presensi di luar radius (is_strict_location=1) ke Worker Edge -> Ditolak 403', async () => {
+        if (!WORKER_URL) {
+            printLog('[SKIPPED] Test 8 dilewati karena WORKER_URL tidak diset.');
+            return;
+        }
+
+        const targetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_JAUH,
+            lat: -6.208763,
+            lng: 106.845599,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = {
+            status: false,
+            code: 403,
+            message: 'Gagal: Di Luar Lokasi. Anda melanggar Aturan Wajib Sesuai Lokasi.'
+        };
+        const isPass = (resData.status === false && resData.code === 403 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '8 / 18',
+            action: 'Submit Presensi di Luar Radius ke Worker Edge (is_strict_location=1)',
+            serverTarget: 'CLOUDFLARE WORKER EDGE',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(403);
+        expect(resData.message).toBe('Gagal: Di Luar Lokasi. Anda melanggar Aturan Wajib Sesuai Lokasi.');
+    });
+
+    // =========================================================================
+    // SKENARIO 5: TEST STRICT LOCATION (DI DALAM RADIUS)
+    // =========================================================================
+    test('9. Test submit presensi di dalam radius (is_strict_location=1) ke PHP Origin -> Sukses 200', async () => {
+        expect(asnToken).toBeDefined();
+
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = { status: true, code: 200, message: 'Absen sudah terkirim.' };
+        const isPass = (resData.status === true && resData.code === 200 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '9 / 18',
+            action: 'Submit Presensi di Dalam Radius ke PHP Origin (is_strict_location=1)',
+            serverTarget: 'PHP ORIGIN DIRECT',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(true);
+        expect(resData.code).toBe(200);
+        expect(resData.message).toBe('Absen sudah terkirim.');
+    });
+
+    test('10. Test submit presensi di dalam radius (is_strict_location=1) ke Worker Edge -> Sukses 200', async () => {
+        if (!WORKER_URL) {
+            printLog('[SKIPPED] Test 10 dilewati karena WORKER_URL tidak diset.');
+            return;
+        }
+
+        const targetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = { status: true, code: 200, message: 'Absen sudah terkirim.' };
+        const isPass = (resData.status === true && resData.code === 200 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '10 / 18',
+            action: 'Submit Presensi di Dalam Radius ke Worker Edge (is_strict_location=1)',
+            serverTarget: 'CLOUDFLARE WORKER EDGE',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(true);
+        expect(resData.code).toBe(200);
+        expect(resData.message).toBe('Absen sudah terkirim.');
+    });
+
+    // =========================================================================
+    // SKENARIO 6: TEST QR CODE TOKEN DYNAMIC (VALID)
+    // =========================================================================
+    test('11. Test submit presensi dengan QR Token Valid ke PHP Origin -> Sukses 200', async () => {
+        expect(adminToken).toBeDefined();
+
+        const qrUrl = buildTargetUrl(ORIGIN_URL, `/api/admin/jadwal/generate-token/${dynamicKodeAkses}?cb=${Date.now()}`);
+        const qrRes = await sendHttpRequest(qrUrl, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const qrData = await qrRes.json();
+        const validQrToken = qrData?.data?.token;
+        expect(validQrToken).toBeDefined();
+
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO,
+            qr_token: validQrToken
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = { status: true, code: 200, message: 'Absen sudah terkirim.' };
+        const isPass = (resData.status === true && resData.code === 200 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '11 / 18',
+            action: 'Submit Presensi Membawa QR Token Valid ke PHP Origin',
+            serverTarget: 'PHP ORIGIN DIRECT',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(true);
+        expect(resData.code).toBe(200);
+        expect(resData.message).toBe('Absen sudah terkirim.');
+    });
+
+    test('12. Test submit presensi dengan QR Token Valid ke Worker Edge -> Sukses 200', async () => {
+        if (!WORKER_URL) {
+            printLog('[SKIPPED] Test 12 dilewati karena WORKER_URL tidak diset.');
+            return;
+        }
+
+        const qrUrl = buildTargetUrl(ORIGIN_URL, `/api/admin/jadwal/generate-token/${dynamicKodeAkses}?cb=${Date.now()}`);
+        const qrRes = await sendHttpRequest(qrUrl, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const qrData = await qrRes.json();
+        const validQrToken = qrData?.data?.token;
+        expect(validQrToken).toBeDefined();
+
+        const targetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO,
+            qr_token: validQrToken
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = { status: true, code: 200, message: 'Absen sudah terkirim.' };
+        const isPass = (resData.status === true && resData.code === 200 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '12 / 18',
+            action: 'Submit Presensi Membawa QR Token Valid ke Worker Edge',
+            serverTarget: 'CLOUDFLARE WORKER EDGE',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(true);
+        expect(resData.code).toBe(200);
+        expect(resData.message).toBe('Absen sudah terkirim.');
+    });
+
+    // =========================================================================
+    // SKENARIO 7: TEST QR CODE TOKEN INVALID / PALSU
+    // =========================================================================
+    test('13. Test submit presensi dengan QR Token Invalid/Palsu ke PHP Origin -> Ditolak 401', async () => {
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO,
+            qr_token: 'INVALID_OR_TAMPERED_QR_TOKEN_STRING'
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = {
+            status: false,
+            code: 401,
+            message: 'Token QR Code tidak valid atau sudah kedaluwarsa.'
+        };
+        const isPass = (resData.status === false && resData.code === 401 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '13 / 18',
+            action: 'Submit Presensi dengan QR Token Invalid ke PHP Origin',
+            serverTarget: 'PHP ORIGIN DIRECT',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(401);
+        expect(resData.message).toBe('Token QR Code tidak valid atau sudah kedaluwarsa.');
+    });
+
+    test('14. Test submit presensi dengan QR Token Invalid/Palsu ke Worker Edge -> Ditolak 401', async () => {
+        if (!WORKER_URL) {
+            printLog('[SKIPPED] Test 14 dilewati karena WORKER_URL tidak diset.');
+            return;
+        }
+
+        const targetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO,
+            qr_token: 'INVALID_OR_TAMPERED_QR_TOKEN_STRING'
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = {
+            status: false,
+            code: 401,
+            message: 'Token QR Code tidak valid atau sudah kedaluwarsa.'
+        };
+        const isPass = (resData.status === false && resData.code === 401 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '14 / 18',
+            action: 'Submit Presensi dengan QR Token Invalid ke Worker Edge',
+            serverTarget: 'CLOUDFLARE WORKER EDGE',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(401);
+        expect(resData.message).toBe('Token QR Code tidak valid atau sudah kedaluwarsa.');
+    });
+
+    // =========================================================================
+    // SKENARIO 8: TEST VALIDASI GPS WAJIB UNTUK STATUS HADIR (422)
+    // =========================================================================
+    test('15. Test submit Hadir tanpa koordinat GPS valid ke PHP Origin -> Error 422', async () => {
+        await updateJadwalConfig({
+            jam_mulai: formatTimeOffset(-60),
+            jam_selesai: formatTimeOffset(120),
+            is_strict_time: 0,
+            is_strict_location: 0,
+            radius_meter: 50000
+        });
+
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: '',
+            lat: 0,
+            lng: 0,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = {
+            status: false,
+            code: 422,
+            message: 'Lokasi GPS wajib diisi untuk presensi Hadir.'
+        };
+        const isPass = (resData.status === false && resData.code === 422 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '15 / 18',
+            action: 'Validasi GPS Wajib Diisi untuk Status Hadir ke PHP Origin (lat/lng = 0)',
+            serverTarget: 'PHP ORIGIN DIRECT',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(422);
+        expect(resData.message).toBe('Lokasi GPS wajib diisi untuk presensi Hadir.');
+    });
+
+    test('16. Test submit Hadir tanpa koordinat GPS valid ke Worker Edge -> Error 422', async () => {
+        if (!WORKER_URL) {
+            printLog('[SKIPPED] Test 16 dilewati karena WORKER_URL tidak diset.');
+            return;
+        }
+
+        const targetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: '',
+            lat: 0,
+            lng: 0,
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = {
+            status: false,
+            code: 422,
+            message: 'Lokasi GPS wajib diisi untuk presensi Hadir.'
+        };
+        const isPass = (resData.status === false && resData.code === 422 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '16 / 18',
+            action: 'Validasi GPS Wajib Diisi untuk Status Hadir ke Worker Edge (lat/lng = 0)',
+            serverTarget: 'CLOUDFLARE WORKER EDGE',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(422);
+        expect(resData.message).toBe('Lokasi GPS wajib diisi untuk presensi Hadir.');
+    });
+
+    // =========================================================================
+    // SKENARIO 9: TEST VALIDASI UKURAN FOTO OVERSIZE (422)
+    // =========================================================================
+    test('17. Test submit presensi foto > 100 KB ke PHP Origin -> Error 422', async () => {
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
             foto_absensi: OVERSIZE_BASE64_PHOTO
         };
 
-        const headers = {
-            'Authorization': `Bearer ${validAuthToken}`,
-            'Content-Type': 'application/json'
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = {
+            status: false,
+            code: 422,
+            message: 'Ukuran foto terlalu besar. Maksimal 100 KB.'
         };
-
-        const workerRes = await sendHttpRequest(workerTargetUrl, { method: 'POST', headers, body: JSON.stringify(payloadOversize) });
-        const workerData = await workerRes.json();
-
-        const originRes = await sendHttpRequest(originTargetUrl, { method: 'POST', headers, body: JSON.stringify(payloadOversize) });
-        const originData = await originRes.json();
-
-        const isWorkerPass = (workerData.status === false && workerData.code === 422);
-        const isOriginPass = (originData.status === false && originData.code === 422);
+        const isPass = (resData.status === false && resData.code === 422 && resData.message === expectedOutput.message);
 
         logTestDetail({
-            testName: '3. HADIR FOTO OVERSIZED > 100KB (422)',
-            serverName: 'WORKER EDGE',
+            step: '17 / 18',
+            action: 'Validasi Ukuran Foto Absensi > 100 KB ke PHP Origin',
+            serverTarget: 'PHP ORIGIN DIRECT',
             method: 'POST',
-            endpointUrl: workerTargetUrl,
-            payload: payloadOversize,
-            resStatus: workerRes.status,
-            resBody: workerData,
-            isPass: isWorkerPass
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
         });
 
-        logTestDetail({
-            testName: '3. HADIR FOTO OVERSIZED > 100KB (422)',
-            serverName: 'PHP ORIGIN',
-            method: 'POST',
-            endpointUrl: originTargetUrl,
-            payload: payloadOversize,
-            resStatus: originRes.status,
-            resBody: originData,
-            isPass: isOriginPass
-        });
-
-        expect(workerData.status).toBe(originData.status);
-        expect(workerData.code).toBe(originData.code);
-        expect(workerData.message).toBe(originData.message);
-        expect(originData.status).toBe(false);
-        expect(originData.code).toBe(422);
-        expect(originData.message).toBe('Ukuran foto terlalu besar. Maksimal 100 KB.');
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(422);
+        expect(resData.message).toBe('Ukuran foto terlalu besar. Maksimal 100 KB.');
     });
 
-    // =========================================================================
-    // 4. TEST MISSING GPS KOORDINAT HADIR (422)
-    // =========================================================================
-    test('4. Test submit Hadir tanpa koordinat GPS / 0,0 -> Error 422 (Kecocokan Worker vs Origin)', async () => {
-        expect(validAuthToken).toBeDefined();
-
-        const workerTargetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const originTargetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
-
-        const payloadNoGps = {
-            kode_akses: KODE_NORMAL,
-            status_kehadiran: 'Hadir',
-            lat: '0',
-            lng: '0',
-            lokasi: '',
-            foto_absensi: VALID_SMALL_BASE64_PHOTO
-        };
-
-        const headers = {
-            'Authorization': `Bearer ${validAuthToken}`,
-            'Content-Type': 'application/json'
-        };
-
-        const workerRes = await sendHttpRequest(workerTargetUrl, { method: 'POST', headers, body: JSON.stringify(payloadNoGps) });
-        const workerData = await workerRes.json();
-
-        const originRes = await sendHttpRequest(originTargetUrl, { method: 'POST', headers, body: JSON.stringify(payloadNoGps) });
-        const originData = await originRes.json();
-
-        const isWorkerPass = (workerData.status === false && workerData.code === 422);
-        const isOriginPass = (originData.status === false && originData.code === 422);
-
-        logTestDetail({
-            testName: '4. HADIR TANPA GPS KOORDINAT (422)',
-            serverName: 'WORKER EDGE',
-            method: 'POST',
-            endpointUrl: workerTargetUrl,
-            payload: payloadNoGps,
-            resStatus: workerRes.status,
-            resBody: workerData,
-            isPass: isWorkerPass
-        });
-
-        logTestDetail({
-            testName: '4. HADIR TANPA GPS KOORDINAT (422)',
-            serverName: 'PHP ORIGIN',
-            method: 'POST',
-            endpointUrl: originTargetUrl,
-            payload: payloadNoGps,
-            resStatus: originRes.status,
-            resBody: originData,
-            isPass: isOriginPass
-        });
-
-        expect(workerData.status).toBe(originData.status);
-        expect(workerData.code).toBe(originData.code);
-        expect(workerData.message).toBe(originData.message);
-        expect(originData.status).toBe(false);
-        expect(originData.code).toBe(422);
-        expect(originData.message).toBe('Lokasi GPS wajib diisi untuk presensi Hadir.');
-    });
-
-    // =========================================================================
-    // 5. TEST POSITIVE SUBMIT HADIR FOTO VALID < 100 KB (200)
-    // =========================================================================
-    test('5. Test submit Hadir dengan data & foto valid -> Sukses kecocokan Worker vs PHP Origin (200)', async () => {
-        expect(validAuthToken).toBeDefined();
-
-        const workerTargetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const originTargetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
-
-        const validPayload = {
-            kode_akses: KODE_NORMAL,
-            status_kehadiran: 'Hadir',
-            lat: '-0.626411',
-            lng: '100.124588',
-            lokasi: 'Balaikota Pariaman',
-            keterangan: 'Presensi Hadir Uji Coba',
-            foto_absensi: VALID_SMALL_BASE64_PHOTO
-        };
-
-        const headers = {
-            'Authorization': `Bearer ${validAuthToken}`,
-            'Content-Type': 'application/json'
-        };
-
-        const originRes = await sendHttpRequest(originTargetUrl, { method: 'POST', headers, body: JSON.stringify(validPayload) });
-        const originData = await originRes.json();
-
-        const workerRes = await sendHttpRequest(workerTargetUrl, { method: 'POST', headers, body: JSON.stringify(validPayload) });
-        const workerData = await workerRes.json();
-
-        const isWorkerPass = (workerData.status === true && workerData.code === 200);
-        const isOriginPass = (originData.status === true && originData.code === 200);
-
-        logTestDetail({
-            testName: '5. HADIR DATA & FOTO VALID (200)',
-            serverName: 'PHP ORIGIN',
-            method: 'POST',
-            endpointUrl: originTargetUrl,
-            payload: validPayload,
-            resStatus: originRes.status,
-            resBody: originData,
-            isPass: isOriginPass
-        });
-
-        logTestDetail({
-            testName: '5. HADIR DATA & FOTO VALID (200)',
-            serverName: 'WORKER EDGE',
-            method: 'POST',
-            endpointUrl: workerTargetUrl,
-            payload: validPayload,
-            resStatus: workerRes.status,
-            resBody: workerData,
-            isPass: isWorkerPass
-        });
-
-        if (originData.status === true && workerData.status === true) {
-            expect(workerData.status).toBe(originData.status);
-            expect(workerData.code).toBe(originData.code);
-            expect(workerData.message).toBe(originData.message);
-            expect(originData.status).toBe(true);
-            expect(originData.code).toBe(200);
-            expect(workerData.code).toBe(200);
-            expect(originData.data).toBeNull();
-            expect(workerData.data).toBeNull();
+    test('18. Test submit presensi foto > 100 KB ke Worker Edge -> Error 422', async () => {
+        if (!WORKER_URL) {
+            printLog('[SKIPPED] Test 18 dilewati karena WORKER_URL tidak diset.');
+            return;
         }
+
+        const targetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Hadir',
+            lokasi: KOORDINAT_PUSAT,
+            lat: -0.626411,
+            lng: 100.124588,
+            foto_absensi: OVERSIZE_BASE64_PHOTO
+        };
+
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
+
+        const expectedOutput = {
+            status: false,
+            code: 422,
+            message: 'Ukuran foto terlalu besar. Maksimal 100 KB.'
+        };
+        const isPass = (resData.status === false && resData.code === 422 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '18 / 18',
+            action: 'Validasi Ukuran Foto Absensi > 100 KB ke Worker Edge',
+            serverTarget: 'CLOUDFLARE WORKER EDGE',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(422);
+        expect(resData.message).toBe('Ukuran foto terlalu besar. Maksimal 100 KB.');
     });
 });

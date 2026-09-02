@@ -181,6 +181,16 @@ export default {
 					}
 				}
 
+				// Validasi QR Code Token jika dikirim
+				if (payload.qr_token && String(payload.qr_token).trim() !== '') {
+					try {
+						const secret = new TextEncoder().encode(env.JWT_SECRET);
+						await jwtVerify(payload.qr_token, secret, { issuer: ALLOWED_ISSUERS });
+					} catch (e) {
+						return { error: true, code: 401, message: "Token QR Code tidak valid atau sudah kedaluwarsa." };
+					}
+				}
+
 				// Jika pegawai mencoba Hadir murni (bukan Izin/Sakit/Cuti)
 				if (status === "hadir") {
 					// Validasi Strict Time

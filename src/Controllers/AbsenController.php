@@ -68,6 +68,20 @@ class AbsenController {
         $statusKehadiranInput = $_POST['status_kehadiran'] ?? $input['status_kehadiran'] ?? 'Hadir';
         $statusVerifikasiInput = $_POST['status_verifikasi'] ?? $input['status_verifikasi'] ?? 'Terverifikasi Sistem';
         $submittedAtInput = $input['submittedAt'] ?? $input['submitted_at'] ?? $_POST['submittedAt'] ?? null;
+        $qrTokenInput = $_POST['qr_token'] ?? $input['qr_token'] ?? null;
+
+        if (!empty($qrTokenInput)) {
+            try {
+                $qrDecoded = JWT::decode($qrTokenInput, new \Firebase\JWT\Key($secretKey, 'HS256'));
+                if (isset($qrDecoded->exp) && $qrDecoded->exp < time()) {
+                    Response::json(false, 401, "Token QR Code tidak valid atau sudah kedaluwarsa.", null);
+                    return;
+                }
+            } catch (\Exception $e) {
+                Response::json(false, 401, "Token QR Code tidak valid atau sudah kedaluwarsa.", null);
+                return;
+            }
+        }
 
         // Tentukan Waktu Resmi Presensi ($waktu)
         if (!empty($submittedAtInput)) {

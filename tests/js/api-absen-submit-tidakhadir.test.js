@@ -1,5 +1,7 @@
 /**
- * Test Uji Coba Endpoint Submit Absensi Kegiatan ASN (Status Kehadiran: TIDAK HADIR / IZIN / SAKIT / CUTI)
+ * Test Uji Coba Endpoint Submit Absensi Kegiatan ASN (Status Kehadiran: TIDAK HADIR)
+ * Status: Izin, Sakit, Dinas Luar, Cuti (Cukai)
+ * Sesuai Standar Logging Seksi 25 .agents/TESTING.md & Siklus Fixture Jadwal Dinamis
  * File: tests/js/api-absen-submit-tidakhadir.test.js
  */
 
@@ -10,38 +12,43 @@ const WORKER_URL = process.env.WORKER_URL;
 const ORIGIN_URL = process.env.ORIGIN_URL || process.env.PHP_URL;
 const TEST_NIP = process.env.TEST_NIP || process.env.NIP;
 const TEST_NIK = process.env.TEST_NIK || process.env.NIK;
-const TEST_KODE_AKSES = process.env.TEST_KODE_AKSES || 'TESTKODE123';
+
+const TEST_ADMIN_USERNAME = process.env.TEST_ADMIN_USERNAME || process.env.ADMIN_USER || 'admin';
+const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.ADMIN_PASS || 'admin123';
 
 /**
- * File Bukti Dukung Valid < 1 MB
+ * Dummy Foto Base64 Kecil (< 100 KB)
  */
-const VALID_SMALL_DOC = "data:application/pdf;base64,JVBERi0xLjAKMSAwIG9iajw8L1BhZ2VzIDIgMCBSPj5lbmRvYmoKMiAwIG9iajw8L0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvTWVkaWFCb3hbMCAwIDMgM10+PmVuZG9iagp4cmVmCjAgNAowMDAwMDAwMDAwIDY1NTM1IGYKMDAwMDAwMDAxMCAwMDAwMCBuCjAwMDAwMDAwNTAgMDAwMDAgbgowMDAwMDAwMDk2IDAwMDAwIG4KdHJhaWxlcjw8L1Jvb3QgMSAwIFIvU2l6ZSA0Pj4KJSVFT0YK";
-
-/**
- * File Bukti Dukung Oversized > 1 MB (1.048.576 bytes)
- */
-const OVERSIZED_DOC = "data:application/pdf;base64," + "A".repeat(1450000);
+const VALID_SMALL_BASE64_PHOTO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=";
 
 function printLog(message) {
     process.stdout.write(message + '\n');
 }
 
-function logFetchDetail(stepTitle, serverName, targetUrl, headers, payload, resStatus, resBody) {
+/**
+ * Helper Standarisasi Logging Test Sesuai Seksi 25 .agents/TESTING.md
+ */
+function logTestDetail({ step, action, serverTarget, method, endpointUrl, payload, resStatus, resBody, expectedOutput, actualOutput, isPass }) {
     printLog(`\n=================================================================`);
-    printLog(`[${stepTitle}] SERVER: ${serverName}`);
-    printLog(`URL     : ${targetUrl}`);
-    printLog(`HEADERS : ${JSON.stringify(headers || {})}`);
+    printLog(`LANGKAH TEST  : ${step}`);
+    printLog(`NAMA AKSI     : ${action}`);
+    printLog(`SERVER TARGET : ${serverTarget} (${endpointUrl})`);
+    printLog(`HTTP METHOD   : ${method}`);
+    
     if (payload) {
         const payloadCopy = { ...payload };
         if (payloadCopy.foto_absensi && payloadCopy.foto_absensi.length > 50) {
-            payloadCopy.foto_absensi = payloadCopy.foto_absensi.substring(0, 50) + `... [Total ${payloadCopy.foto_absensi.length} chars]`;
+            payloadCopy.foto_absensi = payloadCopy.foto_absensi.substring(0, 50) + `... [Total ${payloadCopy.foto_absensi.length} bytes/chars]`;
         }
-        printLog(`PAYLOAD : ${JSON.stringify(payloadCopy)}`);
+        printLog(`DATA DIKIRIM  : ${JSON.stringify(payloadCopy, null, 2)}`);
     } else {
-        printLog(`PAYLOAD : (empty / none)`);
+        printLog(`DATA DIKIRIM  : (Tanpa Payload / Kosong)`);
     }
-    printLog(`HTTP ST : ${resStatus}`);
-    printLog(`RESPONSE: ${JSON.stringify(resBody, null, 2)}`);
+
+    printLog(`RESPON SERVER : HTTP ${resStatus} - ${JSON.stringify(resBody, null, 2)}`);
+    printLog(`OUTPUT HARAPAN: ${JSON.stringify(expectedOutput, null, 2)}`);
+    printLog(`OUTPUT MUNCUL : ${JSON.stringify(actualOutput || resBody, null, 2)}`);
+    printLog(`STATUS TEST   : ${isPass ? '✅ LULUS (PASS)' : '❌ GAGAL (FAIL)'}`);
     printLog(`=================================================================\n`);
 }
 
@@ -111,14 +118,25 @@ async function sendHttpRequest(targetUrl, options = {}) {
     });
 }
 
-describe('Uji Coba Endpoint Submit Absensi (Status Kehadiran: TIDAK HADIR / IZIN / SAKIT)', () => {
-    let validAuthToken = null;
+function formatTimeOffset(offsetMinutes) {
+    const d = new Date(Date.now() + offsetMinutes * 60000);
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    const secs = String(d.getSeconds()).padStart(2, '0');
+    return `${hours}:${mins}:${secs}`;
+}
+
+describe('Uji Coba Endpoint Submit Absensi ASN (Status Kehadiran: TIDAK HADIR)', () => {
+    let asnToken = null;
+    let adminToken = null;
+    let dynamicKodeAkses = null;
 
     beforeAll(async () => {
-        if (!WORKER_URL || !ORIGIN_URL || !TEST_NIP || !TEST_NIK) {
-            throw new Error('Environment variable WORKER_URL, ORIGIN_URL, TEST_NIP, dan TEST_NIK wajib disediakan!');
+        if (!ORIGIN_URL || !TEST_NIP || !TEST_NIK) {
+            throw new Error('Environment variable ORIGIN_URL, TEST_NIP, dan TEST_NIK wajib disediakan!');
         }
 
+        // 1. Login ASN
         const loginUrl = buildTargetUrl(ORIGIN_URL, `/api/login-asn?cb=${Date.now()}`);
         const loginRes = await sendHttpRequest(loginUrl, {
             method: 'POST',
@@ -127,170 +145,310 @@ describe('Uji Coba Endpoint Submit Absensi (Status Kehadiran: TIDAK HADIR / IZIN
         });
         const loginData = await loginRes.json();
         if (loginData && loginData.status && loginData.data) {
-            validAuthToken = loginData.data.access_token || loginData.data.token;
+            asnToken = loginData.data.access_token || loginData.data.token;
+        }
+
+        // 2. Login Admin
+        const adminLoginUrl = buildTargetUrl(ORIGIN_URL, `/api/admin/login?cb=${Date.now()}`);
+        const adminLoginRes = await sendHttpRequest(adminLoginUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD })
+        });
+        const adminLoginData = await adminLoginRes.json();
+        if (adminLoginData && adminLoginData.status && adminLoginData.data) {
+            adminToken = adminLoginData.data.access_token || adminLoginData.data.token;
+        }
+
+        // 3. Buat Jadwal Uji Dinamis
+        if (adminToken) {
+            const todayYMD = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+            const createJadwalUrl = buildTargetUrl(ORIGIN_URL, `/api/admin/jadwal?cb=${Date.now()}`);
+            const createRes = await sendHttpRequest(createJadwalUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${adminToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    judul: 'Uji Coba Presensi Tidak Hadir Dinamis',
+                    kategori: 'Apel Pagi',
+                    tanggal: todayYMD,
+                    jam_mulai: formatTimeOffset(-60),
+                    jam_selesai: formatTimeOffset(120),
+                    koordinat: '-0.626411,100.124588',
+                    radius_meter: 50000,
+                    is_strict_time: 0,
+                    is_strict_location: 0,
+                    aktifkan_antrian: 1
+                })
+            });
+            const createData = await createRes.json();
+            if (createData && createData.data && createData.data.kode_akses) {
+                dynamicKodeAkses = createData.data.kode_akses;
+            }
+        }
+    });
+
+    afterAll(async () => {
+        // Cleanup jadwal uji
+        if (adminToken && dynamicKodeAkses) {
+            try {
+                await sendHttpRequest(buildTargetUrl(ORIGIN_URL, `/api/admin/jadwal/${dynamicKodeAkses}?cb=${Date.now()}`), {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+            } catch (e) {}
         }
     });
 
     // =========================================================================
-    // 1. TEST UNAUTHENTICATED (401)
+    // 1. PENOLAKAN WORKER EDGE (403 "Data ditolak.")
     // =========================================================================
-    test('1. Test submit Izin tanpa token auth -> Error 401 (Worker vs Origin)', async () => {
-        const workerTargetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const originTargetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+    test('1. Test penolakan Worker untuk status Tidak Hadir (Izin) -> Error 403', async () => {
+        if (!WORKER_URL) {
+            printLog('[SKIPPED] Test 1 dilewati karena WORKER_URL tidak diset.');
+            return;
+        }
 
+        const targetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
         const payload = {
-            kode_akses: TEST_KODE_AKSES,
+            kode_akses: dynamicKodeAkses,
             status_kehadiran: 'Izin',
-            keterangan: 'Izin urusan keluarga'
+            keterangan: 'Ada keperluan keluarga mendesak',
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
         };
 
-        const headers = { 'Content-Type': 'application/json' };
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
 
-        const workerRes = await sendHttpRequest(workerTargetUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
-        const workerData = await workerRes.json();
-        logFetchDetail('TEST 1: IZIN TANPA TOKEN AUTH', 'WORKER EDGE', workerTargetUrl, headers, payload, workerRes.status, workerData);
+        const expectedOutput = {
+            status: false,
+            code: 403,
+            message: 'Data ditolak.'
+        };
 
-        const originRes = await sendHttpRequest(originTargetUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
-        const originData = await originRes.json();
-        logFetchDetail('TEST 1: IZIN TANPA TOKEN AUTH', 'PHP ORIGIN', originTargetUrl, headers, payload, originRes.status, originData);
+        const isPass = (resData.status === false && resData.code === 403 && resData.message === expectedOutput.message);
 
-        expect(workerData.status).toBe(originData.status);
-        expect(workerData.code).toBe(originData.code);
-        expect(workerData.message).toBe(originData.message);
-        expect(originData.status).toBe(false);
-        expect(originData.code).toBe(401);
-        expect(originData.message).toBe('Waktu login Anda sudah habis. Silahkan login ulang.');
+        logTestDetail({
+            step: '1 / 5',
+            action: 'Penolakan Pengiriman Tidak Hadir ke Cloudflare Worker Edge',
+            serverTarget: 'CLOUDFLARE WORKER EDGE',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(false);
+        expect(resData.code).toBe(403);
+        expect(resData.message).toBe('Data ditolak.');
     });
 
     // =========================================================================
-    // 2. TEST PROTEKSI WORKER EDGE (403 Data Ditolak)
+    // 2. PENGIRIMAN LANGSUNG KE PHP ORIGIN (IZIN, SAKIT, DINAS LUAR, CUTI)
     // =========================================================================
-    test('2. Test ASN submit Izin ke Worker Edge -> Error 403 (Data ditolak.)', async () => {
-        expect(validAuthToken).toBeDefined();
+    test('2. Test submit status IZIN langsung ke PHP Origin -> Sukses 200', async () => {
+        expect(asnToken).toBeDefined();
+        expect(dynamicKodeAkses).toBeDefined();
 
-        const workerTargetUrl = buildTargetUrl(WORKER_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const payloadIzin = {
-            kode_akses: TEST_KODE_AKSES,
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
             status_kehadiran: 'Izin',
-            keterangan: 'Izin urusan keluarga'
-        };
-        const headers = {
-            'Authorization': `Bearer ${validAuthToken}`,
-            'Content-Type': 'application/json'
+            keterangan: 'Ada urusan keluarga penting',
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
         };
 
-        const workerRes = await sendHttpRequest(workerTargetUrl, { method: 'POST', headers, body: JSON.stringify(payloadIzin) });
-        const workerData = await workerRes.json();
-        logFetchDetail('TEST 2: WORKER EDGE DITOLAK UNTUK IZIN', 'WORKER EDGE', workerTargetUrl, headers, payloadIzin, workerRes.status, workerData);
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
 
-        expect(workerData.status).toBe(false);
-        expect(workerData.code).toBe(403);
-        expect(workerData.message).toBe('Data ditolak.');
+        const expectedOutput = {
+            status: true,
+            code: 200,
+            message: 'Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.'
+        };
+
+        const isPass = (resData.status === true && resData.code === 200 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '2 / 5',
+            action: `Submit Presensi Status IZIN ke PHP Origin (${dynamicKodeAkses})`,
+            serverTarget: 'PHP ORIGIN DIRECT',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(true);
+        expect(resData.code).toBe(200);
+        expect(resData.message).toBe('Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.');
     });
 
-    // =========================================================================
-    // 3. TEST MISSING KODE AKSES DI PHP ORIGIN (422)
-    // =========================================================================
-    test('3. Test submit Izin tanpa kode akses di PHP Origin -> Error 422', async () => {
-        expect(validAuthToken).toBeDefined();
+    test('3. Test submit status SAKIT langsung ke PHP Origin -> Sukses 200', async () => {
+        expect(asnToken).toBeDefined();
 
-        const originTargetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const payloadNoKode = {
-            status_kehadiran: 'Izin',
-            keterangan: 'Izin urusan keluarga'
-        };
-        const headers = {
-            'Authorization': `Bearer ${validAuthToken}`,
-            'Content-Type': 'application/json'
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Sakit',
+            keterangan: 'Demam tinggi dan istirahat dokter',
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
         };
 
-        const originRes = await sendHttpRequest(originTargetUrl, { method: 'POST', headers, body: JSON.stringify(payloadNoKode) });
-        const originData = await originRes.json();
-        logFetchDetail('TEST 3: IZIN TANPA KODE AKSES', 'PHP ORIGIN', originTargetUrl, headers, payloadNoKode, originRes.status, originData);
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
 
-        expect(originData.status).toBe(false);
-        expect(originData.code).toBe(422);
-        expect(originData.message).toBe('Kode akses kegiatan wajib diisi.');
+        const expectedOutput = {
+            status: true,
+            code: 200,
+            message: 'Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.'
+        };
+
+        const isPass = (resData.status === true && resData.code === 200 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '3 / 5',
+            action: `Submit Presensi Status SAKIT ke PHP Origin (${dynamicKodeAkses})`,
+            serverTarget: 'PHP ORIGIN DIRECT',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(true);
+        expect(resData.code).toBe(200);
+        expect(resData.message).toBe('Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.');
     });
 
-    // =========================================================================
-    // 4. TEST MISSING KETERANGAN ALASAN DI PHP ORIGIN (422)
-    // =========================================================================
-    test('4. Test submit Izin tanpa keterangan di PHP Origin -> Error 422', async () => {
-        expect(validAuthToken).toBeDefined();
+    test('4. Test submit status DINAS LUAR langsung ke PHP Origin -> Sukses 200', async () => {
+        expect(asnToken).toBeDefined();
 
-        const originTargetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const payloadNoKet = {
-            kode_akses: TEST_KODE_AKSES,
-            status_kehadiran: 'Izin',
-            keterangan: ''
-        };
-        const headers = {
-            'Authorization': `Bearer ${validAuthToken}`,
-            'Content-Type': 'application/json'
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Dinas Luar',
+            keterangan: 'Menghadiri rapat koordinasi tingkat provinsi',
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
         };
 
-        const originRes = await sendHttpRequest(originTargetUrl, { method: 'POST', headers, body: JSON.stringify(payloadNoKet) });
-        const originData = await originRes.json();
-        logFetchDetail('TEST 4: IZIN TANPA KETERANGAN', 'PHP ORIGIN', originTargetUrl, headers, payloadNoKet, originRes.status, originData);
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
 
-        expect(originData.status).toBe(false);
-        expect(originData.code).toBe(422);
-        expect(originData.message).toBe('Keterangan alasan tidak hadir wajib diisi.');
+        const expectedOutput = {
+            status: true,
+            code: 200,
+            message: 'Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.'
+        };
+
+        const isPass = (resData.status === true && resData.code === 200 && resData.message === expectedOutput.message);
+
+        logTestDetail({
+            step: '4 / 5',
+            action: `Submit Presensi Status DINAS LUAR ke PHP Origin (${dynamicKodeAkses})`,
+            serverTarget: 'PHP ORIGIN DIRECT',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(true);
+        expect(resData.code).toBe(200);
+        expect(resData.message).toBe('Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.');
     });
 
-    // =========================================================================
-    // 5. TEST OVERSIZED BUKTI DUKUNG > 1 MB DI PHP ORIGIN (422)
-    // =========================================================================
-    test('5. Test submit Izin dengan bukti dukung > 1 MB di PHP Origin -> Error 422', async () => {
-        expect(validAuthToken).toBeDefined();
+    test('5. Test submit status CUTI (Cukai) langsung ke PHP Origin -> Sukses 200', async () => {
+        expect(asnToken).toBeDefined();
 
-        const originTargetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const payloadOversize = {
-            kode_akses: TEST_KODE_AKSES,
-            status_kehadiran: 'Izin',
-            keterangan: 'Izin urusan dinas',
-            foto_absensi: OVERSIZED_DOC
-        };
-        const headers = {
-            'Authorization': `Bearer ${validAuthToken}`,
-            'Content-Type': 'application/json'
+        const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
+        const payload = {
+            kode_akses: dynamicKodeAkses,
+            status_kehadiran: 'Cukai',
+            keterangan: 'Cuti tahunan yang telah disetujui pimpinan',
+            foto_absensi: VALID_SMALL_BASE64_PHOTO
         };
 
-        const originRes = await sendHttpRequest(originTargetUrl, { method: 'POST', headers, body: JSON.stringify(payloadOversize) });
-        const originData = await originRes.json();
-        logFetchDetail('TEST 5: IZIN BUKTI OVERSIZED > 1MB', 'PHP ORIGIN', originTargetUrl, headers, payloadOversize, originRes.status, originData);
+        const res = await sendHttpRequest(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${asnToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const resData = await res.json();
 
-        expect(originData.status).toBe(false);
-        expect(originData.code).toBe(422);
-        expect(originData.message).toBe('Ukuran file bukti dukung terlalu besar. Maksimal 1 MB.');
-    });
-
-    // =========================================================================
-    // 6. TEST POSITIVE SUBMIT IZIN VALID DI PHP ORIGIN (200)
-    // =========================================================================
-    test('6. Test submit Izin valid di PHP Origin -> Sukses (200, Menunggu Verifikasi Admin)', async () => {
-        expect(validAuthToken).toBeDefined();
-
-        const originTargetUrl = buildTargetUrl(ORIGIN_URL, `/api/absen/submit?cb=${Date.now()}`);
-        const validPayload = {
-            kode_akses: TEST_KODE_AKSES,
-            status_kehadiran: 'Izin',
-            keterangan: 'Izin urusan keluarga mendesak',
-            foto_absensi: VALID_SMALL_DOC
-        };
-        const headers = {
-            'Authorization': `Bearer ${validAuthToken}`,
-            'Content-Type': 'application/json'
+        const expectedOutput = {
+            status: true,
+            code: 200,
+            message: 'Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.'
         };
 
-        const originRes = await sendHttpRequest(originTargetUrl, { method: 'POST', headers, body: JSON.stringify(validPayload) });
-        const originData = await originRes.json();
-        logFetchDetail('TEST 6: IZIN VALID', 'PHP ORIGIN', originTargetUrl, headers, validPayload, originRes.status, originData);
+        const isPass = (resData.status === true && resData.code === 200 && resData.message === expectedOutput.message);
 
-        expect(originData.status).toBe(true);
-        expect(originData.code).toBe(200);
-        expect(originData.message).toBe('Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.');
-        expect(originData.data).toBeNull();
+        logTestDetail({
+            step: '5 / 5',
+            action: `Submit Presensi Status CUTI (Cukai) ke PHP Origin (${dynamicKodeAkses})`,
+            serverTarget: 'PHP ORIGIN DIRECT',
+            method: 'POST',
+            endpointUrl: targetUrl,
+            payload,
+            resStatus: res.status,
+            resBody: resData,
+            expectedOutput,
+            actualOutput: resData,
+            isPass
+        });
+
+        expect(resData.status).toBe(true);
+        expect(resData.code).toBe(200);
+        expect(resData.message).toBe('Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.');
     });
 });

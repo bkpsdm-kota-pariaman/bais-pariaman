@@ -753,15 +753,16 @@ ALWAYS PROVIDE THE EXACT TEST COMMAND.
 Sebelum coding untuk task yang mengubah source code:
 
 1. Analisis source code dan dokumentasi relevan.
-2. Buat Implementation Plan singkat.
-3. Jangan coding.
-4. Tampilkan plan di chat.
-5. Tunggu user meminta implementasi.
-6. Plan harus bisa langsung diberikan ke model AI lain.
+2. Buat penjelasan ringkas mengenai perubahan yang akan dilakukan.
+3. Buat Implementation Plan singkat (maksimal 30 baris).
+4. **Dilarang keras langsung membuat atau mengedit kode sebelum user secara eksplisit meminta/menyetujui.**
+5. Tampilkan penjelasan dan plan di chat, lalu minta persetujuan user.
+6. Tunggu user menyetujui atau memerintahkan implementasi.
+7. Plan harus bisa langsung diberikan ke model AI lain.
 
 ### Format Implementation Plan
 
-Maksimal 10 baris.
+Maksimal 30 baris.
 
 ```text
 GOAL:

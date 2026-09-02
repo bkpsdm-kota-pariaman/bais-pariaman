@@ -437,9 +437,11 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
 - **Method:** `POST`
 - **Path:** `/api/absen/submit`
 - **Akses:** Bearer Token (ASN)
+- **Status Test Hadir:** ✅ SUKSES TERUJI (2026-09-02 12:31:05 WIB)
+- **Status Test Tidak Hadir:** ✅ SUKSES TERUJI (2026-09-02 13:23:43 WIB)
 - **File Test Hadir:** `ROOT_PROJECT/tests/js/api-absen-submit-hadir.test.js`
 - **File Test Tidak Hadir:** `ROOT_PROJECT/tests/js/api-absen-submit-tidakhadir.test.js`
-- **Perintah Test:** `npx cross-env WORKER_URL="https://worker-example.domain.dev" ORIGIN_URL="https://api-origin.domain.go.id/api" TEST_NIP="123456789012345678" TEST_NIK="1234567890123456" TEST_KODE_AKSES="KODE12" jest tests/js/api-absen-submit-hadir.test.js tests/js/api-absen-submit-tidakhadir.test.js`
+- **Perintah Test:** `npx cross-env WORKER_URL="https://worker-example.domain.dev" ORIGIN_URL="https://api-origin.domain.go.id/api" TEST_NIP="123456789012345678" TEST_NIK="1234567890123456" TEST_ADMIN_USERNAME="admin" TEST_ADMIN_PASSWORD="password" jest tests/js/api-absen-submit-hadir.test.js tests/js/api-absen-submit-tidakhadir.test.js`
 - **Deskripsi:** Menerima absensi ASN, memvalidasi aturan ketat (waktu, radius, batasan foto Base64 < 100 KB), lalu memasukkan pesan ke Cloudflare Queue (`MY_QUEUE`).
 
 **Input Payload (JSON):**
@@ -1597,7 +1599,12 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Tipe:** `[CONTROLLER]` (`AbsenController::submit`)
 - **Method:** `POST`
 - **Path:** `/api/absen/submit`
-- **Content-Type:** `multipart/form-data`
+- **Content-Type:** `multipart/form-data` / `application/json`
+- **Status Test Hadir:** ✅ SUKSES TERUJI (2026-09-02 12:31:05 WIB)
+- **Status Test Tidak Hadir:** ✅ SUKSES TERUJI (2026-09-02 13:23:43 WIB)
+- **File Test Hadir:** `ROOT_PROJECT/tests/js/api-absen-submit-hadir.test.js`
+- **File Test Tidak Hadir:** `ROOT_PROJECT/tests/js/api-absen-submit-tidakhadir.test.js`
+- **Perintah Test:** `npx cross-env WORKER_URL="https://worker-example.domain.dev" ORIGIN_URL="https://api-origin.domain.go.id/api" TEST_NIP="123456789012345678" TEST_NIK="1234567890123456" TEST_ADMIN_USERNAME="admin" TEST_ADMIN_PASSWORD="password" jest tests/js/api-absen-submit-hadir.test.js tests/js/api-absen-submit-tidakhadir.test.js`
 
 **Input Form Data:**
 - `kode_akses`: `KODE12`
@@ -2706,6 +2713,9 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Method:** `GET`
 - **Path:** `/api/admin/opd`
 - **Akses:** Bearer Token (Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-opd-crud.test.js`
+- **Perintah Test:** `npx cross-env ORIGIN_URL="https://api-origin.domain.dev" TEST_ADMIN_USERNAME="admin" TEST_ADMIN_PASSWORD="password" npx jest tests/js/api-admin-opd-crud.test.js`
 
 **Input:** Header `Authorization: Bearer <admin_jwt>`
 
@@ -2729,7 +2739,7 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 {
   "status": false,
   "code": 401,
-  "message": "Waktu session login admin telah habis. Silahkan login kembali.",
+  "message": "Waktu login Anda sudah habis. Silahkan login ulang.",
   "data": null
 }
 ```
@@ -2741,6 +2751,8 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Method:** `POST`
 - **Path:** `/api/admin/opd`
 - **Akses:** Bearer Token (Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-opd-crud.test.js`
 
 **Input Payload (JSON):**
 ```json
@@ -2776,6 +2788,8 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Method:** `PUT`
 - **Path:** `/api/admin/opd/{id}`
 - **Akses:** Bearer Token (Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-opd-crud.test.js`
 
 **Input Payload (JSON):**
 ```json
@@ -2811,6 +2825,8 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Method:** `DELETE`
 - **Path:** `/api/admin/opd/{id}`
 - **Akses:** Bearer Token (Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-opd-crud.test.js`
 
 **Input Param:** `{id}` = `Dinas Baru`
 
@@ -2841,6 +2857,8 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Method:** `POST`
 - **Path:** `/api/admin/opd/sync-kv`
 - **Akses:** Bearer Token (Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-opd-crud.test.js`
 
 **Input:** Header `Authorization: Bearer <admin_jwt>`
 
@@ -3075,6 +3093,201 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
   "status": true,
   "code": 200,
   "message": "Jadwal berhasil dihapus dari database.",
+  "data": null
+}
+```
+
+---
+
+## 12. Manajemen Data Pegawai (Admin)
+
+### 12.1 List & Search Data Pegawai
+- **Tipe:** `[CONTROLLER]` (`MasterDataController::listPegawai`)
+- **Method:** `GET`
+- **Path:** `/api/admin/pegawai`
+- **Query Params:** `page` (default 1), `limit` (default 10), `search` (opsional), `opd` (opsional)
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-pegawai-crud.test.js`
+- **Perintah Test:** `npx cross-env ORIGIN_URL="https://api-origin.domain.dev" TEST_ADMIN_USERNAME="admin" TEST_ADMIN_PASSWORD="password" npx jest tests/js/api-admin-pegawai-crud.test.js`
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "OK",
+  "data": {
+    "data": [
+      {
+        "nip": "199001012020011001",
+        "nama_pegawai": "Nama Pegawai Contoh",
+        "perangkat_daerah": "BADAN KEPEGAWAIAN DAN PENGEMBANGAN SUMBER DAYA MANUSIA",
+        "jabatan": "Pranata Komputer Ahli Pertama",
+        "jenis_asn": "PNS",
+        "role": "asn"
+      }
+    ],
+    "pagination": {
+      "total_rows": 1,
+      "total_pages": 1,
+      "current_page": 1,
+      "limit": 10
+    }
+  }
+}
+```
+
+---
+
+### 12.2 Create Data Pegawai Baru
+- **Tipe:** `[CONTROLLER]` (`MasterDataController::createPegawai`)
+- **Method:** `POST`
+- **Path:** `/api/admin/pegawai`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-pegawai-crud.test.js`
+
+**Input Payload (JSON):**
+```json
+{
+  "nip": "999999999999999999",
+  "nik": "9999999999999999",
+  "nama_pegawai": "Pegawai Uji Coba Antigravity",
+  "perangkat_daerah": "BADAN KEPEGAWAIAN DAN PENGEMBANGAN SUMBER DAYA MANUSIA",
+  "jabatan": "Pranata Komputer Ahli Pertama",
+  "jenis_asn": "PNS",
+  "role": "asn"
+}
+```
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "Pegawai berhasil ditambahkan.",
+  "data": null
+}
+```
+
+**Output Error (`status: false`):**
+```json
+{
+  "status": false,
+  "code": 400,
+  "message": "Semua field wajib diisi.",
+  "data": null
+}
+```
+
+---
+
+### 12.3 Get Statistik Data Pegawai per OPD
+- **Tipe:** `[CONTROLLER]` (`MasterDataController::getPegawaiStats`)
+- **Method:** `GET`
+- **Path:** `/api/admin/pegawai/stats`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-pegawai-crud.test.js`
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "OK",
+  "data": {
+    "total_pegawai": 150,
+    "per_opd": [
+      {
+        "perangkat_daerah": "BADAN KEPEGAWAIAN DAN PENGEMBANGAN SUMBER DAYA MANUSIA",
+        "jumlah": 25
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 12.4 Update Data Pegawai
+- **Tipe:** `[CONTROLLER]` (`MasterDataController::updatePegawai`)
+- **Method:** `PUT`
+- **Path:** `/api/admin/pegawai/{nip}`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-pegawai-crud.test.js`
+
+> **Catatan NIK Opsional:** Field `nik` bersifat opsional saat update. Jika dikosongkan/omitted, NIK lama dipertahankan.
+
+**Input Payload (JSON):**
+```json
+{
+  "nama_pegawai": "Pegawai Uji Coba Antigravity (UPDATED)",
+  "perangkat_daerah": "BADAN KEPEGAWAIAN DAN PENGEMBANGAN SUMBER DAYA MANUSIA",
+  "jabatan": "Pranata Komputer Ahli Muda",
+  "jenis_asn": "PNS",
+  "role": "asn"
+}
+```
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "Data pegawai berhasil diperbarui.",
+  "data": null
+}
+```
+
+---
+
+### 12.5 Manual Sync KV Cache Pegawai
+- **Tipe:** `[CONTROLLER]` (`MasterDataController::syncPegawaiKvCache`)
+- **Method:** `POST`
+- **Path:** `/api/admin/pegawai/sync-kv/{nip}`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-pegawai-crud.test.js`
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "Cache berhasil disinkronkan dengan Cloudflare KV.",
+  "data": null
+}
+```
+
+---
+
+### 12.6 Delete Data Pegawai
+- **Tipe:** `[CONTROLLER]` (`MasterDataController::deletePegawai`)
+- **Method:** `DELETE`
+- **Path:** `/api/admin/pegawai/{nip}`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-pegawai-crud.test.js`
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "Pegawai berhasil dihapus.",
+  "data": null
+}
+```
+
+**Output Error (`status: false`):**
+```json
+{
+  "status": false,
+  "code": 404,
+  "message": "Pegawai tidak ditemukan atau gagal dihapus.",
   "data": null
 }
 ```
