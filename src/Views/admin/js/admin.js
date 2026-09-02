@@ -3860,7 +3860,7 @@ async function bukaHalamanPengaturanAplikasi() {
         const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
         showAdminLoading(false);
         if (res && res.status && res.data) {
-            listPengaturanCache = Array.isArray(res.data.list) ? res.data.list : [];
+            listPengaturanCache = Array.isArray(res.data) ? res.data : (Array.isArray(res.data.list) ? res.data.list : []);
             renderTabelPengaturanAplikasi(listPengaturanCache);
         } else {
             Swal.fire('Gagal', (res && res.message) ? res.message : 'Gagal memuat pengaturan.', 'error');
@@ -3887,7 +3887,7 @@ async function bukaModalPengaturanAplikasi() {
         const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
         showAdminLoading(false);
         if (res && res.status && res.data) {
-            listPengaturanCache = Array.isArray(res.data.list) ? res.data.list : [];
+            listPengaturanCache = Array.isArray(res.data) ? res.data : (Array.isArray(res.data.list) ? res.data.list : []);
             renderTabelPengaturanAplikasi(listPengaturanCache);
             modalInst.show();
         } else {
@@ -4043,7 +4043,7 @@ async function submitFormPengaturanItem(event) {
             // Refresh daftar pengaturan di modal utama
             const refreshRes = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
             if (refreshRes.status && refreshRes.data) {
-                listPengaturanCache = Array.isArray(refreshRes.data.list) ? refreshRes.data.list : [];
+                listPengaturanCache = Array.isArray(refreshRes.data) ? refreshRes.data : (Array.isArray(refreshRes.data.list) ? refreshRes.data.list : []);
                 renderTabelPengaturanAplikasi(listPengaturanCache);
             }
 
@@ -4143,7 +4143,7 @@ async function hapusPengaturan(kodeEnc, namaEnc) {
             // Refresh list pengaturan
             const refreshRes = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
             if (refreshRes && refreshRes.status && refreshRes.data) {
-                listPengaturanCache = Array.isArray(refreshRes.data.list) ? refreshRes.data.list : [];
+                listPengaturanCache = Array.isArray(refreshRes.data) ? refreshRes.data : (Array.isArray(refreshRes.data.list) ? refreshRes.data.list : []);
                 renderTabelPengaturanAplikasi(listPengaturanCache);
             }
 

@@ -461,7 +461,7 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
 ```json
 {
   "status": true,
-  "code": 202,
+  "code": 200,
   "message": "Absen sudah terkirim.",
   "data": null
 }
@@ -471,7 +471,7 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
 ```json
 {
   "status": true,
-  "code": 202,
+  "code": 200,
   "message": "Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.",
   "data": null
 }
@@ -997,6 +997,9 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Method:** `GET`
 - **Path:** `/api/admin/pengaturan`
 - **Akses:** Bearer Token (Super Admin Only)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02 14:20:00 WIB)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-pengaturan-crud.test.js`
+- **Perintah Test:** `npx cross-env ORIGIN_URL="https://api-origin.domain.go.id/api" TEST_ADMIN_USERNAME="admin" TEST_ADMIN_PASSWORD="password" TEST_NIP="123456789012345678" TEST_NIK="1234567890123456" jest tests/js/api-admin-pengaturan-crud.test.js`
 
 **Input:** Header `Authorization: Bearer <super_admin_jwt>`
 
@@ -1006,20 +1009,14 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
   "status": true,
   "code": 200,
   "message": "Berhasil mengambil pengaturan aplikasi.",
-  "data": {
-    "list": [
-      {
-        "id": 1,
-        "kode_pengaturan": "link_absensi_cadangan",
-        "nama_pengaturan": "Link Absensi Cadangan",
-        "nilai_pengaturan": "https://script.google.com/macros/s/example/exec"
-      }
-    ],
-    "map": {
-      "link_absensi_cadangan": "https://script.google.com/macros/s/example/exec"
-    },
-    "link_absensi_cadangan": "https://script.google.com/macros/s/example/exec"
-  }
+  "data": [
+    {
+      "id": 1,
+      "kode_pengaturan": "link_absensi_cadangan",
+      "nama_pengaturan": "Link Absensi Cadangan",
+      "nilai_pengaturan": "https://script.google.com/macros/s/example/exec"
+    }
+  ]
 }
 ```
 
@@ -1028,7 +1025,7 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 {
   "status": false,
   "code": 403,
-  "message": "Hak akses ditolak. Hanya Super Admin yang dapat mengakses pengaturan aplikasi.",
+  "message": "Hak akses ditolak.",
   "data": null
 }
 ```
@@ -1040,6 +1037,9 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Method:** `PUT`
 - **Path:** `/api/admin/pengaturan`
 - **Akses:** Bearer Token (Super Admin Only)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02 14:20:00 WIB)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-pengaturan-crud.test.js`
+- **Perintah Test:** `npx cross-env ORIGIN_URL="https://api-origin.domain.go.id/api" TEST_ADMIN_USERNAME="admin" TEST_ADMIN_PASSWORD="password" TEST_NIP="123456789012345678" TEST_NIK="1234567890123456" jest tests/js/api-admin-pengaturan-crud.test.js`
 
 **Input Payload (JSON):**
 ```json
@@ -1077,6 +1077,9 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Method:** `DELETE`
 - **Path:** `/api/admin/pengaturan/{kode}`
 - **Akses:** Bearer Token (Super Admin Only)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02 14:20:00 WIB)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-pengaturan-crud.test.js`
+- **Perintah Test:** `npx cross-env ORIGIN_URL="https://api-origin.domain.go.id/api" TEST_ADMIN_USERNAME="admin" TEST_ADMIN_PASSWORD="password" TEST_NIP="123456789012345678" TEST_NIK="1234567890123456" jest tests/js/api-admin-pengaturan-crud.test.js`
 
 **Input Param:** `{kode}` = `link_absensi_cadangan`
 
@@ -1095,7 +1098,7 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 {
   "status": false,
   "code": 403,
-  "message": "Hak akses ditolak. Hanya Super Admin yang dapat menghapus pengaturan.",
+  "message": "Hak akses ditolak.",
   "data": null
 }
 ```
@@ -2077,6 +2080,9 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Method:** `POST`
 - **Path:** `/api/admin/verifikasi`
 - **Akses:** Bearer Token (Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02 16:45:00 WIB)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-verifikasi-absen.test.js`
+- **Perintah Test:** `npx cross-env WORKER_URL="https://worker-example.domain.dev" ORIGIN_URL="https://api-origin.domain.go.id/api" TEST_ADMIN_USERNAME="admin" TEST_ADMIN_PASSWORD="password" LIMIT_PEGAWAI="120" jest tests/js/api-admin-verifikasi-absen.test.js`
 
 **Input Payload (JSON):**
 ```json

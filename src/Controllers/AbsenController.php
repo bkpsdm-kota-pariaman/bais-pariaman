@@ -561,7 +561,6 @@ class AbsenController {
             Response::json(false, 401, "Waktu login Anda sudah habis. Silahkan login ulang.");
             return;
         }
-        }
 
         $sql = "INSERT INTO app_absensi_data_absensi 
                     (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, waktu, lokasi, lat, lng, nama_file_foto, keterangan_verifikasi, status_verifikasi, status_kehadiran) 
@@ -1303,13 +1302,16 @@ class AbsenController {
         $db = Database::getConnection();
         $now = new \DateTime('now', new \DateTimeZone('Asia/Jakarta'));
         
-        $kodeAkses = $_POST['kode_akses'] ?? null;
-        $nip = $_POST['nip'] ?? null;
-        $statusVerifikasi = $_POST['status_verifikasi'] ?? null;
-        $statusKehadiranBaru = $_POST['status_kehadiran'] ?? null; // Added
-        $keteranganAdmin = $_POST['keterangan'] ?? null;
-        $opd = $_POST['opd'] ?? null;
-        $jabatan = $_POST['jabatan'] ?? null;
+        $inputJSON = file_get_contents('php://input');
+        $input = json_decode($inputJSON, true) ?: [];
+
+        $kodeAkses = $_POST['kode_akses'] ?? $input['kode_akses'] ?? null;
+        $nip = $_POST['nip'] ?? $input['nip'] ?? null;
+        $statusVerifikasi = $_POST['status_verifikasi'] ?? $input['status_verifikasi'] ?? null;
+        $statusKehadiranBaru = $_POST['status_kehadiran'] ?? $input['status_kehadiran'] ?? null; // Added
+        $keteranganAdmin = $_POST['keterangan'] ?? $input['keterangan'] ?? null;
+        $opd = $_POST['opd'] ?? $input['opd'] ?? null;
+        $jabatan = $_POST['jabatan'] ?? $input['jabatan'] ?? null;
         $buktiDukung = $_FILES['bukti_dukung'] ?? null;
 
         if (!$kodeAkses || !$nip || !$statusVerifikasi) {
@@ -1476,11 +1478,16 @@ class AbsenController {
         $db = Database::getConnection();
         $now = new \DateTime('now', new \DateTimeZone('Asia/Jakarta'));
         
-        $kodeAkses = $_POST['kode_akses'] ?? null;
-        $nips = isset($_POST['nips']) ? json_decode($_POST['nips'], true) : [];
-        $statusVerifikasi = $_POST['status_verifikasi'] ?? null;
-        $statusKehadiran = $_POST['status_kehadiran'] ?? null;
-        $keteranganAdmin = $_POST['keterangan'] ?? null;
+        $inputJSON = file_get_contents('php://input');
+        $input = json_decode($inputJSON, true) ?: [];
+
+        $kodeAkses = $_POST['kode_akses'] ?? $input['kode_akses'] ?? null;
+        $nips = isset($_POST['nips']) 
+            ? (is_array($_POST['nips']) ? $_POST['nips'] : json_decode($_POST['nips'], true)) 
+            : ($input['nips'] ?? $input['nip_list'] ?? []);
+        $statusVerifikasi = $_POST['status_verifikasi'] ?? $input['status_verifikasi'] ?? null;
+        $statusKehadiran = $_POST['status_kehadiran'] ?? $input['status_kehadiran'] ?? null;
+        $keteranganAdmin = $_POST['keterangan'] ?? $input['keterangan'] ?? null;
         $buktiDukung = $_FILES['bukti_dukung'] ?? null;
 
         if (!$kodeAkses || empty($nips) || !$statusVerifikasi || !$statusKehadiran) {

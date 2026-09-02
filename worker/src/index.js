@@ -1163,8 +1163,8 @@ export default {
 						jwt_token: userToken,
 						submittedAt: new Date().toISOString()
 					};
-					delete queuePayload.keterangan; // Jangan timpa kolom keterangan pegawai
 					await env.MY_QUEUE.send(queuePayload);
+					console.log(`[Queue Producer Absen Cepat] Enqueue presensi NIP: ${pegawaiNip || payload.nip || '-'} (Kode: ${payload.kode_akses}) ke MY_QUEUE.`);
 
 					return jsonResponse(true, 200, 'Absensi Cepat telah diterima dan akan segera diproses.');
 				} catch (error) {
@@ -1271,6 +1271,7 @@ export default {
 
 					const queuePayload = { ...payload, jwt_token: token };
 					await env.MY_QUEUE.send(queuePayload);
+					console.log(`[Queue Producer] Enqueue presensi NIP: ${payload.nip || '-'} (Kode: ${payload.kode_akses}, Status: ${payload.status_kehadiran}) ke MY_QUEUE.`);
 
 					const pesanSukses = (payload.status_verifikasi === 'Menunggu Verifikasi Admin')
 						? 'Absen sudah terkirim. BKPSDM Kota Pariaman akan melakukan verifikasi absen Anda.'
@@ -1338,9 +1339,9 @@ export default {
 
 			if (response.ok) {
 				const responseData = await response.json();
-				console.log(`[Queue Batch SUKSES] Batch ${messagesToSend.length} pesan berhasil diproses server PHP.`);
+				console.log(`[Queue Batch SUKSES] Batch ${messagesToSend.length} pesan berhasil diproses server PHP. NIPs: [${nipSummary}]`);
 				if (responseData.errors && responseData.errors.length > 0) {
-					console.warn(`[Queue Batch Warnings] ${responseData.errors.length} pesan ditolak PHP:`, JSON.stringify(responseData.errors));
+					console.warn(`[Queue Batch Warnings] ${responseData.errors.length} pesan ditolak PHP. NIPs: [${nipSummary}]. Details:`, JSON.stringify(responseData.errors));
 				}
 				return;
 			} else {
@@ -1375,7 +1376,7 @@ export default {
 						console.error(`[Queue FATAL 5XX] Pesan ID ${msg.id} (NIP: ${msg.body?.nip || '-'}) telah gagal setelah 5x percobaan.`);
 						msg.ack();
 					} else {
-						console.log(`[Queue RETRY 5XX #${currentAttempt}/5] Server PHP error HTTP ${httpStatus}. Pesan ID ${msg.id} akan dicoba ulang 1 menit lagi...`);
+						console.log(`[Queue RETRY 5XX #${currentAttempt}/5] Server PHP error HTTP ${httpStatus}. Pesan ID ${msg.id} (NIP: ${msg.body?.nip || '-'}) akan dicoba ulang 1 menit lagi...`);
 						msg.retry({ delaySeconds: 60 });
 					}
 				} else {

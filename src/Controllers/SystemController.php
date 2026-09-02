@@ -110,7 +110,7 @@ class SystemController {
         $adminData = AdminAuthHelper::validate();
         $roles = isset($adminData['role']) ? (array) $adminData['role'] : [];
         if (!in_array('super admin', $roles)) {
-            Response::json(false, 403, "Hak akses ditolak. Hanya Super Admin yang dapat mengakses pengaturan aplikasi.");
+            Response::json(false, 403, "Hak akses ditolak.");
             return;
         }
 
@@ -120,16 +120,7 @@ class SystemController {
         $stmt = $db->query("SELECT id, kode_pengaturan, nama_pengaturan, nilai_pengaturan FROM app_absensi_pengaturan_aplikasi ORDER BY id ASC");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $map = [];
-        foreach ($rows as $r) {
-            $map[$r['kode_pengaturan']] = $r['nilai_pengaturan'];
-        }
-
-        Response::json(true, 200, "Berhasil mengambil pengaturan aplikasi.", [
-            'list' => $rows,
-            'map' => $map,
-            'link_absensi_cadangan' => $map['link_absensi_cadangan'] ?? ''
-        ]);
+        Response::json(true, 200, "Berhasil mengambil pengaturan aplikasi.", $rows);
     }
 
     /**
@@ -140,7 +131,7 @@ class SystemController {
         $adminData = AdminAuthHelper::validate();
         $roles = isset($adminData['role']) ? (array) $adminData['role'] : [];
         if (!in_array('super admin', $roles)) {
-            Response::json(false, 403, "Hak akses ditolak. Hanya Super Admin yang dapat mengelola pengaturan.");
+            Response::json(false, 403, "Hak akses ditolak.");
             return;
         }
 
@@ -221,7 +212,7 @@ class SystemController {
         $adminData = AdminAuthHelper::validate();
         $roles = isset($adminData['role']) ? (array) $adminData['role'] : [];
         if (!in_array('super admin', $roles)) {
-            Response::json(false, 403, "Hak akses ditolak. Hanya Super Admin yang dapat menghapus pengaturan.");
+            Response::json(false, 403, "Hak akses ditolak.");
             return;
         }
 
@@ -250,7 +241,7 @@ class SystemController {
         $adminData = AdminAuthHelper::validate();
         $roles = isset($adminData['role']) ? (array) $adminData['role'] : [];
         if (!in_array('super admin', $roles)) {
-            Response::json(false, 403, "Hak akses ditolak. Hanya Super Admin yang dapat menyinkronkan pengaturan ke KV.");
+            Response::json(false, 403, "Hak akses ditolak.");
             return;
         }
 
