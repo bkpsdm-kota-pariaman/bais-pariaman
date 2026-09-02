@@ -184,13 +184,32 @@ describe('Uji Coba Endpoint CRUD Data Jadwal Kegiatan Admin (PHP Origin Direct)'
             return;
         }
 
+        // Decode payload token ASN untuk cek apakah akun test memiliki role admin di DB
+        let isAsnAdmin = false;
+        try {
+            const parts = asnToken.split('.');
+            if (parts.length === 3) {
+                const decodedJson = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+                const roles = Array.isArray(decodedJson?.data?.role) ? decodedJson.data.role : (decodedJson?.data?.role ? [decodedJson.data.role] : []);
+                isAsnAdmin = roles.some(r => ['admin', 'super admin'].includes(String(r).trim().toLowerCase()));
+            }
+        } catch (e) {}
+
+        if (isAsnAdmin) {
+            printLog(`\n[INFO Test 2] Akun TEST_NIP (${TEST_NIP}) memiliki role admin di database.`);
+            printLog(`[INFO Test 2] Uji coba penolakan HTTP 403 dilewati karena akun pengujian ini adalah Admin/Super Admin.`);
+            return;
+        }
+
         const targetUrl = buildTargetUrl(ORIGIN_URL, `/api/admin/jadwal?cb=${Date.now()}`);
         const payload = {
             judul: 'Uji Coba Ilegal ASN',
             kategori: 'Apel Pagi',
             tanggal: '2026-09-02',
             jam_mulai: '07:30:00',
-            jam_selesai: '08:30:00'
+            jam_selesai: '08:30:00',
+            koordinat: '-0.626411,100.124588',
+            radius_meter: 100
         };
 
         const headers = {

@@ -2863,3 +2863,218 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
   "data": null
 }
 ```
+
+---
+
+## 11. Manajemen Jadwal Kegiatan (Admin)
+
+### 11.1 List & Search Data Jadwal Kegiatan
+- **Tipe:** `[CONTROLLER]` (`JadwalController::listJadwal`)
+- **Method:** `GET`
+- **Path:** `/api/admin/jadwal`
+- **Query Params:** `page` (default 1), `limit` (default 10), `search` (opsional), `kategori` (opsional)
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-jadwal-crud.test.js`
+- **Perintah Test:** `npx cross-env ORIGIN_URL="https://api-origin.domain.dev" TEST_ADMIN_USERNAME="admin" TEST_ADMIN_PASSWORD="password" npx jest tests/js/api-admin-jadwal-crud.test.js`
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "OK",
+  "data": {
+    "data": [
+      {
+        "id": 1,
+        "kode_akses": "TEST12",
+        "judul": "Apel Pagi",
+        "kategori": "Apel Pagi",
+        "tanggal": "2026-09-02",
+        "jam_mulai": "07:30:00",
+        "jam_selesai": "09:00:00",
+        "koordinat": "-0.626411,100.124588",
+        "radius_meter": 100,
+        "is_strict_time": 1,
+        "is_strict_location": 1
+      }
+    ],
+    "pagination": {
+      "total_rows": 1,
+      "total_pages": 1,
+      "current_page": 1,
+      "limit": 10
+    }
+  }
+}
+```
+
+**Output Error (`status: false`):**
+```json
+{
+  "status": false,
+  "code": 401,
+  "message": "Waktu login Anda sudah habis. Silahkan login ulang.",
+  "data": null
+}
+```
+
+---
+
+### 11.2 Create Jadwal Kegiatan Baru
+- **Tipe:** `[CONTROLLER]` (`JadwalController::createJadwal`)
+- **Method:** `POST`
+- **Path:** `/api/admin/jadwal`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-jadwal-crud.test.js`
+
+**Input Payload (JSON):**
+```json
+{
+  "judul": "Uji Coba Presensi Pagi",
+  "kategori": "Apel Pagi",
+  "tanggal": "2026-09-02",
+  "jam_mulai": "07:30:00",
+  "jam_selesai": "10:00:00",
+  "koordinat": "-0.626411,100.124588",
+  "radius_meter": 100,
+  "aktifkan_antrian": 1,
+  "is_strict_time": 1,
+  "is_strict_location": 1,
+  "target_opd": ["BADAN KEPEGAWAIAN DAN PENGEMBANGAN SUMBER DAYA MANUSIA"]
+}
+```
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "Jadwal berhasil dibuat.",
+  "data": {
+    "kode_akses": "6A1362"
+  }
+}
+```
+
+---
+
+### 11.3 Get Detail Jadwal Kegiatan
+- **Tipe:** `[CONTROLLER]` (`JadwalController::getJadwalAdmin`)
+- **Method:** `GET`
+- **Path:** `/api/admin/jadwal/{kode_akses}`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-jadwal-crud.test.js`
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "OK",
+  "data": {
+    "kode_akses": "6A1362",
+    "judul": "Uji Coba Presensi Pagi",
+    "kategori": "Apel Pagi",
+    "tanggal": "2026-09-02",
+    "jam_mulai": "07:30:00",
+    "jam_selesai": "10:00:00",
+    "target_opd": ["BADAN KEPEGAWAIAN DAN PENGEMBANGAN SUMBER DAYA MANUSIA"]
+  }
+}
+```
+
+**Output Error (`status: false`):**
+```json
+{
+  "status": false,
+  "code": 404,
+  "message": "Jadwal tidak ditemukan.",
+  "data": null
+}
+```
+
+---
+
+### 11.4 Update Jadwal Kegiatan
+- **Tipe:** `[CONTROLLER]` (`JadwalController::updateJadwal`)
+- **Method:** `PUT`
+- **Path:** `/api/admin/jadwal/{kode_akses}`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-jadwal-crud.test.js`
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "Jadwal berhasil diperbarui.",
+  "data": null
+}
+```
+
+---
+
+### 11.5 Generate Token QR Code Jadwal
+- **Tipe:** `[CONTROLLER]` (`JadwalController::generateJadwalToken`)
+- **Method:** `GET`
+- **Path:** `/api/admin/jadwal/generate-token/{kode_akses}`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-jadwal-crud.test.js`
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "Token jadwal berhasil dibuat",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+}
+```
+
+---
+
+### 11.6 Sync KV Cache Jadwal Manual
+- **Tipe:** `[CONTROLLER]` (`JadwalController::syncKvCache`)
+- **Method:** `POST`
+- **Path:** `/api/admin/jadwal/sync-kv/{kode_akses}`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-jadwal-crud.test.js`
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "Cache berhasil disinkronkan dengan Cloudflare KV.",
+  "data": null
+}
+```
+
+---
+
+### 11.7 Delete Jadwal Kegiatan
+- **Tipe:** `[CONTROLLER]` (`JadwalController::deleteJadwal`)
+- **Method:** `DELETE`
+- **Path:** `/api/admin/jadwal/{kode_akses}`
+- **Akses:** Bearer Token (Admin / Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI (2026-09-02)
+- **File Test:** `ROOT_PROJECT/tests/js/api-admin-jadwal-crud.test.js`
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "Jadwal berhasil dihapus dari database.",
+  "data": null
+}
+```
