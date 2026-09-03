@@ -13,6 +13,8 @@ let mapAdd, circleAdd, markerAdd;
 let mapEdit, circleEdit, markerEdit;
 let currentQrData = { kode: '', judul: '' };
 let opdState = { add: { available: [], selected: [] }, edit: { available: [], selected: [] } };
+let lastRekapPagination = null;
+let lastKeseluruhanPagination = null;
 
 
 let paginasiState = { page: 1, limit: 10 };
@@ -1461,9 +1463,10 @@ async function terapkanFilterRekap(isFromPagination = false) {
 
         if (result.status) {
             currentRekapData.filtered_pegawai = result.data.data;
+            lastRekapPagination = result.data.pagination;
             renderPaginationControls('rekapPagination', result.data.pagination, 'rekap');
             if (selectedView === 'table') {
-                renderRekapTable(currentRekapData.filtered_pegawai);
+                renderRekapTable(currentRekapData.filtered_pegawai, result.data.pagination);
             } else {
                 renderFotoKehadiranGrid(currentRekapData.filtered_pegawai);
             }
@@ -1671,7 +1674,7 @@ async function syncOpdList() {
     }
 }
 
-function renderRekapTable(filteredPegawai) {
+function renderRekapTable(filteredPegawai, pagination = null) {
     const tbody = document.getElementById('rekapTableBody');
     const tableView = document.getElementById('rekapTableView');
     tableView.classList.remove('d-none');
@@ -1685,9 +1688,12 @@ function renderRekapTable(filteredPegawai) {
         tableView.parentNode.insertBefore(warningContainer, tableView);
     }
 
-    const pendingCount = filteredPegawai.filter(p => p.status_verifikasi === 'Menunggu Verifikasi Admin').length;
+    const pendingCount = (pagination && typeof pagination.pending_verifikasi_count === 'number')
+        ? pagination.pending_verifikasi_count
+        : filteredPegawai.filter(p => p.status_verifikasi === 'Menunggu Verifikasi Admin').length;
+
     if (pendingCount > 0) {
-        warningContainer.innerHTML = `<div class="alert alert-warning shadow-sm border-warning mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>Terdapat <strong>${pendingCount}</strong> absensi yang <strong>Menunggu Verifikasi Admin</strong> pada tabel di bawah ini. Harap segera periksa.</div>`;
+        warningContainer.innerHTML = `<div class="alert alert-warning shadow-sm border-warning mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>Terdapat <strong>${pendingCount}</strong> absensi yang <strong>Menunggu Verifikasi Admin</strong> pada data hasil filter di bawah ini. Harap segera periksa.</div>`;
     } else {
         warningContainer.innerHTML = '';
     }
@@ -2042,20 +2048,58 @@ async function submitVerifikasi(event) {
             modalVerifikasi.hide();
             Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, icon: 'success', title: 'Status berhasil diperbarui!' });
 
-            // Ambil daftar OPD terbaru untuk filter, karena mungkin berubah setelah edit.
-            try {
-                const verifKodeAkses = document.getElementById('verifKodeAkses').value;
-                const opdResult = await fetchWithAuth(`${API_BASE_URL}/admin/rekap/opd-list/${verifKodeAkses}`);
-                if (opdResult.status) {
-                    populateOpdCheckboxContainer('rekapFilterOpdContainer', opdResult.data);
-                }
-            } catch (e) { console.error("Gagal refresh list OPD filter:", e); }
+            // In-place update data lokal tanpa refetch ulang ke server (posisi scroll & paginasi terjaga)
+            const targetNip = document.getElementById('verifNip').value;
+            const targetKodeAkses = document.getElementById('verifKodeAkses').value;
+            const newVerifStatus = document.getElementById('verifStatus').value;
+            const newKehadiranStatus = document.getElementById('verifStatusKehadiran').value;
+            const newKeteranganVerif = document.getElementById('verifKeterangan').value;
+            const newOpd = document.getElementById('verifOpd').value;
+            const newJabatan = document.getElementById('verifJabatan').value;
 
             if (!document.getElementById('rekapKeseluruhanContainer').classList.contains('d-none')) {
-                terapkanFilterRekapKeseluruhan();
+                // Menu Rekap Keseluruhan
+                if (Array.isArray(currentRekapKeseluruhanData)) {
+                    currentRekapKeseluruhanData.forEach(p => {
+                        if (p.nip === targetNip && p.kode_akses === targetKodeAkses) {
+                            const oldVerif = p.status_verifikasi;
+                            p.status_verifikasi = newVerifStatus;
+                            if (newKehadiranStatus) p.status_kehadiran = newKehadiranStatus;
+                            p.keterangan_verifikasi = newKeteranganVerif;
+                            p.perangkat_daerah = newOpd;
+                            p.jabatan = newJabatan;
+
+                            if (oldVerif === 'Menunggu Verifikasi Admin' && newVerifStatus !== 'Menunggu Verifikasi Admin' && lastKeseluruhanPagination) {
+                                lastKeseluruhanPagination.pending_verifikasi_count = Math.max(0, (lastKeseluruhanPagination.pending_verifikasi_count || 1) - 1);
+                            }
+                        }
+                    });
+                }
+                renderRekapKeseluruhanTable(currentRekapKeseluruhanData, lastKeseluruhanPagination);
             } else if (!document.getElementById('rekapContainer').classList.contains('d-none')) {
-                terapkanFilterRekap();
-                refreshRekapSummary(); // Refresh juga modal ringkasan
+                // Menu Rekap Per Kegiatan
+                if (currentRekapData && Array.isArray(currentRekapData.filtered_pegawai)) {
+                    currentRekapData.filtered_pegawai.forEach(p => {
+                        if (p.nip === targetNip) {
+                            const oldVerif = p.status_verifikasi;
+                            p.status_verifikasi = newVerifStatus;
+                            if (newKehadiranStatus) p.status_kehadiran = newKehadiranStatus;
+                            p.keterangan_verifikasi = newKeteranganVerif;
+                            p.perangkat_daerah = newOpd;
+                            p.jabatan = newJabatan;
+
+                            if (oldVerif === 'Menunggu Verifikasi Admin' && newVerifStatus !== 'Menunggu Verifikasi Admin' && lastRekapPagination) {
+                                lastRekapPagination.pending_verifikasi_count = Math.max(0, (lastRekapPagination.pending_verifikasi_count || 1) - 1);
+                            }
+                        }
+                    });
+                }
+                const selectedView = document.getElementById('rekapFilterView').value;
+                if (selectedView === 'table') {
+                    renderRekapTable(currentRekapData.filtered_pegawai, lastRekapPagination);
+                } else {
+                    renderFotoKehadiranGrid(currentRekapData.filtered_pegawai);
+                }
             }
         } else {
             Swal.fire('Gagal', 'Gagal memperbarui: ' + result.message, 'error');
@@ -2971,8 +3015,9 @@ async function terapkanFilterRekapKeseluruhan(isFromPagination = false) {
 
         if (result.status) {
             currentRekapKeseluruhanData = result.data.data;
+            lastKeseluruhanPagination = result.data.pagination;
             renderPaginationControls('rekapKeseluruhanPagination', result.data.pagination, 'rekapKeseluruhan');
-            renderRekapKeseluruhanTable(currentRekapKeseluruhanData);
+            renderRekapKeseluruhanTable(currentRekapKeseluruhanData, result.data.pagination);
 
             if (result.data.length > 0) {
 
@@ -2986,7 +3031,7 @@ async function terapkanFilterRekapKeseluruhan(isFromPagination = false) {
     }
 }
 
-function renderRekapKeseluruhanTable(data) {
+function renderRekapKeseluruhanTable(data, pagination = null) {
     const tbody = document.getElementById('rekapKeseluruhanTableBody');
     const tableView = document.getElementById('rekapKeseluruhanTableView');
     tableView.classList.remove('d-none');
@@ -2999,9 +3044,12 @@ function renderRekapKeseluruhanTable(data) {
         tableView.parentNode.insertBefore(warningContainer, tableView);
     }
 
-    const pendingCount = data.filter(p => p.status_verifikasi === 'Menunggu Verifikasi Admin').length;
+    const pendingCount = (pagination && typeof pagination.pending_verifikasi_count === 'number')
+        ? pagination.pending_verifikasi_count
+        : data.filter(p => p.status_verifikasi === 'Menunggu Verifikasi Admin').length;
+
     if (pendingCount > 0) {
-        warningContainer.innerHTML = `<div class="alert alert-warning shadow-sm border-warning mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>Terdapat <strong>${pendingCount}</strong> absensi yang <strong>Menunggu Verifikasi Admin</strong> pada tabel di bawah ini. Harap segera periksa.</div>`;
+        warningContainer.innerHTML = `<div class="alert alert-warning shadow-sm border-warning mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>Terdapat <strong>${pendingCount}</strong> absensi yang <strong>Menunggu Verifikasi Admin</strong> pada data hasil filter di bawah ini. Harap segera periksa.</div>`;
     } else {
         warningContainer.innerHTML = '';
     }

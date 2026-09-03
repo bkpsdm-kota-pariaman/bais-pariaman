@@ -156,7 +156,8 @@ class MasterDataController {
         if (!in_array('asn', $newRoles)) $newRoles[] = 'asn';
 
         $rolesStr = implode(',', $newRoles);
-        $hashedNik = password_hash($input['nik'], PASSWORD_DEFAULT);
+        $rawNikInput = trim($input['nik']);
+        $hashedNik = (strlen($rawNikInput) === 64 && ctype_xdigit($rawNikInput)) ? strtolower($rawNikInput) : hash('sha256', $rawNikInput);
 
         $payloadForKv = [
             'nip' => $input['nip'],
@@ -211,7 +212,12 @@ class MasterDataController {
         $stmtCurrent->execute([':nip' => $nip]);
         $currentPegawai = $stmtCurrent->fetch();
 
-        $nikToSave = !empty($input['nik']) ? password_hash($input['nik'], PASSWORD_DEFAULT) : $currentPegawai['nik'];
+        $rawNikInput = !empty($input['nik']) ? trim($input['nik']) : '';
+        if ($rawNikInput !== '') {
+            $nikToSave = (strlen($rawNikInput) === 64 && ctype_xdigit($rawNikInput)) ? strtolower($rawNikInput) : hash('sha256', $rawNikInput);
+        } else {
+            $nikToSave = $currentPegawai['nik'];
+        }
 
         $newRoles = is_array($input['role']) ? $input['role'] : explode(',', $input['role']);
         $newRoles = array_map('trim', $newRoles);

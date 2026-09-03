@@ -687,6 +687,13 @@ class AbsenController {
         }
         
         $totalRows = count($detailPegawai);
+        $pendingVerifikasiCount = 0;
+        foreach ($detailPegawai as $p) {
+            if (($p['status_verifikasi'] ?? '') === 'Menunggu Verifikasi Admin') {
+                $pendingVerifikasiCount++;
+            }
+        }
+
         $page = isset($filters['page']) ? max(1, (int)$filters['page']) : 1;
         $limit = isset($filters['limit']) ? max(1, (int)$filters['limit']) : 10;
         $offset = ($page - 1) * $limit;
@@ -698,7 +705,8 @@ class AbsenController {
                 'total_rows' => $totalRows,
                 'total_pages' => ceil($totalRows / $limit),
                 'current_page' => $page,
-                'limit' => $limit
+                'limit' => $limit,
+                'pending_verifikasi_count' => $pendingVerifikasiCount
             ]
         ];
         
@@ -779,6 +787,13 @@ class AbsenController {
         }
 
         $totalRows = count($detailPegawai);
+        $pendingVerifikasiCount = 0;
+        foreach ($detailPegawai as $p) {
+            if (($p['status_verifikasi'] ?? '') === 'Menunggu Verifikasi Admin') {
+                $pendingVerifikasiCount++;
+            }
+        }
+
         $page = isset($filters['page']) ? max(1, (int)$filters['page']) : 1;
         $limit = isset($filters['limit']) ? max(1, (int)$filters['limit']) : 10;
         $offset = ($page - 1) * $limit;
@@ -790,7 +805,8 @@ class AbsenController {
                 'total_rows' => $totalRows,
                 'total_pages' => ceil($totalRows / $limit),
                 'current_page' => $page,
-                'limit' => $limit
+                'limit' => $limit,
+                'pending_verifikasi_count' => $pendingVerifikasiCount
             ]
         ];
 

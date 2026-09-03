@@ -15,7 +15,32 @@
  */
 
 import { jwtVerify, SignJWT } from 'jose';
-import bcrypt from 'bcryptjs';
+
+// Helper Hashing WebCrypto SHA-256 (Cepat & hemat CPU < 0.1ms untuk Edge Worker)
+async function hashSha256(text) {
+	const encoder = new TextEncoder();
+	const data = encoder.encode(text);
+	const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function verifyNikPassword(input, storedNik) {
+	if (!storedNik || !input) return false;
+	const cleanInput = String(input).trim();
+	const cleanStored = String(storedNik).trim();
+
+	// 1. Match SHA-256 Hash (64 karakter hex)
+	if (cleanStored.length === 64 && /^[0-9a-f]{64}$/i.test(cleanStored)) {
+		const hashedInput = await hashSha256(cleanInput);
+		return hashedInput.toLowerCase() === cleanStored.toLowerCase();
+	}
+
+	// 2. Match plain text
+	if (cleanStored === cleanInput) return true;
+
+	return false;
+}
 
 // Definisikan header CORS di satu tempat agar mudah dikelola.
 // Ini mengizinkan semua origin ('*'), yang cukup untuk pengembangan.
@@ -307,8 +332,9 @@ export default {
 
 					// --- CACHE HIT ---
 					if (cachedPegawai) {
-						// Pengecekan bcrypt NIK secara sinkron (karena bcryptjs mendukung di edge)
-						if (bcrypt.compareSync(nik, cachedPegawai.nik)) {
+						// Pengecekan NIK aman & cepat via WebCrypto SHA-256 / plain
+						const isPasswordMatch = await verifyNikPassword(nik, cachedPegawai.nik);
+						if (isPasswordMatch) {
 							console.log(`[Login Cache] Cache HIT for NIP: ${nip}`);
 							const secret = new TextEncoder().encode(env.JWT_SECRET);
 							const issuedAt = Math.floor(Date.now() / 1000);
@@ -331,16 +357,14 @@ export default {
 
 							return jsonResponse(true, 200, 'Login Berhasil', responseData);
 						} else {
-							// NIK tidak cocok. Jangan hapus cache, cukup perlakukan sebagai cache miss.
+							// NIK tidak cocok. Biarkan PWA fallback ke server utama.
 							console.log(`[Login Cache] NIK mismatch for NIP: ${nip}. Treating as Cache MISS.`);
-							// Tidak ada 'delete' di sini. Biarkan PWA melakukan fallback ke server utama.
-							// Lanjutkan ke logika CACHE MISS di bawah.
 						}
 					}
 
 					// --- CACHE MISS atau NIK mismatch setelah cache invalidation ---
-					console.log(`[Login Cache] Cache MISS or NIK mismatch for NIP: ${nip}. Returning 404 to PWA.`);
-					// Explicitly return 404 to signal PWA to try origin
+					console.log(`[Login Cache] Cache MISS or NIK mismatch for NIP: ${nip}. Returning 401 to PWA.`);
+					// Explicitly return 401 to signal PWA to try origin
 					return jsonResponse(false, 401, 'Data login tidak ditemukan di cache. Mencoba ke server utama.');
 
 				} catch (error) {
@@ -372,12 +396,7 @@ export default {
 					const cachedPegawai = await env.PEGAWAI_KV.get(kvKey, 'json');
 
 					if (cachedPegawai && cachedPegawai.nik) {
-						let isPasswordMatch = false;
-						if (cachedPegawai.nik === password) {
-							isPasswordMatch = true;
-						} else if (cachedPegawai.nik.startsWith('$2y$') || cachedPegawai.nik.startsWith('$2a$') || cachedPegawai.nik.startsWith('$2b$')) {
-							isPasswordMatch = await compareBcrypt(password, cachedPegawai.nik);
-						}
+						const isPasswordMatch = await verifyNikPassword(password, cachedPegawai.nik);
 
 						if (isPasswordMatch) {
 							let roles = ['asn'];

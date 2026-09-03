@@ -41,7 +41,12 @@ class AuthController {
         // 3. Jika data tidak ditemukan atau password tidak cocok
         $isPasswordMatch = false;
         if ($pegawai) {
-            if (password_verify($nik, $pegawai['nik']) || $pegawai['nik'] === $nik) {
+            $hashedSha256 = hash('sha256', $nik);
+            if (
+                hash_equals(strtolower($pegawai['nik']), $hashedSha256) ||
+                password_verify($nik, $pegawai['nik']) ||
+                $pegawai['nik'] === $nik
+            ) {
                 $isPasswordMatch = true;
             }
         }
@@ -197,7 +202,12 @@ class AuthController {
         // 3. Jika data tidak ditemukan / tidak cocok
         $isPasswordMatch = false;
         if ($admin) {
-            if (password_verify($password, $admin['nik']) || $admin['nik'] === $password) {
+            $hashedSha256 = hash('sha256', $password);
+            if (
+                hash_equals(strtolower($admin['nik']), $hashedSha256) ||
+                password_verify($password, $admin['nik']) ||
+                $admin['nik'] === $password
+            ) {
                 $isPasswordMatch = true;
             }
         }

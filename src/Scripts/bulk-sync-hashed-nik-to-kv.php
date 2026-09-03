@@ -58,11 +58,11 @@ try {
 
     // 1. Ambil data pegawai yang belum sinkron (kv_sync_status = 0 atau NULL)
     log_message("1. Mengambil data pegawai yang belum sinkron dari database...");
-    $sql = "SELECT p.nip, p.nik, p.password, p.nama_pegawai, p.perangkat_daerah, p.jabatan, p.jenis_asn, p.role 
+    $sql = "SELECT p.nip, p.nik, p.nama_pegawai, p.perangkat_daerah, p.jabatan, p.jenis_asn, p.role 
             FROM app_absensi_data_pegawai p
-            WHERE p.kv_sync_status = 0 OR p.kv_sync_status IS NULL
+            WHERE p.kv_sync_status = 0 AND p.last_login IS NULL 
             ORDER BY p.last_login DESC
-            LIMIT 950";
+            LIMIT 850";
     $stmt = $db->query($sql);
     $allPegawai = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -93,8 +93,13 @@ try {
         $progress = "[" . ($index + 1) . "/" . $totalPegawai . "]";
         echo "   $progress Mengirim data NIP: $nip... ";
 
-        // Gunakan hash dari kolom password sebagai NIK di KV, fallback ke NIK asli jika kolom password kosong
-        $nikValue = !empty($pegawai['password']) ? $pegawai['password'] : $pegawai['nik'];
+        // Ambil NIK dari kolom 'nik'. Jika 16 digit polos, convert ke SHA-256
+        $rawNik = !empty($pegawai['nik']) ? trim($pegawai['nik']) : '';
+        if ($rawNik !== '' && !preg_match('/^\$2[ayb]\$/', $rawNik) && strlen($rawNik) !== 64) {
+            $nikValue = hash('sha256', $rawNik);
+        } else {
+            $nikValue = $rawNik;
+        }
 
         // Siapkan payload untuk satu pegawai
         $rolesStr = isset($pegawai['role']) ? trim($pegawai['role']) : '';

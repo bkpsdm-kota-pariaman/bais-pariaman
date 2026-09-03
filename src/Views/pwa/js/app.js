@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.1'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.2'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -2359,10 +2359,29 @@ async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
     if (isSubmittingAdminCepat) return;
     isSubmittingAdminCepat = true;
     try {
-        const userData = parseJwt(userToken, true);
-        if (!userData) {
+        const cleanToken = typeof userToken === 'string' ? userToken.trim() : '';
+        if (!cleanToken) {
             Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Token Pegawai Tidak Valid`, showConfirmButton: false, timer: 2000 });
             return;
+        }
+
+        let namaPegawaiPreview = 'Pegawai ASN';
+        if (cleanToken.startsWith("BP:")) {
+            namaPegawaiPreview = 'Pegawai ASN (E-Presensi Pass)';
+        } else if (cleanToken.startsWith("BB:")) {
+            const jwtData = parseJwt(cleanToken.replace("BB:", ""), true);
+            if (!jwtData) {
+                Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Token Pegawai Kedaluwarsa`, showConfirmButton: false, timer: 2000 });
+                return;
+            }
+            namaPegawaiPreview = jwtData.nama || 'Pegawai ASN';
+        } else {
+            const jwtData = parseJwt(cleanToken, true);
+            if (!jwtData) {
+                Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Format Token Tidak Sesuai`, showConfirmButton: false, timer: 2000 });
+                return;
+            }
+            namaPegawaiPreview = jwtData.nama || 'Pegawai ASN';
         }
 
         const jadwal = adminCepatState.jadwal;
@@ -2428,7 +2447,8 @@ async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
 
         if (response.ok && res.status) {
             playBeepSound();
-            Swal.fire({ toast: true, position: 'bottom', icon: 'success', title: `Berhasil: ${userData.nama}`, showConfirmButton: false, timer: 1500, timerProgressBar: true });
+            const displayName = res?.data?.nama_pegawai || namaPegawaiPreview;
+            Swal.fire({ toast: true, position: 'bottom', icon: 'success', title: `Berhasil: ${displayName}`, showConfirmButton: false, timer: 1500, timerProgressBar: true });
         } else {
             Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Gagal: ${res.message || 'Error'}`, showConfirmButton: false, timer: 2000 });
         }
@@ -3042,11 +3062,12 @@ async function handleScanSuccess(decodedText) {
             await html5QrCode.stop().catch(err => console.warn("Gagal menghentikan scanner setelah sukses.", err));
         }
 
-        const isProfileToken = decodedText.startsWith("BP:") || decodedText.startsWith("BB:");
+        const cleanText = typeof decodedText === 'string' ? decodedText.trim() : '';
+        const isProfileToken = cleanText.startsWith("BP:") || cleanText.startsWith("BB:");
         if (isProfileToken) {
-            const token = decodedText;
+            const token = cleanText;
             const modeFoto = adminCepatState.mode_foto || 'tidak';
-            const userData = decodedText.startsWith("BB:") ? (parseJwt(decodedText.replace("BB:", ""), true) || { nama: 'Pegawai ASN', nip: '-' }) : { nama: 'Pegawai ASN (E-Presensi Pass)', nip: '-' };
+            const userData = cleanText.startsWith("BB:") ? (parseJwt(cleanText.replace("BB:", ""), true) || { nama: 'Pegawai ASN', nip: '-' }) : { nama: 'Pegawai ASN (E-Presensi Pass)', nip: '-' };
 
             try {
                 let fotoBase64 = null;
