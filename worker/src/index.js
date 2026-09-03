@@ -69,7 +69,7 @@ async function encryptBpToken(nip, exp, secretStr) {
 	const combined = new Uint8Array(iv.length + encryptedArray.length);
 	combined.set(iv, 0);
 	combined.set(encryptedArray, iv.length);
-	
+
 	let binaryString = '';
 	for (let i = 0; i < combined.length; i++) {
 		binaryString += String.fromCharCode(combined[i]);
@@ -94,7 +94,7 @@ async function decryptBpToken(token, secretStr) {
 		if (combined.length < 29) return null;
 		const iv = combined.subarray(0, 12);
 		const ciphertextWithTag = combined.subarray(12);
-		
+
 		const encoder = new TextEncoder();
 		const secretBytes = encoder.encode(secretStr);
 		const keyHash = await crypto.subtle.digest('SHA-256', secretBytes);
@@ -1300,8 +1300,10 @@ export default {
 	 * @param {ExecutionContext} ctx
 	 */
 	async queue(batch, env) {
-		if (!env.ORIGIN_API_BULK_URL || !env.WORKER_SECRET) {
-			console.error("[Queue Consumer] Secrets ORIGIN_API_BULK_URL / WORKER_SECRET belum diatur.");
+		const targetUrl = (env.ORIGIN_API_URL ? `${env.ORIGIN_API_URL.replace(/\/$/, '')}/absen/submit` : null);
+
+		if (!targetUrl || !env.WORKER_SECRET) {
+			console.error("[Queue Consumer] Secrets ORIGIN_API_URL / WORKER_SECRET belum diatur.");
 			batch.retryAll({ delaySeconds: 300 });
 			return;
 		}
@@ -1327,7 +1329,7 @@ export default {
 		let httpStatus = 500;
 
 		try {
-			response = await fetch(env.ORIGIN_API_BULK_URL, {
+			response = await fetch(targetUrl, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
