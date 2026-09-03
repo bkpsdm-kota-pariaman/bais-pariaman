@@ -40,6 +40,13 @@
 			}
 		]
 	},
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true
+		},
+		"redact_query_string": false
+	},
 	"env": {
 		"beta": {
 			"name": "absensi-kegiatan-asn-worker-dev",
