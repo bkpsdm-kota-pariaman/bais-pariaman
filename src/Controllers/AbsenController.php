@@ -316,21 +316,7 @@ class AbsenController {
             }
         }
 
-        // 11. Proteksi Celah 2: Cek apakah data existing sudah diverifikasi/ditolak admin
-        $stmtCheck = $db->prepare("SELECT status_verifikasi, status_kehadiran FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip LIMIT 1");
-        $stmtCheck->execute([':ka' => $kodeAkses, ':nip' => $nip]);
-        $existingRecord = $stmtCheck->fetch(PDO::FETCH_ASSOC);
-
-        if ($existingRecord && !$isAdminOrSuperAdmin) {
-            $existingSv = $existingRecord['status_verifikasi'] ?? '';
-            if (in_array($existingSv, ['Terverifikasi Oleh Admin', 'Ditolak Oleh Admin'])) {
-                // Pertahankan keputusan Admin
-                $statusVerifikasi = $existingRecord['status_verifikasi'];
-                $statusKehadiran = $existingRecord['status_kehadiran'];
-            }
-        }
-
-        // 11b. UPDATE atau INSERT data absensi di database
+        // 11b. UPDATE atau INSERT data absensi di database (Proteksi Status Verifikasi Admin)
         $sql = "INSERT INTO app_absensi_data_absensi 
                     (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, waktu, lokasi, lat, lng, nama_file_foto, keterangan, keterangan_verifikasi, status_verifikasi, status_kehadiran) 
                 VALUES 
@@ -344,11 +330,11 @@ class AbsenController {
                     kategori = VALUES(kategori),
                     keterangan = VALUES(keterangan),
                     keterangan_verifikasi = VALUES(keterangan_verifikasi),
-                    status_verifikasi = VALUES(status_verifikasi),
-                    status_kehadiran = VALUES(status_kehadiran),
                     nama_pegawai = VALUES(nama_pegawai),
                     opd = VALUES(opd),
-                    jabatan = VALUES(jabatan)";
+                    jabatan = VALUES(jabatan),
+                    status_verifikasi = IF(status_verifikasi IN ('Terverifikasi Oleh Admin', 'Ditolak Oleh Admin'), status_verifikasi, VALUES(status_verifikasi)),
+                    status_kehadiran = IF(status_verifikasi IN ('Terverifikasi Oleh Admin', 'Ditolak Oleh Admin'), status_kehadiran, VALUES(status_kehadiran))";
 
         $stmt = $db->prepare($sql);
         $isSuccess = $stmt->execute([
@@ -370,6 +356,7 @@ class AbsenController {
         ]);
 
         if ($isSuccess) {
+
             // 12. FITUR AUDIT LOG: HANYA DIJALANKAN JIKA PENGIRIM ADALAH ADMIN / SUPER ADMIN
             if ($isAdminOrSuperAdmin) {
                 $jenisAksi = ($stmt->rowCount() > 1) ? 'edit' : 'tambah';
@@ -656,67 +643,105 @@ class AbsenController {
         $errorMessages = [];
 
         try {
-            // Siapkan statement di luar loop untuk efisiensi.
             $sql = "INSERT INTO app_absensi_data_absensi 
                         (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, waktu, lokasi, lat, lng, nama_file_foto, keterangan, keterangan_verifikasi, status_verifikasi, status_kehadiran) 
                     VALUES 
                         (:kode_akses, :nip, :nama_pegawai, :opd, :jabatan, :kategori, :waktu, :lokasi, :lat, :lng, :nama_file_foto, :keterangan, :keterangan_verifikasi, :status_verifikasi, :status_kehadiran)
                     ON DUPLICATE KEY UPDATE
-                        waktu = IF(status_kehadiran = 'Alpa', VALUES(waktu), waktu),
-                        lokasi = IF(status_kehadiran = 'Alpa', VALUES(lokasi), lokasi),
-                        lat = IF(status_kehadiran = 'Alpa', VALUES(lat), lat),
-                        lng = IF(status_kehadiran = 'Alpa', VALUES(lng), lng),
-                        nama_file_foto = IF(status_kehadiran = 'Alpa', VALUES(nama_file_foto), nama_file_foto),
-                        keterangan = IF(VALUES(keterangan) IS NOT NULL AND VALUES(keterangan) != '', VALUES(keterangan), keterangan),
-                        keterangan_verifikasi = IF(VALUES(keterangan_verifikasi) IS NOT NULL AND VALUES(keterangan_verifikasi) != '', VALUES(keterangan_verifikasi), keterangan_verifikasi),
-                        status_verifikasi = IF(status_kehadiran = 'Alpa', VALUES(status_verifikasi), status_verifikasi),
-                        status_kehadiran = IF(status_kehadiran = 'Alpa', VALUES(status_kehadiran), status_kehadiran),
+                        waktu = VALUES(waktu),
+                        lokasi = VALUES(lokasi),
+                        lat = VALUES(lat),
+                        lng = VALUES(lng),
+                        nama_file_foto = VALUES(nama_file_foto),
+                        kategori = VALUES(kategori),
+                        keterangan = VALUES(keterangan),
+                        keterangan_verifikasi = VALUES(keterangan_verifikasi),
                         nama_pegawai = VALUES(nama_pegawai),
                         opd = VALUES(opd),
                         jabatan = VALUES(jabatan),
-                        kategori = VALUES(kategori)";
-            $stmt = $db->prepare($sql);
+                        status_verifikasi = IF(status_verifikasi IN ('Terverifikasi Oleh Admin', 'Ditolak Oleh Admin'), status_verifikasi, VALUES(status_verifikasi)),
+                        status_kehadiran = IF(status_verifikasi IN ('Terverifikasi Oleh Admin', 'Ditolak Oleh Admin'), status_kehadiran, VALUES(status_kehadiran))";
 
             foreach ($absensiBatch as $item) {
                 $uploadPath = null; // Reset untuk setiap item
                 try {
                     $db->beginTransaction();
+                    $stmt = $db->prepare($sql);
 
-                    $waktu = (new DateTime('now', new DateTimeZone('Asia/Jakarta')))->format('Y-m-d H:i:s');
-
-                    $payload = $item['body'] ?? null;
-                    if (!$payload) {
+                    $payload = $item['body'] ?? $item;
+                    if (!$payload || !is_array($payload)) {
                         throw new \Exception("Payload kosong.");
                     }
 
-                    // Dapatkan data pegawai dari JWT
-                    $decoded = JWT::decode($payload['jwt_token'], new Key($jwtSecretKey, 'HS256'));
-                    $pegawaiData = (array) $decoded->data;
-                    
-                    // Payload data dari token sekarang selalu dalam format objek
-                    $nip = $pegawaiData['nip'] ?? null;
-                    $nama = $pegawaiData['nama'] ?? null;
-                    $opd = $pegawaiData['opd'] ?? null;
-                    $jabatan = $pegawaiData['jabatan'] ?? null;
+                    $submittedAt = $payload['submittedAt'] ?? $payload['submitted_at'] ?? null;
+                    if (!empty($submittedAt)) {
+                        try {
+                            $nowObj = new DateTime($submittedAt);
+                            $nowObj->setTimezone(new DateTimeZone('Asia/Jakarta'));
+                        } catch (\Exception $ex) {
+                            $nowObj = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
+                        }
+                    } else {
+                        $nowObj = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
+                    }
+                    $waktu = $nowObj->format('Y-m-d H:i:s');
+
+                    // Dapatkan data pegawai dari JWT / token payload
+                    $nip = null;
+                    $nama = null;
+                    $opd = null;
+                    $jabatan = null;
+                    $pegawaiData = [];
+                    $authSource = 'fallback_payload';
+
+                    $rawToken = $payload['jwt_token'] ?? '';
+                    $cleanToken = preg_replace('/^(Bearer|BP:|BB:)\s*/i', '', $rawToken);
+
+                    if (!empty($cleanToken)) {
+                        try {
+                            $decoded = JWT::decode($cleanToken, new Key($jwtSecretKey, 'HS256'));
+                            $pegawaiData = (array) ($decoded->data ?? []);
+                            $nip = $pegawaiData['nip'] ?? null;
+                            $nama = $pegawaiData['nama'] ?? null;
+                            $opd = $pegawaiData['opd'] ?? null;
+                            $jabatan = $pegawaiData['jabatan'] ?? null;
+                            if (!empty($nip)) {
+                                $authSource = 'jwt_token';
+                            }
+                        } catch (\Exception $jwtEx) {
+                            // Abaikan error JWT jika data pegawai sudah disediakan oleh Worker
+                        }
+                    }
+
+                    // Fallback identitas dari payload yang disuntikkan Worker
+                    $nip = $nip ?? $payload['nip'] ?? null;
+                    $nama = $nama ?? $payload['nama'] ?? null;
+                    $opd = $opd ?? $payload['opd'] ?? null;
+                    $jabatan = $jabatan ?? $payload['jabatan'] ?? null;
 
                     // Validasi data penting dari payload
                     $kodeAkses = $payload['kode_akses'] ?? null;
-                    $kategori = $payload['kategori'] ?? null; // Ambil kategori dari payload
-
-                    if (empty($kodeAkses) || empty($kategori) || empty($nip) || empty($nama)) {
-                        throw new \Exception("Data esensial (kode, kategori, nip, nama) tidak lengkap dalam payload.");
+                    if (empty($kodeAkses) || empty($nip) || empty($nama)) {
+                        throw new \Exception("Data esensial (kode: " . ($kodeAkses ?: 'null') . ", nip: " . ($nip ?: 'null') . ", nama: " . ($nama ?: 'null') . ") tidak lengkap dalam payload.");
                     }
 
+                    // Cek jadwal dari DB untuk memverifikasi ulang waktu & lokasi serta mengambil kategori
+                    $stmtJadwalBulk = $db->prepare("SELECT judul, kategori, tanggal, jam_selesai, koordinat, radius_meter FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode LIMIT 1");
+                    $stmtJadwalBulk->execute([':kode' => $kodeAkses]);
+                    $jadwalBulk = $stmtJadwalBulk->fetch(PDO::FETCH_ASSOC);
+
+                    $kategori = $jadwalBulk['kategori'] ?? $payload['kategori'] ?? 'Kegiatan ASN';
+
                     // Proses foto base64
-                    $fotoBase64 = $payload['foto_base64'] ?? null;
-                    $newFileName = 'NO_PHOTO_ADMIN_FAST_INPUT.jpg'; // Default filename
-                    $uploadPath = null; // Tidak ada file yang di-upload secara default
+                    $fotoBase64 = $payload['foto_base64'] ?? $payload['foto_absensi'] ?? $payload['foto'] ?? null;
+                    $newFileName = 'NO_PHOTO_ADMIN_FAST_INPUT.jpg';
+                    $uploadPath = null;
 
                     $statusVerifikasi = $payload['status_verifikasi'] ?? 'Terverifikasi Sistem';
                     $statusKehadiran = $payload['status_kehadiran'] ?? 'Hadir';
 
                     // Validasi role: foto/bukti dukung wajib jika role = asn (bukan admin/super admin)
-                    $userRoles = isset($pegawaiData['role']) ? (array) $pegawaiData['role'] : ['asn'];
+                    $userRoles = isset($pegawaiData['role']) ? (array) $pegawaiData['role'] : (isset($payload['role']) ? (array)$payload['role'] : ['asn']);
                     $userRoles = array_map('strtolower', array_map('trim', $userRoles));
                     $isAdminOrSuperAdmin = in_array('admin', $userRoles) || in_array('super admin', $userRoles) || ($statusVerifikasi === 'Terverifikasi Oleh Admin');
 
@@ -725,19 +750,16 @@ class AbsenController {
                     }
 
                     if (!empty($fotoBase64)) {
-                        // Jika ada foto, proses seperti biasa
-                        $data = explode(',', $fotoBase64);
+                        $cleanBase64 = preg_replace('#^data:(image|application)/\w+;base64,#i', '', $fotoBase64);
+                        $binaryData = base64_decode($cleanBase64);
                         $timestamp = time();
-                        $ext = 'jpg';
-                        if (strpos($data[0] ?? '', 'application/pdf') !== false) {
-                            $ext = 'pdf';
-                        }
                         $randomStr = bin2hex(random_bytes(4));
+                        $ext = (strpos($fotoBase64, 'application/pdf') !== false) ? 'pdf' : 'jpg';
                         $newFileName = $nip . '_' . $kodeAkses . '_' . $timestamp . '_' . $randomStr . '.' . $ext;
                         $uploadPath = $uploadDir . $newFileName;
-                        $fotoData = base64_decode($data[1] ?? '');
-                        if ($fotoData === false || !file_put_contents($uploadPath, $fotoData)) {
-                            throw new \Exception("Gagal menyimpan file foto untuk NIP: " . $nip);
+
+                        if ($binaryData === false || file_put_contents($uploadPath, $binaryData) === false) {
+                            throw new \Exception("Gagal menyimpan file foto Base64 untuk NIP: " . $nip);
                         }
                     }
 
@@ -749,13 +771,7 @@ class AbsenController {
                     $isItemTerlambat = false;
                     $isItemLuarRadius = false;
 
-                    // Cek jadwal dari DB untuk memverifikasi ulang waktu & lokasi
-                    $stmtJadwalBulk = $db->prepare("SELECT tanggal, jam_selesai, koordinat, radius_meter FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode LIMIT 1");
-                    $stmtJadwalBulk->execute([':kode' => $kodeAkses]);
-                    $jadwalBulk = $stmtJadwalBulk->fetch(PDO::FETCH_ASSOC);
-
                     if ($jadwalBulk) {
-                        $nowObj = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
                         $endTimeObj = new DateTime($jadwalBulk['tanggal'] . ' ' . $jadwalBulk['jam_selesai'], new DateTimeZone('Asia/Jakarta'));
                         if ($nowObj > $endTimeObj) {
                             $isItemTerlambat = true;
@@ -800,11 +816,11 @@ class AbsenController {
                         ':nama_pegawai' => $nama,
                         ':opd' => $opd,
                         ':jabatan' => $jabatan,
-                        ':kategori' => $kategori, // Gunakan kategori dari payload
+                        ':kategori' => $kategori,
                         ':waktu' => $waktu,
-                        ':lokasi' => $payload['lokasi'] ?? 'Lokasi tidak terdeteksi',
-                        ':lat' => $payload['lat'] ?? null, // PERBAIKAN: Tangani jika lat tidak ada
-                        ':lng' => $payload['lng'] ?? null, // PERBAIKAN: Tangani jika lng tidak ada
+                        ':lokasi' => $payload['lokasi'] ?? '-',
+                        ':lat' => $payload['lat'] ?? 0,
+                        ':lng' => $payload['lng'] ?? 0,
                         ':nama_file_foto' => $newFileName,
                         ':keterangan' => $keteranganPegawai,
                         ':keterangan_verifikasi' => $keteranganVerifikasi,
@@ -812,11 +828,43 @@ class AbsenController {
                         ':status_kehadiran' => $statusKehadiran
                     ]);
 
-                    // PERBAIKAN: Cek return value dari execute().
-                    // `execute()` mengembalikan `false` jika query gagal, tapi mungkin tidak melempar Exception
-                    // tergantung pada mode error PDO. Pengecekan eksplisit ini akan menangkap error tersebut.
                     if (!$isSuccess) {
                         throw new \Exception("Eksekusi database gagal: " . ($stmt->errorInfo()[2] ?? "Unknown error"));
+                    }
+
+                    $affectedRows = $stmt->rowCount();
+                    LogHelper::write('info', "Bulk Absen Sukses Item: NIP $nip, Kode $kodeAkses, Auth: $authSource, Status: $statusKehadiran, RowCount: $affectedRows");
+
+                    if ($isAdminOrSuperAdmin) {
+                        $jenisAksi = ($affectedRows > 1) ? 'edit' : 'tambah';
+                        LogAbsensi::log(
+                            $db,
+                            $kodeAkses,
+                            $nip,
+                            $nama,
+                            $jenisAksi,
+                            $pegawaiData['nip'] ?? ($payload['nip'] ?? ''),
+                            $pegawaiData['nama'] ?? ($payload['nama'] ?? ''),
+                            $_SERVER['REMOTE_ADDR'] ?? '',
+                            [
+                                'kode_akses' => $kodeAkses,
+                                'nip' => $nip,
+                                'nama_pegawai' => $nama,
+                                'opd' => $opd,
+                                'jabatan' => $jabatan,
+                                'kategori' => $kategori,
+                                'waktu' => $waktu,
+                                'lokasi' => $payload['lokasi'] ?? '-',
+                                'lat' => $payload['lat'] ?? 0,
+                                'lng' => $payload['lng'] ?? 0,
+                                'nama_file_foto' => $newFileName,
+                                'keterangan' => $keteranganPegawai,
+                                'keterangan_verifikasi' => $keteranganVerifikasi,
+                                'status_verifikasi' => $statusVerifikasi,
+                                'status_kehadiran' => $statusKehadiran,
+                                'mode' => 'submit-absen-bulk',
+                            ]
+                        );
                     }
 
                     // Commit transaksi jika eksekusi berhasil.
@@ -830,7 +878,7 @@ class AbsenController {
                     }
 
                     $failureCount++;
-                    $errorMessages[] = "Item ID " . ($item['id'] ?? 'unknown') . ": " . $e->getMessage();
+                    $errorMessages[] = "NIP " . ($item['body']['nip'] ?? $item['nip'] ?? 'unknown') . ": " . $e->getMessage();
                     LogHelper::write('error', "Bulk Absen Error: " . $e->getMessage(), ['item' => $item]);
                     // Hapus file yang mungkin sudah dibuat untuk item yang gagal ini
                     if ($uploadPath && file_exists($uploadPath)) {
@@ -839,13 +887,21 @@ class AbsenController {
                 }
             }
 
-            // Selalu kembalikan response sukses ke Worker agar batch tidak di-retry.
-            $message = "$successCount data berhasil diproses.";
-            if ($failureCount > 0) $message .= " $failureCount data gagal.";
+            // Jika ada data yang gagal, kembalikan HTTP 500 agar Worker Queue otomatis retry
+            if ($failureCount > 0) {
+                $errorDetail = implode("; ", $errorMessages);
+                Response::json(false, 500, "Gagal memproses bulk absensi: $failureCount data gagal ($errorDetail).", [
+                    'success_count' => $successCount,
+                    'failure_count' => $failureCount,
+                    'errors' => $errorMessages
+                ]);
+                return;
+            }
 
-            // Gunakan 207 Multi-Status jika ada kegagalan, agar lebih semantik.
-            $statusCode = ($failureCount > 0) ? 207 : 200;
-            Response::json(true, $statusCode, $message, ['errors' => $errorMessages]);
+            Response::json(true, 200, "$successCount data berhasil diproses.", [
+                'success_count' => $successCount,
+                'failure_count' => 0
+            ]);
         } catch (\Exception $e) {
             // Ini adalah catch untuk error yang tidak terduga di luar loop (misal: koneksi DB putus total)
             // Log seluruh batch data yang gagal diproses untuk memastikan tidak ada data yang hilang.

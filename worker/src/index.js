@@ -1339,7 +1339,9 @@ export default {
 
 			if (response.ok) {
 				const responseData = await response.json();
-				console.log(`[Queue Batch SUKSES] Batch ${messagesToSend.length} pesan berhasil diproses server PHP. NIPs: [${nipSummary}]`);
+				const sc = responseData?.data?.success_count ?? '?';
+				const fc = responseData?.data?.failure_count ?? '?';
+				console.log(`[Queue Batch SUKSES] Batch ${messagesToSend.length} pesan. PHP: success=${sc}, failure=${fc}, msg="${responseData?.message || '-'}". NIPs: [${nipSummary}]`);
 				if (responseData.errors && responseData.errors.length > 0) {
 					console.warn(`[Queue Batch Warnings] ${responseData.errors.length} pesan ditolak PHP. NIPs: [${nipSummary}]. Details:`, JSON.stringify(responseData.errors));
 				}
