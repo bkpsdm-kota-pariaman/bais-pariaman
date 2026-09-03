@@ -1,8 +1,8 @@
 // js/app.js
 
-const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
+const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.1.305'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.1'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -10,7 +10,7 @@ const APP_VERSION = 'v6.1.305'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
  * =================================================================
  * Ubah ke 'beta' untuk aplikasi versi pengembangan/salinan.
  */
-const APP_ENV = 'beta'; // 'production' atau 'beta'
+const APP_ENV = 'production'; // 'production' atau 'beta'
 
 const WORKER_URL = APP_ENV === 'production'
     ? "https://absensi-kegiatan-asn-worker.bidpp-bkpsdm.workers.dev"

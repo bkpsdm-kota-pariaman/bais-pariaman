@@ -3,7 +3,7 @@ let currentPegawaiData = [];
 let currentOpdData = [];
 // File: public_html/admin.js
 
-const ORIGIN_SERVER_URL = 'https://api-esdm.pariamankota.go.id/beta-bais-pariaman';
+const ORIGIN_SERVER_URL = 'https://api-esdm.pariamankota.go.id/bais-pariaman';
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
 const WORKER_URL = "https://absensi-kegiatan-asn-worker.bidpp-bkpsdm.workers.dev";
 let allOpdList = [];
