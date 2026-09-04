@@ -3550,16 +3550,18 @@ let parsedImportData = [];
 
 function downloadTemplateCSV() {
     const sampleOpd = (allOpdList && allOpdList.length > 0) ? allOpdList[0] : "Dinas Komunikasi dan Informatika";
-    const header = "waktu;nip;nama_pegawai;jabatan;opd;lokasi;lat;lng;nama_file_foto;keterangan\n";
-    const sample = `20-08-2026 07:30:00;198001012005011001;Ahmad Fajar;Staf Analis;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_absen.jpg;Hadir tepat waktu\n`;
-    const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(header + sample);
-    const encodedUri = encodeURI(csvContent);
+    const header = "waktu;nip;nama_pegawai;jabatan;opd;lokasi;lat;lng;nama_file_foto;keterangan\r\n";
+    const sample = `20-08-2026 07:30:00;198001012005011001;Ahmad Fajar;Staf Analis;${sampleOpd};Kantor Walikota;-0.6276;100.1209;foto_absen.jpg;Hadir tepat waktu\r\n`;
+    const csvContent = "\uFEFF" + header + sample;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute("download", "template_import_absen.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 async function handlePreviewCSV(event) {
