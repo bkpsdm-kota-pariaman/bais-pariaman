@@ -77,7 +77,7 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
         logAction.check('Alasan Memakai Absensi Cadangan', `input[value="${testData.alasanValue}"]`);
         await page.check(`input[value="${testData.alasanValue}"]`);
 
-        logAction.step('3. Mengunggah File Foto & Memverifikasi Tombol "PAKAI FOTO INI" (Awal)');
+        logAction.step('3. Mengunggah File Foto & Memverifikasi Tampilan Preview serta Tombol GANTI FOTO');
 
         const dummyJpegBase64 = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
         const dummyJpegBuffer = Buffer.from(dummyJpegBase64, 'base64');
@@ -97,14 +97,9 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
         const imgPreview = page.locator('#imgPreview');
         await expect(imgPreview).toBeVisible();
 
-        logAction.click('Tombol PAKAI FOTO INI', '#btnPakaiFoto');
-        const btnPakai = page.locator('#btnPakaiFoto');
-        await expect(btnPakai).toBeVisible();
-        await btnPakai.click();
-
-        logAction.verify('Memverifikasi indikator Foto Siap Digunakan muncul (warna hijau)');
-        const statusTerkonfirmasi = page.locator('#statusFotoTerkonfirmasi');
-        await expect(statusTerkonfirmasi).toBeVisible({ timeout: 8000 });
+        logAction.verify('Memverifikasi tombol GANTI FOTO (#btnGantiFoto) tampil di bawah preview');
+        const btnGanti = page.locator('#btnGantiFoto');
+        await expect(btnGanti).toBeVisible();
 
         logAction.step('4. Mengosongkan & Reset Seluruh Data Form & Foto');
 
@@ -127,11 +122,6 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
             if (elBoxPrev) elBoxPrev.classList.add('hidden-view');
             const elBoxPilih = document.getElementById('boxPilihFoto');
             if (elBoxPilih) elBoxPilih.classList.remove('hidden-view');
-            const elStatus = document.getElementById('statusFotoTerkonfirmasi');
-            if (elStatus) elStatus.classList.add('hidden-view');
-            if (typeof fotoTerkonfirmasi !== 'undefined') {
-                fotoTerkonfirmasi = false;
-            }
         });
 
         logAction.verify('Memverifikasi kotak pilih foto awal tampil kembali');
@@ -169,8 +159,7 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
         });
 
         await expect(boxPreview).toBeVisible({ timeout: 10000 });
-        await btnPakai.click();
-        await expect(statusTerkonfirmasi).toBeVisible({ timeout: 8000 });
+        await expect(btnGanti).toBeVisible();
 
         logAction.step('6. Mengirimkan Formulir Absensi Cadangan');
         logAction.click('Tombol SIMPAN ABSENSI CADANGAN', '#btnSubmit');

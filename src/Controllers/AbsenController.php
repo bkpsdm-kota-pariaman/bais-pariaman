@@ -184,6 +184,7 @@ class AbsenController {
             $statusKehadiran = $statusKehadiranInput;
             $statusVerifikasi = $statusVerifikasiInput;
             $keteranganVerifikasiAdmin = $payload['keterangan_verifikasi'] ?? $payload['keterangan_admin'] ?? 'Absensi Cepat oleh Admin';
+            $keteranganPegawai = $payload['keterangan'] ?? $keteranganVerifikasiAdmin;
 
             if ($has_base64_foto) {
                 $cleanBase64 = preg_replace('#^data:(image|application)/\w+;base64,#i', '', $base64Foto);
@@ -488,6 +489,14 @@ class AbsenController {
             }
             Response::json(false, $code, $e->getMessage());
         }
+    }
+
+    /**
+     * Menerima dan memproses absensi cepat dari Admin (Single/Direct).
+     */
+    public function submitCepat() {
+        AdminAuthHelper::validate();
+        $this->submit();
     }
 
     /**
@@ -1068,7 +1077,18 @@ class AbsenController {
                 ]
             );
 
-            Response::json(true, 200, "Status absensi berhasil ditambahkan.");
+            $insertedWaktu = $now->format('Y-m-d H:i:s');
+            $insertedKehadiran = $statusKehadiranBaru ?? 'Hadir Terlambat Diluar Lokasi';
+
+            Response::json(true, 200, "Status absensi berhasil ditambahkan.", [
+                'waktu'                 => $insertedWaktu,
+                'waktu_absen'           => $insertedWaktu,
+                'status_kehadiran'      => $insertedKehadiran,
+                'status_verifikasi'     => $statusVerifikasi,
+                'nama_file_foto'        => $newFileName,
+                'keterangan_verifikasi' => $keteranganAdmin,
+                'lokasi'                => 'Diubah oleh Admin (Manual)'
+            ]);
             return;
         }
 
@@ -1129,7 +1149,14 @@ class AbsenController {
             ]
         );
 
-        Response::json(true, 200, "Status absensi berhasil diperbarui.");
+        Response::json(true, 200, "Status absensi berhasil diperbarui.", [
+            'waktu'                 => $updateWaktu,
+            'waktu_absen'           => $updateWaktu,
+            'status_kehadiran'      => $updateStatusKehadiran,
+            'status_verifikasi'     => $statusVerifikasi,
+            'nama_file_foto'        => $newFileName,
+            'keterangan_verifikasi' => $keteranganAdmin
+        ]);
     }
 
     public function verifikasiAbsenMasal() {

@@ -314,22 +314,13 @@
                                 </div>
                             </div>
 
-                            <!-- Tombol Konfirmasi "Pakai Foto Ini" & "Ganti Foto" -->
-                            <div class="max-w-[280px] mx-auto space-y-2">
-                                <button type="button" id="btnPakaiFoto" onclick="konfirmasiPakaiFoto()"
-                                    class="w-full bg-green-600 hover:bg-green-700 active:scale-95 text-white font-extrabold py-2.5 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-xs">
-                                    <i class="bi bi-check2-circle text-base"></i> PAKAI FOTO INI
-                                </button>
+                            <!-- Tombol Ganti Foto -->
+                            <div class="max-w-[280px] mx-auto">
                                 <button type="button" id="btnGantiFoto"
                                     onclick="document.getElementById('inpFotoFile').click()"
-                                    class="w-full bg-white border border-gray-300 hover:bg-gray-50 active:scale-95 text-gray-700 font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
-                                    <i class="bi bi-arrow-repeat"></i> Ganti Foto Lain
+                                    class="w-full bg-white border border-gray-300 hover:bg-gray-50 active:scale-95 text-gray-700 font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
+                                    <i class="bi bi-arrow-repeat text-sm"></i> GANTI FOTO
                                 </button>
-                            </div>
-
-                            <div id="statusFotoTerkonfirmasi"
-                                class="hidden-view max-w-[280px] mx-auto bg-green-50 border border-green-200 text-green-700 p-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5">
-                                <i class="bi bi-check-circle-fill text-green-600"></i> Foto Siap Digunakan
                             </div>
                         </div>
 
@@ -573,8 +564,6 @@
         // =========================================================================
         // RESIZE & VALIDASI INPUT FOTO
         // =========================================================================
-        var fotoTerkonfirmasi = false;
-
         function handleFotoSelected(event) {
             var file = event.target.files && event.target.files[0];
             if (!file) return;
@@ -585,7 +574,6 @@
                 document.getElementById('fotoBase64').value = '';
                 document.getElementById('boxPreviewFoto').classList.add('hidden-view');
                 document.getElementById('boxPilihFoto').classList.remove('hidden-view');
-                fotoTerkonfirmasi = false;
 
                 Swal.fire({
                     icon: 'error',
@@ -631,8 +619,6 @@
                     document.getElementById('fotoBase64').value = resizedBase64;
                     document.getElementById('boxPilihFoto').classList.add('hidden-view');
                     document.getElementById('boxPreviewFoto').classList.remove('hidden-view');
-                    document.getElementById('statusFotoTerkonfirmasi').classList.add('hidden-view');
-                    fotoTerkonfirmasi = false;
 
                     showLoading(false);
                 };
@@ -643,25 +629,6 @@
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
-        }
-
-        function konfirmasiPakaiFoto() {
-            var b64 = document.getElementById('fotoBase64').value;
-            if (!b64) {
-                Swal.fire('Peringatan', 'Silakan pilih file foto terlebih dahulu.', 'warning');
-                return;
-            }
-            fotoTerkonfirmasi = true;
-            document.getElementById('statusFotoTerkonfirmasi').classList.remove('hidden-view');
-
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                icon: 'success',
-                title: 'Foto berhasil dipilih & siap digunakan!',
-                showConfirmButton: false,
-                timer: 1800
-            });
         }
 
         // =========================================================================
@@ -819,9 +786,7 @@
             document.getElementById('fotoBase64').value = '';
             document.getElementById('boxPreviewFoto').classList.add('hidden-view');
             document.getElementById('boxPilihFoto').classList.remove('hidden-view');
-            document.getElementById('statusFotoTerkonfirmasi').classList.add('hidden-view');
             document.getElementById('boxKeteranganLainnya').classList.add('hidden-view');
-            fotoTerkonfirmasi = false;
             document.getElementById('viewForm').classList.remove('hidden-view');
             window.scrollTo(0, 0);
         }

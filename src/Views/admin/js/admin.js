@@ -2056,6 +2056,7 @@ async function submitVerifikasi(event) {
             const newKeteranganVerif = document.getElementById('verifKeterangan').value;
             const newOpd = document.getElementById('verifOpd').value;
             const newJabatan = document.getElementById('verifJabatan').value;
+            const updatedData = result.data || {};
 
             if (!document.getElementById('rekapKeseluruhanContainer').classList.contains('d-none')) {
                 // Menu Rekap Keseluruhan
@@ -2064,7 +2065,11 @@ async function submitVerifikasi(event) {
                         if (p.nip === targetNip && p.kode_akses === targetKodeAkses) {
                             const oldVerif = p.status_verifikasi;
                             p.status_verifikasi = newVerifStatus;
-                            if (newKehadiranStatus) p.status_kehadiran = newKehadiranStatus;
+                            p.status_kehadiran = newKehadiranStatus || updatedData.status_kehadiran || p.status_kehadiran || 'Hadir';
+                            p.waktu_absen = updatedData.waktu_absen || updatedData.waktu || p.waktu_absen || p.waktu || new Date().toISOString();
+                            p.waktu = p.waktu_absen;
+                            if (updatedData.nama_file_foto) p.nama_file_foto = updatedData.nama_file_foto;
+                            if (updatedData.lokasi) p.lokasi_absen = updatedData.lokasi;
                             p.keterangan_verifikasi = newKeteranganVerif;
                             p.perangkat_daerah = newOpd;
                             p.jabatan = newJabatan;
@@ -2083,7 +2088,11 @@ async function submitVerifikasi(event) {
                         if (p.nip === targetNip) {
                             const oldVerif = p.status_verifikasi;
                             p.status_verifikasi = newVerifStatus;
-                            if (newKehadiranStatus) p.status_kehadiran = newKehadiranStatus;
+                            p.status_kehadiran = newKehadiranStatus || updatedData.status_kehadiran || p.status_kehadiran || 'Hadir';
+                            p.waktu_absen = updatedData.waktu_absen || updatedData.waktu || p.waktu_absen || p.waktu || new Date().toISOString();
+                            p.waktu = p.waktu_absen;
+                            if (updatedData.nama_file_foto) p.nama_file_foto = updatedData.nama_file_foto;
+                            if (updatedData.lokasi) p.lokasi_absen = updatedData.lokasi;
                             p.keterangan_verifikasi = newKeteranganVerif;
                             p.perangkat_daerah = newOpd;
                             p.jabatan = newJabatan;

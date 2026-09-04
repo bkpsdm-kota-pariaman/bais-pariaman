@@ -90,6 +90,45 @@ Admin Dashboard digunakan untuk:
 
 ---
 
+### 4.4 Alur Proses Bisnis & Rules Absensi
+
+#### 1. Mode Absen Cepat (`/api/absen-cepat/submit`)
+- **Autentikasi & Otorisasi:** Cek token JWT, pastikan role `admin` atau `superadmin` (tolak HTTP 403 jika pengguna biasa).
+- **Validasi & Pengisian Field Input:**
+  - `nama_file_foto`: Opsional (default fallback: `NO_PHOTO_ADMIN_FAST_INPUT.jpg`).
+  - `keterangan` (pegawai): Opsional.
+  - `keterangan_verifikasi`: WAJIB diisi oleh admin.
+  - `status_kehadiran`: Set langsung oleh admin (default: `Hadir`).
+  - `status_verifikasi`: Set langsung oleh admin (default: `Terverifikasi Oleh Admin`).
+
+#### 2. Mode Absen Mandiri (`/api/absen/submit`)
+- **Autentikasi & Otorisasi:** Cek token JWT, pastikan token valid dan memiliki role ASN/pegawai.
+- **Validasi Umum:**
+  - `nama_file_foto`: WAJIB (foto selfie terkompres atau file dokumen bukti dukung PDF/Image).
+  - `keterangan`: Tergantung opsi kehadiran dan kondisi lokasi/waktu.
+
+##### 2.1 Opsi Kehadiran: "Hadir"
+- **Pengecekan Strict Mode (`is_strict_time` & `is_strict_location`):**
+  - Jika `is_strict_time == 1` dan waktu di luar jadwal (terlambat/belum mulai), ATAU `is_strict_location == 1` dan posisi di luar radius (atau GPS error/tidak melacak) -> **LANGSUNG TOLAK** (throw HTTP 422 error "Presensi ditolak..."), tanpa toleransi.
+- **Pengecekan Toleransi (`is_strict_time == 0` dan `is_strict_location == 0`):**
+  - **Kondisi Terlambat ATAU Di Luar Radius:**
+    - `keterangan` (pegawai): WAJIB diisi manual oleh pegawai.
+    - `status_verifikasi`: Automated set `"Menunggu Verifikasi Admin"`.
+    - `status_kehadiran`: `"Hadir"`.
+  - **Kondisi Tepat Waktu DAN Di Dalam Radius:**
+    - `keterangan` (pegawai): Automated set `"-"`.
+    - `status_verifikasi`: Automated set `"Terverifikasi Oleh Sistem"`.
+    - `status_kehadiran`: `"Hadir"`.
+    - `nama_file_foto`: Menggunakan nama file hasil kompresi foto selfie frontend.
+
+##### 2.2 Opsi Kehadiran: Selain "Hadir" (Izin, Sakit, Cuti, Dinas Luar, dll)
+- `nama_file_foto`: Dari file dokumen bukti dukung (Image/PDF) yang diupload manual.
+- `keterangan`: WAJIB diketik manual oleh pegawai (alasan tidak hadir).
+- `status_kehadiran`: Sesuai pilihan pegawai (Cuti, Sakit, Dinas Luar, dll).
+- `status_verifikasi`: Automated set `"Menunggu Verifikasi Admin"`.
+
+---
+
 ## 5. Non-Functional Requirements
 
 ### Performance

@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.3'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.13'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -936,7 +936,7 @@ async function prosesLogin(e) {
             res = await response.json();
         }
 
-        const accessToken = res?.data?.access_token || res?.data?.token;
+        const accessToken = res?.data?.access_token;
         if (res && res.status && accessToken) {
             await handleSuccessfulLogin(accessToken);
         } else {
@@ -944,7 +944,7 @@ async function prosesLogin(e) {
         }
     } catch (error) {
         console.error("Login gagal:", error);
-        Swal.fire("Login Gagal", "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.", "error");
+        Swal.fire("Login Gagal", `Ada kesalahan di aplikasi, ${error.message || error}`, "error");
     } finally {
         showLoading(false);
     }
@@ -1201,7 +1201,7 @@ async function generateUserQrToken() {
             const response = await fetchWithAuth(url, { method: 'POST' });
             if (!response.ok) throw new Error(`Request to ${url} failed with status ${response.status}`);
             const res = await response.json();
-            const newToken = res?.data?.access_token || res?.data?.token;
+            const newToken = res?.data?.access_token;
             if (!res.status || !res.data || !newToken) throw new Error(res.message || `Request to ${url} gagal.`);
             return newToken;
         };
@@ -1217,7 +1217,7 @@ async function generateUserQrToken() {
         }
     } catch (finalError) {
         console.error("Gagal membuat QR Code.", finalError);
-        Swal.fire("Gagal Membuat QR", "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.", "error");
+        Swal.fire("Gagal Membuat QR", `Ada kesalahan di aplikasi, ${finalError.message || finalError}`, "error");
     } finally {
         showLoading(false);
     }
@@ -1371,7 +1371,7 @@ async function adminCepatCekJadwal(event) {
 
     } catch (error) {
         console.error("Error saat memeriksa jadwal admin cepat:", error);
-        Swal.fire("Gagal", "Terjadi kesalahan saat memeriksa jadwal.", "error");
+        Swal.fire("Gagal", `Ada kesalahan di aplikasi, ${error.message || error}`, "error");
     } finally {
         // Pastikan overlay loading selalu disembunyikan setelah proses selesai.
         showLoading(false);
@@ -1499,7 +1499,7 @@ async function silentlyRefreshTokenIfNeeded() {
                 // 1. Coba refresh via Worker. fetchWithAuth akan mengambil token dari localForage.
                 response = await fetchWithAuth(`${WORKER_URL}/api/profil/refresh-token`, { method: 'POST' });
                 res = await response.json();
-                const newRefreshedToken = res?.data?.access_token || res?.data?.token;
+                const newRefreshedToken = res?.data?.access_token;
                 if (!res.status || !res.data || !newRefreshedToken) throw new Error(res.message || "Gagal refresh token di worker");
             } catch (workerError) {
                 // 2. Jika worker gagal, fallback ke server PHP.
@@ -1510,7 +1510,7 @@ async function silentlyRefreshTokenIfNeeded() {
                 }
             }
 
-            const tokenToSave = res?.data?.access_token || res?.data?.token;
+            const tokenToSave = res?.data?.access_token;
             if (res && res.status && res.data && tokenToSave) {
                 // Ganti token lama di localForage dengan yang baru.
                 await localforage.setItem("asn_jwt_token", tokenToSave);
@@ -1552,7 +1552,7 @@ async function refreshProfil() {
             res = await fallbackResponse.json();
         }
 
-        const syncToken = res?.data?.access_token || res?.data?.token;
+        const syncToken = res?.data?.access_token;
         if (res && res.status && res.data && syncToken) {
             await localforage.setItem("asn_jwt_token", syncToken);
             renderProfil();
@@ -1562,7 +1562,7 @@ async function refreshProfil() {
         }
     } catch (finalError) {
         console.error("Error saat sinkronisasi profil (termasuk fallback):", finalError);
-        Swal.fire("Gagal Sinkronisasi", "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.", "error");
+        Swal.fire("Gagal Sinkronisasi", `Ada kesalahan di aplikasi, ${finalError.message || finalError}`, "error");
     } finally {
         showLoading(false);
     }
@@ -1646,7 +1646,7 @@ async function simpanProfil(e) {
         const res = await response.json();
         // PERBAIKAN: Endpoint 'update' sekarang langsung mengembalikan token baru (karena memanggil refresh() di backend).
         // Tidak perlu lagi memanggil refreshProfil() secara terpisah.
-        const updatedToken = res?.data?.access_token || res?.data?.token;
+        const updatedToken = res?.data?.access_token;
         if (res.status && updatedToken) {
             tutupModalEditProfil();
             // Langsung simpan token baru yang diterima dari response
@@ -1869,7 +1869,7 @@ async function prosesQrCode(kodeOrJwt) {
     } catch (error) {
         showLoading(false);
         console.error("Error processing QR/Code:", error);
-        Swal.fire("Gagal", error.message || "Terjadi kesalahan saat memvalidasi jadwal.", "error").then(() => {
+        Swal.fire("Gagal", `Ada kesalahan di aplikasi, ${error.message || error}`, "error").then(() => {
             batalAbsen();
         });
     }
@@ -2276,8 +2276,7 @@ async function kirimAbsensi() {
         }
     }
 
-    const rawJadwal = currentJadwal?.jadwal || currentJadwal?.data?.jadwal || currentJadwal?.data || currentJadwal;
-    const queueValue = rawJadwal?.aktifkan_antrian ?? currentJadwal?.aktifkan_antrian;
+    const queueValue = currentJadwal?.aktifkan_antrian;
     const useQueue = String(queueValue ?? '').trim() === '1';
 
     // Helper penampung FormData untuk server utama PHP
@@ -2344,7 +2343,8 @@ async function kirimAbsensi() {
             },
             (message, res, error) => {
                 if (error) console.error('Error saat kirim absensi:', error);
-                Swal.fire('Gagal Mengirim', message || res?.message || 'Data absensi ditolak.', 'error');
+                const pesanError = error ? `Ada kesalahan di aplikasi, ${error.message || error}` : (message || res?.message || 'Data absensi ditolak.');
+                Swal.fire('Gagal Mengirim', pesanError, 'error');
             },
             fallbackUrl
         );
@@ -2447,14 +2447,14 @@ async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
 
         if (response.ok && res.status) {
             playBeepSound();
-            const displayName = res?.data?.nama_pegawai || namaPegawaiPreview;
+            const displayName = namaPegawaiPreview;
             Swal.fire({ toast: true, position: 'bottom', icon: 'success', title: `Berhasil: ${displayName}`, showConfirmButton: false, timer: 1500, timerProgressBar: true });
         } else {
             Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Gagal: ${res.message || 'Error'}`, showConfirmButton: false, timer: 2000 });
         }
     } catch (e) {
         console.error("Error saat kirim absensi cepat:", e);
-        Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: 'Gagal mengirim absensi cepat. Periksa koneksi.', showConfirmButton: false, timer: 2000 });
+        Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Ada kesalahan di aplikasi, ${e.message || e}`, showConfirmButton: false, timer: 3500 });
         // Lemparkan kembali error agar bisa ditangkap oleh pemanggil jika perlu.
         throw e;
     } finally {
@@ -2800,20 +2800,13 @@ async function setupAbsenForm(jadwalData) {
 
     showLoading(false); // Pastikan loading disembunyikan
 
-    // Normalisasikan currentJadwal agar properti dari API server PHP (res.data.jadwal) di-flatten secara konsisten
-    if (jadwalData && jadwalData.jadwal) {
-        currentJadwal = {
-            ...jadwalData.jadwal,
-            target_opd: jadwalData.target_opd || jadwalData.jadwal.target_opd,
-            is_terlambat: typeof jadwalData.is_terlambat !== 'undefined' ? jadwalData.is_terlambat : jadwalData.jadwal.is_terlambat,
-            server_time: jadwalData.server_time || jadwalData.jadwal.server_time
-        };
-    } else {
-        currentJadwal = jadwalData;
-    }
+    // Set currentJadwal langsung dari data response API (res.data) sesuai dokumentasi api.md
+    currentJadwal = jadwalData;
 
-    const queueValue = currentJadwal?.aktifkan_antrian ?? currentJadwal?.jadwal?.aktifkan_antrian ?? currentJadwal?.data?.aktifkan_antrian;
-    currentJadwal.aktifkan_antrian = String(queueValue ?? '').trim();
+    const queueValue = currentJadwal?.aktifkan_antrian;
+    if (currentJadwal) {
+        currentJadwal.aktifkan_antrian = String(queueValue ?? '').trim();
+    }
 
     if (typeof currentJadwal.is_terlambat !== 'undefined') {
         isTerlambat = Boolean(currentJadwal.is_terlambat);
@@ -3115,7 +3108,7 @@ async function handleScanSuccess(decodedText) {
                 }
             } catch (e) {
                 console.error("Terjadi kesalahan saat mengirim absensi cepat:", e);
-                Swal.fire("Kesalahan", "Terjadi kesalahan saat memproses absensi cepat.", "error");
+                Swal.fire("Kesalahan", `Ada kesalahan di aplikasi, ${e.message || e}`, "error");
             } finally {
                 showLoading(false);
                 setTimeout(() => {
