@@ -20,8 +20,6 @@ class JadwalController {
      * @param array $vars Variabel dari URL, berisi 'kode_akses'
      */
     public function getJadwal($vars) {
-        // 1. Validasi token JWT (bisa token login utama atau token sementara)
-        $pegawaiData = AuthHelper::validateToken(); 
         $kodeAkses = $vars['kode_akses'] ?? null;
 
         if (!$kodeAkses) {

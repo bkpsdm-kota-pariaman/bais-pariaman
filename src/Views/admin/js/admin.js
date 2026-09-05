@@ -4406,3 +4406,199 @@ function exportLogAbsensiToExcel() {
     const kode = document.getElementById('logFilterKegiatan').value.trim() || 'Semua';
     XLSX.writeFile(wb, `Log_Absensi_${kode}_${tgl}.xlsx`);
 }
+
+// =========================================================================
+// SUPER ADMIN UI CHECK & ABSENSI ERROR (DLQ) MANAGEMENT
+// =========================================================================
+
+function parseJwtPayload(token) {
+    if (!token) return null;
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        return null;
+    }
+}
+
+function checkSuperAdminUI() {
+    const token = localStorage.getItem('admin_jwt_token');
+    const payload = parseJwtPayload(token);
+    const roles = Array.isArray(payload?.data?.role) ? payload.data.role : (payload?.data?.role ? [payload.data.role] : []);
+    const isSuperAdminUser = roles.some(r => String(r).trim().toLowerCase() === 'super admin');
+
+    const errItem = document.getElementById('menuItemAbsensiError');
+    if (errItem) errItem.classList.toggle('d-none', !isSuperAdminUser);
+
+    const appSettingItem = document.getElementById('menuItemPengaturanAplikasi');
+    const appSettingDiv = document.getElementById('menuDividerPengaturanAplikasi');
+    if (appSettingItem) appSettingItem.classList.toggle('d-none', !isSuperAdminUser);
+    if (appSettingDiv) appSettingDiv.classList.toggle('d-none', !isSuperAdminUser);
+
+    const logAbsenItem = document.getElementById('menuItemLogAbsensi');
+    const logAbsenDiv = document.getElementById('menuDividerLogAbsensi');
+    if (logAbsenItem) logAbsenItem.classList.toggle('d-none', !isSuperAdminUser);
+    if (logAbsenDiv) logAbsenDiv.classList.toggle('d-none', !isSuperAdminUser);
+}
+
+function sembunyikanSemuaContainer() {
+    const containers = [
+        'dashboardContainer', 'rekapContainer', 'pegawaiContainer',
+        'opdContainer', 'statistikKehadiranContainer', 'logAbsensiContainer',
+        'rekapKeseluruhanContainer', 'pengaturanContainer', 'absensiErrorContainer'
+    ];
+    containers.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('d-none');
+    });
+}
+
+function kembaliKeDaftar() {
+    sembunyikanSemuaContainer();
+    const dashboard = document.getElementById('dashboardContainer');
+    if (dashboard) dashboard.classList.remove('d-none');
+    loadJadwalKegiatan();
+}
+
+async function bukaHalamanAbsensiError() {
+    resetPaginasi();
+    sembunyikanSemuaContainer();
+
+    const errContainer = document.getElementById('absensiErrorContainer');
+    if (errContainer) errContainer.classList.remove('d-none');
+
+    const tbody = document.getElementById('absensiErrorTableBody');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><div class="spinner-border text-danger spinner-border-sm me-2"></div>Memuat data absensi error dari Worker...</td></tr>';
+    }
+
+    try {
+        const result = await fetchWithAuth(`${WORKER_URL}/api/admin/queue/dlq`);
+        if (result && result.status) {
+            renderAbsensiErrorTable(result.data || []);
+        } else {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Gagal memuat data: ${(result && result.message) ? result.message : 'Akses Ditolak / Error'}</td></tr>`;
+        }
+    } catch (err) {
+        console.error("Gagal load DLQ:", err);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Gagal terhubung ke worker / hak akses ditolak.</td></tr>`;
+    }
+}
+
+function renderAbsensiErrorTable(items) {
+    const tbody = document.getElementById('absensiErrorTableBody');
+    if (!tbody) return;
+    if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-success py-4"><i class="bi bi-check-circle-fill h3"></i><br>Tidak ada data absensi error. Semua antrian berjalan normal!</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = items.map((item, idx) => {
+        const body = item.body || {};
+        const waktu = item.created_at || (item.timestamp ? new Date(item.timestamp).toLocaleString('id-ID') : '-');
+        const nip = body.nip || '-';
+        const nama = body.nama || body.nama_pegawai || '-';
+        const kode = body.kode_akses || body.kode || '-';
+        const namaKegiatan = body.nama_kegiatan || '-';
+        const attempt = item.attempts || 5;
+        const httpStatus = item.http_status || '5xx/Timeout';
+        const errorMsg = item.error_message || 'PHP Server Error / Queue Timeout';
+        const keyEscaped = encodeURIComponent(item.key);
+
+        return `
+            <tr>
+                <td class="text-center fw-bold">${idx + 1}</td>
+                <td><small class="fw-semibold text-secondary">${waktu}</small></td>
+                <td>
+                    <strong class="d-block text-dark">${nama}</strong>
+                    <small class="text-muted font-monospace">NIP: ${nip}</small>
+                </td>
+                <td>
+                    <span class="badge bg-danger font-monospace mb-1">${kode}</span>
+                    <small class="d-block text-muted text-truncate" style="max-width: 180px;" title="${namaKegiatan}">${namaKegiatan}</small>
+                </td>
+                <td class="text-center"><span class="badge bg-warning text-dark">#${attempt}</span></td>
+                <td class="text-center"><span class="badge bg-danger">${httpStatus}</span></td>
+                <td>
+                    <textarea class="form-control form-control-sm font-monospace text-danger bg-light" rows="2" readonly style="font-size: 0.72rem;">${errorMsg}</textarea>
+                </td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-danger" onclick="hapusSingleDlq('${keyEscaped}')" title="Hapus dari KV"><i class="bi bi-trash"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function retryAllDlq() {
+    const confirmRes = await Swal.fire({
+        title: 'Coba Ulang Semua (Retry All)?',
+        text: 'Sistem akan mencoba mengirim ulang semua data absensi error dari Worker ke database PHP. Data yang berhasil dikirim baru akan dihapus dari KV.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#b91c1c',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Ya, Coba Ulang!',
+        cancelButtonText: 'Batal'
+    });
+
+    if (!confirmRes.isConfirmed) return;
+
+    const btn = document.getElementById('btnRetryAllDlq');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Memproses...';
+    }
+
+    try {
+        const result = await fetchWithAuth(`${WORKER_URL}/api/admin/queue/dlq/retry-all`, { method: 'POST' });
+        if (result && result.status) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Selesai Diproses',
+                text: result.message || 'Proses coba ulang selesai.'
+            });
+            bukaHalamanAbsensiError();
+        } else {
+            Swal.fire('Gagal Coba Ulang', (result && result.message) ? result.message : 'Terjadi kesalahan saat memproses coba ulang.', 'error');
+        }
+    } catch (e) {
+        console.error("Retry DLQ Error:", e);
+        Swal.fire('Error Koneksi', 'Terjadi kesalahan koneksi atau hak akses saat mencoba ulang.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-play-circle-fill"></i> Coba Ulang Semua (Retry All)';
+        }
+    }
+}
+
+async function hapusSingleDlq(keyEscaped) {
+    const key = decodeURIComponent(keyEscaped);
+    const confirmRes = await Swal.fire({
+        title: 'Hapus Item Absensi Error?',
+        text: 'Item absensi ini akan dihapus dari DEAD_LETTER_KV. Tindakan ini tidak dapat dibatalkan.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#b91c1c',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Ya, Hapus',
+        cancelButtonText: 'Batal'
+    });
+
+    if (!confirmRes.isConfirmed) return;
+
+    try {
+        const result = await fetchWithAuth(`${WORKER_URL}/api/admin/queue/dlq/${encodeURIComponent(key)}`, { method: 'DELETE' });
+        if (result && result.status) {
+            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, icon: 'success', title: 'Berhasil dihapus' });
+            bukaHalamanAbsensiError();
+        } else {
+            Swal.fire('Gagal Hapus', (result && result.message) ? result.message : 'Gagal menghapus item.', 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error Koneksi', 'Gagal terhubung ke worker.', 'error');
+    }
+}

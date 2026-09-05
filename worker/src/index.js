@@ -1460,6 +1460,155 @@ export default {
 					}
 				}
 
+				// =================================================================
+				// RUTE DLQ: DAFTAR ABSENSI ERROR (KHUSUS SUPER ADMIN)
+				// =================================================================
+				if (pathname === '/api/admin/queue/dlq' && request.method === 'GET') {
+					const superAdminAuth = await verifySuperAdminToken(request, env);
+					if (!superAdminAuth) {
+						return jsonResponse(false, 403, 'Akses ditolak. Fitur ini khusus untuk Super Admin.');
+					}
+
+					if (!env.DEAD_LETTER_KV) {
+						return jsonResponse(false, 500, 'DEAD_LETTER_KV belum dikonfigurasi di worker.');
+					}
+
+					const listRes = await env.DEAD_LETTER_KV.list({ prefix: 'dlq:' });
+					const items = [];
+					for (const keyObj of listRes.keys) {
+						const raw = await env.DEAD_LETTER_KV.get(keyObj.name, 'json');
+						if (raw) {
+							items.push({
+								key: keyObj.name,
+								...raw
+							});
+						}
+					}
+
+					// Urutkan dari yang terbaru
+					items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+					return jsonResponse(true, 200, 'Daftar absensi error berhasil diambil.', items);
+				}
+
+				// =================================================================
+				// RUTE DLQ: RETRY ALL ABSENSI ERROR KE PHP ORIGIN (KHUSUS SUPER ADMIN)
+				// =================================================================
+				if (pathname === '/api/admin/queue/dlq/retry-all' && request.method === 'POST') {
+					const superAdminAuth = await verifySuperAdminToken(request, env);
+					if (!superAdminAuth) {
+						return jsonResponse(false, 403, 'Akses ditolak. Fitur ini khusus untuk Super Admin.');
+					}
+
+					if (!env.DEAD_LETTER_KV) {
+						return jsonResponse(false, 500, 'DEAD_LETTER_KV belum dikonfigurasi di worker.');
+					}
+
+					const targetUrl = (env.ORIGIN_API_URL ? `${env.ORIGIN_API_URL.replace(/\/$/, '')}/absen/submit` : null);
+					if (!targetUrl || !env.WORKER_SECRET) {
+						return jsonResponse(false, 500, 'Konfigurasi ORIGIN_API_URL atau WORKER_SECRET belum diatur.');
+					}
+
+					const listRes = await env.DEAD_LETTER_KV.list({ prefix: 'dlq:' });
+					if (!listRes.keys || listRes.keys.length === 0) {
+						return jsonResponse(true, 200, 'Tidak ada antrean absensi error yang perlu diproses.', { success_count: 0, failed_count: 0, remaining_count: 0 });
+					}
+
+					const dlqEntries = [];
+					for (const keyObj of listRes.keys) {
+						const raw = await env.DEAD_LETTER_KV.get(keyObj.name, 'json');
+						if (raw && raw.body) {
+							dlqEntries.push({
+								key: keyObj.name,
+								id: raw.id || keyObj.name,
+								body: raw.body
+							});
+						}
+					}
+
+					if (dlqEntries.length === 0) {
+						return jsonResponse(true, 200, 'Tidak ada data valid di antrean absensi error.', { success_count: 0, failed_count: 0, remaining_count: 0 });
+					}
+
+					// Kirim dalam potongan batch maksimal 10 per request ke PHP
+					let totalSuccess = 0;
+					let totalFailed = 0;
+					const BATCH_SIZE = 10;
+
+					for (let i = 0; i < dlqEntries.length; i += BATCH_SIZE) {
+						const chunk = dlqEntries.slice(i, i + BATCH_SIZE);
+						const messagesToSend = chunk.map(item => ({
+							id: item.id,
+							body: item.body
+						}));
+
+						try {
+							const response = await fetch(targetUrl, {
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json',
+									'X-Worker-Secret': env.WORKER_SECRET
+								},
+								body: JSON.stringify(messagesToSend),
+								signal: AbortSignal.timeout(60000)
+							});
+
+							if (response.ok) {
+								const resJson = await response.json();
+								const rejectedErrors = Array.isArray(resJson?.errors) ? resJson.errors : [];
+								const rejectedIds = new Set(rejectedErrors.map(e => e.id));
+
+								for (const item of chunk) {
+									if (!rejectedIds.has(item.id)) {
+										// SUKSES: Hapus dari KV
+										await env.DEAD_LETTER_KV.delete(item.key);
+										totalSuccess++;
+									} else {
+										// Ditolak PHP: Biarkan di KV
+										totalFailed++;
+									}
+								}
+							} else {
+								// Server PHP error 5xx/4xx: Jangan hapus apapun dari chunk ini
+								totalFailed += chunk.length;
+								console.error(`[DLQ Replay] PHP response HTTP ${response.status}:`, await response.text());
+							}
+						} catch (fetchErr) {
+							// Network/timeout error: Jangan hapus apapun dari chunk ini
+							totalFailed += chunk.length;
+							console.error(`[DLQ Replay Fetch Error]:`, fetchErr);
+						}
+					}
+
+					const remainingList = await env.DEAD_LETTER_KV.list({ prefix: 'dlq:' });
+					const remainingCount = remainingList.keys ? remainingList.keys.length : 0;
+
+					return jsonResponse(true, 200, `Proses coba ulang selesai. Berhasil: ${totalSuccess}, Masih Gagal/Tersimpan: ${totalFailed}.`, {
+						success_count: totalSuccess,
+						failed_count: totalFailed,
+						remaining_count: remainingCount
+					});
+				}
+
+				// =================================================================
+				// RUTE DLQ: HAPUS SATU ITEM ERROR DARI KV (KHUSUS SUPER ADMIN)
+				// =================================================================
+				const deleteDlqMatch = pathname.match(/^\/api\/admin\/queue\/dlq\/([^/]+)\/?$/);
+				if (deleteDlqMatch && request.method === 'DELETE') {
+					const superAdminAuth = await verifySuperAdminToken(request, env);
+					if (!superAdminAuth) {
+						return jsonResponse(false, 403, 'Akses ditolak. Fitur ini khusus untuk Super Admin.');
+					}
+
+					if (!env.DEAD_LETTER_KV) {
+						return jsonResponse(false, 500, 'DEAD_LETTER_KV belum dikonfigurasi di worker.');
+					}
+
+					const targetKey = decodeURIComponent(deleteDlqMatch[1]);
+					await env.DEAD_LETTER_KV.delete(targetKey);
+					return jsonResponse(true, 200, 'Item absensi error berhasil dihapus.');
+				}
+
 				// Fallback untuk rute yang tidak dikenal
 				return jsonResponse(false, 404, 'Endpoint tidak ditemukan di worker.');
 			} catch (topLevelErr) {
@@ -1553,15 +1702,50 @@ export default {
 					if (is5xxOrNetwork) {
 						// HANYA error server (5xx / 520 / network error) yang di-retry 1 menit kedepan
 						if (currentAttempt >= 5) {
-							console.error(`[Queue FATAL 5XX] Pesan ID ${msg.id} (NIP: ${msg.body?.nip || '-'}) telah gagal setelah 5x percobaan.`);
+							console.error(`[Queue FATAL 5XX] Pesan ID ${msg.id} (NIP: ${msg.body?.nip || '-'}) telah gagal setelah 5x percobaan. Menyimpan ke DEAD_LETTER_KV...`);
+
+							if (env.DEAD_LETTER_KV) {
+								const dlqKey = `dlq:${Date.now()}:${msg.id}`;
+								const dlqPayload = {
+									id: msg.id,
+									attempts: currentAttempt,
+									http_status: httpStatus,
+									error_message: errorText || 'Server PHP error atau timeout',
+									created_at: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }),
+									timestamp: Date.now(),
+									body: msg.body
+								};
+								try {
+									await env.DEAD_LETTER_KV.put(dlqKey, JSON.stringify(dlqPayload));
+									console.log(`[Queue DEAD_LETTER_KV SIMPAN] Pesan ID ${msg.id} berhasil disimpan ke DEAD_LETTER_KV (Key: ${dlqKey}).`);
+								} catch (kvErr) {
+									console.error(`[Queue DEAD_LETTER_KV Gagal Simpan]`, kvErr);
+								}
+							}
+
 							msg.ack();
 						} else {
 							console.log(`[Queue RETRY 5XX #${currentAttempt}/5] Server PHP error HTTP ${httpStatus}. Pesan ID ${msg.id} (NIP: ${msg.body?.nip || '-'}) akan dicoba ulang 1 menit lagi...`);
 							msg.retry({ delaySeconds: 60 });
 						}
 					} else {
-						// Error 4xx (Data error): langsung di-ACK (tanpa retry dan tanpa simpan KV)
-						console.warn(`[Queue DITOLAK 4XX] Pesan ID ${msg.id} (NIP: ${msg.body?.nip || '-'}) ditolak PHP dengan HTTP ${httpStatus}. Dihapus dari antrian.`);
+						// Error 4xx (Data error): simpan juga ke DLQ jika perlu inspection sebelum ack
+						if (env.DEAD_LETTER_KV) {
+							const dlqKey = `dlq:${Date.now()}:${msg.id}`;
+							const dlqPayload = {
+								id: msg.id,
+								attempts: currentAttempt,
+								http_status: httpStatus,
+								error_message: errorText || `Ditolak PHP HTTP ${httpStatus}`,
+								created_at: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }),
+								timestamp: Date.now(),
+								body: msg.body
+							};
+							try {
+								await env.DEAD_LETTER_KV.put(dlqKey, JSON.stringify(dlqPayload));
+							} catch (e) {}
+						}
+						console.warn(`[Queue DITOLAK 4XX] Pesan ID ${msg.id} (NIP: ${msg.body?.nip || '-'}) ditolak PHP dengan HTTP ${httpStatus}. Disimpan ke DLQ dan di-ack.`);
 						msg.ack();
 					}
 				}

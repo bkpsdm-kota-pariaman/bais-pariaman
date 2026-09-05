@@ -154,6 +154,8 @@
                     class="bi bi-people me-2"></i> Pegawai</a></li>
               <li><a class="dropdown-item fw-semibold" href="#" onclick="bukaHalamanOpd(); return false;"><i
                     class="bi bi-building me-2"></i> Perangkat Daerah (OPD)</a></li>
+              <li id="menuItemAbsensiError" class="d-none"><a class="dropdown-item fw-semibold text-danger" href="#"
+                  onclick="bukaHalamanAbsensiError(); return false;"><i class="bi bi-exclamation-triangle-fill me-2"></i> Absensi Error</a></li>
               <li id="menuDividerPengaturanAplikasi" class="dropdown-divider d-none"></li>
               <li id="menuItemPengaturanAplikasi" class="d-none"><a class="dropdown-item fw-semibold text-danger" href="#"
                   onclick="bukaHalamanPengaturanAplikasi(); return false;"><i class="bi bi-gear-fill me-2"></i> Pengaturan Aplikasi</a></li>
@@ -680,6 +682,47 @@
               </tr>
             </thead>
             <tbody id="opdTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ABSENSI ERROR (DLQ SUPER ADMIN ONLY) -->
+    <div id="absensiErrorContainer" class="d-none">
+      <button class="btn btn-secondary btn-sm fw-bold mb-3 shadow-sm" onclick="kembaliKeDaftar()"><i
+          class="bi bi-arrow-left"></i> Kembali ke Daftar Jadwal</button>
+
+      <div class="box-container">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h4 class="fw-bold mb-1 text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Data Absensi Error (Queue Gagal)</h4>
+            <span class="small text-muted">Mencatat pesan antrian absensi yang gagal masuk ke database PHP (misal server overload/timeout). Sumber data: Worker DEAD_LETTER_KV.</span>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary fw-bold shadow-sm" onclick="bukaHalamanAbsensiError()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+            <button id="btnRetryAllDlq" class="btn btn-danger fw-bold px-4 shadow-sm" onclick="retryAllDlq()"><i class="bi bi-play-circle-fill"></i> Coba Ulang Semua (Retry All)</button>
+          </div>
+        </div>
+
+        <div class="table-responsive mt-3">
+          <table class="table table-hover table-bordered align-middle">
+            <thead>
+              <tr>
+                <th class="text-center" style="width: 5%;">No</th>
+                <th style="width: 15%;">Waktu Gagal</th>
+                <th style="width: 18%;">NIP & Nama</th>
+                <th style="width: 15%;">Kode Akses / Kegiatan</th>
+                <th class="text-center" style="width: 8%;">Attempt</th>
+                <th class="text-center" style="width: 10%;">HTTP Status</th>
+                <th style="width: 24%;">Detail Error</th>
+                <th class="text-center" style="width: 5%;">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="absensiErrorTableBody">
+              <tr>
+                <td colspan="8" class="text-center text-muted py-4"><div class="spinner-border text-danger spinner-border-sm me-2"></div>Memuat data absensi error...</td>
+              </tr>
+            </tbody>
           </table>
         </div>
       </div>
