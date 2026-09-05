@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.27'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.30'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -2221,7 +2221,7 @@ async function kirimAbsensi() {
     window._isSubmittingAbsen = true;
 
     // Ambil semua data yang dibutuhkan dari elemen form
-    const b64 = document.getElementById('fotoBase64').value;
+    let b64 = document.getElementById('fotoBase64').value;
     const lat = document.getElementById('lat').value;
     const lng = document.getElementById('lng').value;
     const alamat = document.getElementById('alamat').value;
@@ -2286,6 +2286,29 @@ async function kirimAbsensi() {
         }
     }
 
+    // Kompres file bukti jika ada (foto < 100KB, PDF dibiarkan asli)
+    let finalProofFile = null;
+    if (window._isTidakHadir) {
+        const buktiIzinInput = document.getElementById('buktiIzin');
+        if (buktiIzinInput && buktiIzinInput.files.length > 0) {
+            finalProofFile = await compressImageFile(buktiIzinInput.files[0], 100);
+        }
+    } else {
+        const buktiHadirInput = document.getElementById('buktiHadir');
+        if (buktiHadirInput && buktiHadirInput.files.length > 0) {
+            finalProofFile = await compressImageFile(buktiHadirInput.files[0], 100);
+        }
+    }
+
+    if (finalProofFile && finalProofFile.type && finalProofFile.type.startsWith('image/') && !b64) {
+        b64 = await new Promise((res) => {
+            const reader = new FileReader();
+            reader.onload = (e) => res(e.target.result);
+            reader.onerror = () => res(null);
+            reader.readAsDataURL(finalProofFile);
+        });
+    }
+
     const queueValue = currentJadwal?.aktifkan_antrian;
     const useQueue = String(queueValue ?? '').trim() === '1';
 
@@ -2300,21 +2323,13 @@ async function kirimAbsensi() {
         formData.append('status_kehadiran', statusKehadiran);
         formData.append('status_verifikasi', statusVerifikasi);
 
-        if (window._isTidakHadir) {
-            const buktiIzinInput = document.getElementById('buktiIzin');
-            if (buktiIzinInput && buktiIzinInput.files.length > 0) {
-                formData.append('foto', buktiIzinInput.files[0]);
-            }
-        } else {
-            const buktiHadirInput = document.getElementById('buktiHadir');
-            if (buktiHadirInput && buktiHadirInput.files.length > 0) {
-                formData.append('foto', buktiHadirInput.files[0]);
-            } else if (b64) {
-                const isPdf = b64.includes('application/pdf');
-                const fileExt = isPdf ? 'pdf' : 'jpg';
-                const mimeType = isPdf ? 'application/pdf' : 'image/jpeg';
-                formData.append('foto', new File([dataURItoBlob(b64)], `absen_selfie.${fileExt}`, { type: mimeType }));
-            }
+        if (finalProofFile) {
+            formData.append('foto', finalProofFile);
+        } else if (b64) {
+            const isPdf = b64.includes('application/pdf');
+            const fileExt = isPdf ? 'pdf' : 'jpg';
+            const mimeType = isPdf ? 'application/pdf' : 'image/jpeg';
+            formData.append('foto', new File([dataURItoBlob(b64)], `absen_selfie.${fileExt}`, { type: mimeType }));
         }
         return formData;
     };
@@ -2494,6 +2509,73 @@ function tampilkanFormLanjutan() {
     }
 
     validasiTombolKirim();
+}
+
+/**
+ * Mengompres file gambar di frontend hingga di bawah batas maxKb (default 100KB).
+ * Jika file adalah PDF atau non-gambar, file dikembalikan tanpa perubahan.
+ * @param {File} file Objek File yang akan dikompres.
+ * @param {number} maxKb Ukuran maksimal dalam KB.
+ * @returns {Promise<File>} File yang sudah dikompres.
+ */
+async function compressImageFile(file, maxKb = 100) {
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+        return file;
+    }
+    const maxBytes = maxKb * 1024;
+    if (file.size <= maxBytes) {
+        return file;
+    }
+    return new Promise((resolve) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            const canvas = document.createElement('canvas');
+            let w = img.width;
+            let h = img.height;
+            const maxDim = 800;
+            if (w > maxDim || h > maxDim) {
+                if (w > h) {
+                    h = Math.round((h * maxDim) / w);
+                    w = maxDim;
+                } else {
+                    w = Math.round((w * maxDim) / h);
+                    h = maxDim;
+                }
+            }
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+
+            let quality = 0.7;
+            const step = () => {
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        resolve(file);
+                        return;
+                    }
+                    if (blob.size <= maxBytes || quality <= 0.15) {
+                        const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        });
+                        resolve(compressedFile);
+                    } else {
+                        quality -= 0.15;
+                        step();
+                    }
+                }, 'image/jpeg', quality);
+            };
+            step();
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(file);
+        };
+        img.src = url;
+    });
 }
 
 function validateProofFile(file) {
@@ -2708,9 +2790,12 @@ function ambilFoto() {
     canv.height = (v.videoHeight / v.videoWidth) * canv.width;
     canv.getContext('2d').drawImage(v, 0, 0, canv.width, canv.height);
 
-    // Mengubah kualitas JPEG dari 0.6 menjadi 0.5 juga akan mengurangi ukuran file.
-    // Nilai antara 0.4 - 0.6 biasanya merupakan kompromi yang baik antara ukuran dan kualitas.
-    const b64 = canv.toDataURL('image/jpeg', 0.5);
+    let quality = 0.5;
+    let b64 = canv.toDataURL('image/jpeg', quality);
+    while (b64.length > 133333 && quality > 0.1) {
+        quality -= 0.1;
+        b64 = canv.toDataURL('image/jpeg', quality);
+    }
     document.getElementById('fotoBase64').value = b64;
     document.getElementById('hasilFoto').src = b64;
 
@@ -3080,7 +3165,12 @@ async function ambilSnapshotFotoCepat() {
                         canvas.height = h;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, w, h);
-                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.65);
+                        let quality = 0.65;
+                        let compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                        while (compressedBase64.length > 133333 && quality > 0.1) {
+                            quality -= 0.1;
+                            compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                        }
                         resolve(compressedBase64);
                     };
                     img.src = evt.target.result;

@@ -1229,26 +1229,15 @@ function selectOpdDinas(mode) {
 
 function kembaliKeDaftar() {
     resetPaginasi();
-    document.getElementById('opdContainer').classList.add('d-none');
-    document.getElementById('pegawaiContainer').classList.add('d-none');
-    document.getElementById('rekapContainer').classList.add('d-none');
-    document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
-    document.getElementById('statistikKehadiranContainer').classList.add('d-none');
-    document.getElementById('logAbsensiContainer').classList.add('d-none');
-    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
-    document.getElementById('dashboardContainer').classList.remove('d-none');
+    sembunyikanSemuaContainer();
+    const dashboard = document.getElementById('dashboardContainer');
+    if (dashboard) dashboard.classList.remove('d-none');
     loadJadwalKegiatan();
 }
 
 function bukaHalamanPegawai() {
     resetPaginasi();
-    document.getElementById('dashboardContainer').classList.add('d-none');
-    document.getElementById('rekapContainer').classList.add('d-none');
-    document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
-    document.getElementById('statistikKehadiranContainer').classList.add('d-none');
-    document.getElementById('opdContainer').classList.add('d-none');
-    document.getElementById('logAbsensiContainer').classList.add('d-none');
-    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
+    sembunyikanSemuaContainer();
     document.getElementById('pegawaiContainer').classList.remove('d-none');
 
     // Reset tampilan dan isi filter, jangan load data dulu
@@ -1262,24 +1251,14 @@ function bukaHalamanPegawai() {
 
 function bukaHalamanOpd() {
     resetPaginasi();
-    document.getElementById('dashboardContainer').classList.add('d-none');
-    document.getElementById('rekapContainer').classList.add('d-none');
-    document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
-    document.getElementById('statistikKehadiranContainer').classList.add('d-none');
-    document.getElementById('pegawaiContainer').classList.add('d-none');
-    document.getElementById('logAbsensiContainer').classList.add('d-none');
-    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
+    sembunyikanSemuaContainer();
     document.getElementById('opdContainer').classList.remove('d-none');
     loadOpdData();
 }
 
 async function lihatRekap(kodeAkses) {
     // Pindah ke tampilan rekap
-    document.getElementById('dashboardContainer').classList.add('d-none');
-    document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
-    document.getElementById('statistikKehadiranContainer').classList.add('d-none');
-    document.getElementById('logAbsensiContainer').classList.add('d-none');
-    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
+    sembunyikanSemuaContainer();
     document.getElementById('rekapContainer').classList.remove('d-none');
     currentRekapData = { jadwal: null, filtered_pegawai: [] }; // Reset data cache
     resetRekapFilters();
@@ -2978,13 +2957,7 @@ function initRekapKeseluruhanUI() {
 
 async function bukaHalamanRekapKeseluruhan() {
     resetPaginasi();
-    document.getElementById('dashboardContainer').classList.add('d-none');
-    document.getElementById('rekapContainer').classList.add('d-none');
-    document.getElementById('pegawaiContainer').classList.add('d-none');
-    document.getElementById('opdContainer').classList.add('d-none');
-    document.getElementById('statistikKehadiranContainer').classList.add('d-none');
-    document.getElementById('logAbsensiContainer').classList.add('d-none');
-    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
+    sembunyikanSemuaContainer();
     document.getElementById('rekapKeseluruhanContainer').classList.remove('d-none');
 
     initRekapKeseluruhanUI();
@@ -3299,13 +3272,7 @@ function initStatistikUI() {
 
 async function bukaHalamanStatistikKehadiran() {
     resetPaginasi();
-    document.getElementById('dashboardContainer').classList.add('d-none');
-    document.getElementById('rekapContainer').classList.add('d-none');
-    document.getElementById('pegawaiContainer').classList.add('d-none');
-    document.getElementById('opdContainer').classList.add('d-none');
-    document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
-    document.getElementById('logAbsensiContainer').classList.add('d-none');
-    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
+    sembunyikanSemuaContainer();
     document.getElementById('statistikKehadiranContainer').classList.remove('d-none');
 
     initStatistikUI();
@@ -3929,13 +3896,7 @@ async function bukaHalamanPengaturanAplikasi() {
     resetPaginasi();
 
     // Sembunyikan container lain, tampilkan pengaturanContainer
-    document.getElementById('dashboardContainer').classList.add('d-none');
-    document.getElementById('rekapContainer').classList.add('d-none');
-    document.getElementById('pegawaiContainer').classList.add('d-none');
-    document.getElementById('opdContainer').classList.add('d-none');
-    document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
-    document.getElementById('statistikKehadiranContainer').classList.add('d-none');
-    document.getElementById('logAbsensiContainer').classList.add('d-none');
+    sembunyikanSemuaContainer();
     const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.remove('d-none');
 
     showAdminLoading(true, 'Memuat pengaturan aplikasi...');
@@ -4256,13 +4217,7 @@ async function bukaHalamanLogAbsensi() {
     resetPaginasi();
 
     // Sembunyikan semua container lain
-    document.getElementById('dashboardContainer').classList.add('d-none');
-    document.getElementById('rekapContainer').classList.add('d-none');
-    document.getElementById('pegawaiContainer').classList.add('d-none');
-    document.getElementById('opdContainer').classList.add('d-none');
-    document.getElementById('rekapKeseluruhanContainer').classList.add('d-none');
-    document.getElementById('statistikKehadiranContainer').classList.add('d-none');
-    const pContainer = document.getElementById('pengaturanContainer'); if (pContainer) pContainer.classList.add('d-none');
+    sembunyikanSemuaContainer();
     document.getElementById('logAbsensiContainer').classList.remove('d-none');
 
     // Reset input filter
@@ -4473,13 +4428,6 @@ function sembunyikanSemuaContainer() {
         const el = document.getElementById(id);
         if (el) el.classList.add('d-none');
     });
-}
-
-function kembaliKeDaftar() {
-    sembunyikanSemuaContainer();
-    const dashboard = document.getElementById('dashboardContainer');
-    if (dashboard) dashboard.classList.remove('d-none');
-    loadJadwalKegiatan();
 }
 
 async function bukaHalamanAbsensiError() {
