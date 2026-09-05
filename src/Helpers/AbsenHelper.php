@@ -91,6 +91,15 @@ class AbsenHelper {
 
                 $isStrictTime = !empty($jadwal['is_strict_time']);
                 $isStrictLocation = !empty($jadwal['is_strict_location']);
+                $isStrictOpd = !empty($jadwal['is_strict_opd']);
+
+                if ($isStrictOpd) {
+                    $targetOpdList = $jadwal['target_opd'] ?? [];
+                    $userOpd = trim($pegawai['opd'] ?? $pegawai['perangkat_daerah'] ?? '');
+                    if (!empty($targetOpdList) && !in_array($userOpd, $targetOpdList)) {
+                        throw new Exception("Gagal: Perangkat Daerah Dibatasi. Perangkat Daerah Anda tidak terdaftar dalam target OPD kegiatan ini.", 403);
+                    }
+                }
 
                 if ($isStrictTime && $isTerlambat) {
                     throw new Exception("Presensi ditolak. Waktu presensi di luar jadwal kegiatan.", 422);

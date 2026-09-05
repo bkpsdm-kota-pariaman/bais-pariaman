@@ -22,46 +22,8 @@ class SystemController {
     // =========================================================================
 
 
-    /**
-     * Memastikan tabel pengaturan aplikasi sudah ada di database dengan skema terbaru:
-     * - kode_pengaturan (varchar 100 UNIQUE) -> kunci unik misal 'link_absensi_cadangan'
-     * - nama_pengaturan (varchar 255)        -> label caption di UI misal 'Link Absensi Cadangan'
-     * - nilai_pengaturan (text)              -> nilai setting
-     */
-    private function ensureTableExists(PDO $db) {
-        $db->exec("CREATE TABLE IF NOT EXISTS `app_absensi_pengaturan_aplikasi` (
-            `id` int(11) NOT NULL AUTO_INCREMENT,
-            `kode_pengaturan` varchar(100) NOT NULL UNIQUE,
-            `nama_pengaturan` varchar(255) NOT NULL,
-            `nilai_pengaturan` text DEFAULT NULL,
-            PRIMARY KEY (`id`),
-            UNIQUE KEY `idx_kode_pengaturan` (`kode_pengaturan`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
-
-        // Migrasi dari skema lama jika kolom kode_pengaturan belum ada
-        try {
-            $checkStmt = $db->query("SHOW COLUMNS FROM `app_absensi_pengaturan_aplikasi` LIKE 'kode_pengaturan'");
-            $colExists = $checkStmt->fetch();
-            if (!$colExists) {
-                $db->exec("ALTER TABLE `app_absensi_pengaturan_aplikasi` ADD COLUMN `kode_pengaturan` varchar(100) NULL AFTER `id`");
-                $db->exec("UPDATE `app_absensi_pengaturan_aplikasi` SET `kode_pengaturan` = `nama_pengaturan` WHERE `kode_pengaturan` IS NULL OR `kode_pengaturan` = ''");
-                $db->exec("UPDATE `app_absensi_pengaturan_aplikasi` SET `nama_pengaturan` = 'Link Absensi Cadangan' WHERE `kode_pengaturan` = 'link_absensi_cadangan'");
-                $db->exec("ALTER TABLE `app_absensi_pengaturan_aplikasi` MODIFY COLUMN `kode_pengaturan` varchar(100) NOT NULL");
-                $db->exec("ALTER TABLE `app_absensi_pengaturan_aplikasi` ADD UNIQUE KEY `idx_kode_pengaturan` (`kode_pengaturan`)");
-            }
-        } catch (\Exception $e) {
-            // Ignore error jika migrasi sudah berhasil dijalankan sebelumnya
-        }
-
-        // Tabel app_absensi_pengaturan_aplikasi siap digunakan
-    }
-
-    /**
-     * [Public API] Mengambil URL link absensi cadangan yang aktif berdasarkan kode_pengaturan.
-     */
     public function getLinkAbsensiCadangan() {
         $db = Database::getConnection();
-        $this->ensureTableExists($db);
 
         $stmt = $db->prepare("SELECT nilai_pengaturan FROM app_absensi_pengaturan_aplikasi WHERE kode_pengaturan = 'link_absensi_cadangan' LIMIT 1");
         $stmt->execute();
@@ -85,7 +47,6 @@ class SystemController {
     public function redirectAbsensiCadangan() {
         $db = Database::getConnection();
         try {
-            $this->ensureTableExists($db);
             $stmt = $db->prepare("SELECT nilai_pengaturan FROM app_absensi_pengaturan_aplikasi WHERE kode_pengaturan = 'link_absensi_cadangan' LIMIT 1");
             $stmt->execute();
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -115,7 +76,6 @@ class SystemController {
         }
 
         $db = Database::getConnection();
-        $this->ensureTableExists($db);
 
         $stmt = $db->query("SELECT id, kode_pengaturan, nama_pengaturan, nilai_pengaturan FROM app_absensi_pengaturan_aplikasi ORDER BY id ASC");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -142,61 +102,74 @@ class SystemController {
         }
 
         $db = Database::getConnection();
-        $this->ensureTableExists($db);
 
         $sanitizedMap = [];
 
-        // Jika payload adalah single item pengaturan (Tambah / Edit 1 item)
-        if (isset($input['kode_pengaturan']) || isset($input['nama_pengaturan'])) {
-            $kode = trim($input['kode_pengaturan'] ?? '');
-            $nama = trim($input['nama_pengaturan'] ?? '');
-            $nilai = is_null($input['nilai_pengaturan'] ?? null) ? '' : trim((string)$input['nilai_pengaturan']);
+        try {
+            $db->beginTransaction();
 
-            if (empty($kode)) {
-                Response::json(false, 400, "Kode pengaturan wajib diisi.");
-                return;
-            }
-            if (empty($nama)) {
-                Response::json(false, 400, "Nama pengaturan (caption) wajib diisi.");
-                return;
-            }
+            // Jika payload adalah single item pengaturan (Tambah / Edit 1 item)
+            if (isset($input['kode_pengaturan']) || isset($input['nama_pengaturan'])) {
+                $kode = trim($input['kode_pengaturan'] ?? '');
+                $nama = trim($input['nama_pengaturan'] ?? '');
+                $nilai = is_null($input['nilai_pengaturan'] ?? null) ? '' : trim((string)$input['nilai_pengaturan']);
 
-            // Normalisasi format kode_pengaturan (lowercase, alphanumeric, underscore, hyphen)
-            $kode = strtolower(preg_replace('/[^a-zA-Z0-9_-]/', '_', $kode));
+                if (empty($kode)) {
+                    $db->rollBack();
+                    Response::json(false, 400, "Kode pengaturan wajib diisi.");
+                    return;
+                }
+                if (empty($nama)) {
+                    $db->rollBack();
+                    Response::json(false, 400, "Nama pengaturan (caption) wajib diisi.");
+                    return;
+                }
 
-            $stmt = $db->prepare("INSERT INTO app_absensi_pengaturan_aplikasi (kode_pengaturan, nama_pengaturan, nilai_pengaturan) 
-                                  VALUES (:kode, :nama, :nilai) 
-                                  ON DUPLICATE KEY UPDATE nama_pengaturan = :nama2, nilai_pengaturan = :nilai2");
-            $stmt->execute([
-                ':kode' => $kode,
-                ':nama' => $nama,
-                ':nilai' => $nilai,
-                ':nama2' => $nama,
-                ':nilai2' => $nilai
-            ]);
+                // Normalisasi format kode_pengaturan (lowercase, alphanumeric, underscore, hyphen)
+                $kode = strtolower(preg_replace('/[^a-zA-Z0-9_-]/', '_', $kode));
 
-            $sanitizedMap[$kode] = $nilai;
-
-        } else {
-            // Jika payload berbentuk key-value map (misal batch update)
-            $stmt = $db->prepare("INSERT INTO app_absensi_pengaturan_aplikasi (kode_pengaturan, nama_pengaturan, nilai_pengaturan) 
-                                  VALUES (:kode, :nama, :nilai) 
-                                  ON DUPLICATE KEY UPDATE nilai_pengaturan = :nilai2");
-
-            foreach ($input as $key => $val) {
-                $kodeSanitized = strtolower(trim($key));
-                $valSanitized = is_null($val) ? '' : trim((string)$val);
-                // Nama caption default dari kode format ucwords
-                $namaCaption = ucwords(str_replace(['_', '-'], ' ', $kodeSanitized));
-
+                $stmt = $db->prepare("INSERT INTO app_absensi_pengaturan_aplikasi (kode_pengaturan, nama_pengaturan, nilai_pengaturan) 
+                                      VALUES (:kode, :nama, :nilai) 
+                                      ON DUPLICATE KEY UPDATE nama_pengaturan = :nama2, nilai_pengaturan = :nilai2");
                 $stmt->execute([
-                    ':kode' => $kodeSanitized,
-                    ':nama' => $namaCaption,
-                    ':nilai' => $valSanitized,
-                    ':nilai2' => $valSanitized
+                    ':kode' => $kode,
+                    ':nama' => $nama,
+                    ':nilai' => $nilai,
+                    ':nama2' => $nama,
+                    ':nilai2' => $nilai
                 ]);
-                $sanitizedMap[$kodeSanitized] = $valSanitized;
+
+                $sanitizedMap[$kode] = $nilai;
+
+            } else {
+                // Jika payload berbentuk key-value map (misal batch update)
+                $stmt = $db->prepare("INSERT INTO app_absensi_pengaturan_aplikasi (kode_pengaturan, nama_pengaturan, nilai_pengaturan) 
+                                      VALUES (:kode, :nama, :nilai) 
+                                      ON DUPLICATE KEY UPDATE nilai_pengaturan = :nilai2");
+
+                foreach ($input as $key => $val) {
+                    $kodeSanitized = strtolower(trim($key));
+                    $valSanitized = is_null($val) ? '' : trim((string)$val);
+                    // Nama caption default dari kode format ucwords
+                    $namaCaption = ucwords(str_replace(['_', '-'], ' ', $kodeSanitized));
+
+                    $stmt->execute([
+                        ':kode' => $kodeSanitized,
+                        ':nama' => $namaCaption,
+                        ':nilai' => $valSanitized,
+                        ':nilai2' => $valSanitized
+                    ]);
+                    $sanitizedMap[$kodeSanitized] = $valSanitized;
+                }
             }
+
+            $db->commit();
+        } catch (\Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            Response::json(false, 500, "Gagal menyimpan pengaturan aplikasi ke database.");
+            return;
         }
 
         // Sinkronkan seluruh pengaturan ke Cloudflare Worker KV (seumur hidup tanpa batas waktu)
@@ -223,15 +196,17 @@ class SystemController {
         }
 
         $db = Database::getConnection();
-        $this->ensureTableExists($db);
 
         $stmt = $db->prepare("DELETE FROM app_absensi_pengaturan_aplikasi WHERE kode_pengaturan = :kode");
         $stmt->execute([':kode' => $kode]);
 
-        // Hapus juga kunci dari Cloudflare Worker KV
-        $kvDeleted = $this->deletePengaturanFromKv($kode);
-
-        Response::json(true, 200, "Pengaturan '{$kode}' berhasil dihapus " . ($kvDeleted ? "dan disinkronkan ke Worker KV." : "dari database."));
+        if ($stmt->rowCount() > 0) {
+            // Hapus juga kunci dari Cloudflare Worker KV
+            $kvDeleted = $this->deletePengaturanFromKv($kode);
+            Response::json(true, 200, "Pengaturan '{$kode}' berhasil dihapus " . ($kvDeleted ? "dan disinkronkan ke Worker KV." : "dari database."));
+        } else {
+            Response::json(false, 404, "Pengaturan '{$kode}' tidak ditemukan di database.");
+        }
     }
 
     /**
@@ -246,7 +221,6 @@ class SystemController {
         }
 
         $db = Database::getConnection();
-        $this->ensureTableExists($db);
 
         $stmt = $db->query("SELECT kode_pengaturan, nilai_pengaturan FROM app_absensi_pengaturan_aplikasi");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

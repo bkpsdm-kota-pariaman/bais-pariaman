@@ -345,6 +345,7 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
     "radius_meter": 100,
     "is_strict_time": 1,
     "is_strict_location": 1,
+    "is_strict_opd": 0,
     "is_terlambat": false,
     "server_time": "2026-09-01T07:30:00.000Z"
   }
@@ -384,6 +385,7 @@ Semua endpoint di Bagian 1 diproses oleh Cloudflare Worker (`worker/src/index.js
   "aktifkan_antrian": 1,
   "is_strict_time": 1,
   "is_strict_location": 1,
+  "is_strict_opd": 0,
   "target_opd": ["Dinas Contoh"]
 }
 ```
@@ -1411,6 +1413,7 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
   "aktifkan_antrian": 1,
   "is_strict_time": 1,
   "is_strict_location": 1,
+  "is_strict_opd": 0,
   "target_opd": ["Dinas Contoh"]
 }
 ```
@@ -1494,6 +1497,7 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
   "aktifkan_antrian": 1,
   "is_strict_time": 1,
   "is_strict_location": 1,
+  "is_strict_opd": 0,
   "target_opd": ["Dinas Contoh"]
 }
 ```

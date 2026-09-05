@@ -185,6 +185,7 @@ CREATE TABLE `app_absensi_log_absensi` (
 
 ALTER TABLE app_absensi_jadwal_kegiatan ADD COLUMN is_strict_location TINYINT(1) DEFAULT 0;
 ALTER TABLE app_absensi_jadwal_kegiatan ADD COLUMN is_strict_time TINYINT(1) DEFAULT 0;
+ALTER TABLE app_absensi_jadwal_kegiatan ADD COLUMN is_strict_opd TINYINT(1) DEFAULT 0;
 
 --
 -- Struktur dari tabel `app_absensi_pengaturan_aplikasi`

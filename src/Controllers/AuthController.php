@@ -17,12 +17,12 @@ class AuthController {
         $input = json_decode($inputJSON, true);
 
         // Validasi input kosong
-        if (!isset($input['nip']) || !isset($input['nik'])) {
+        $nip = isset($input['nip']) ? trim((string)$input['nip']) : '';
+        $nik = isset($input['nik']) ? trim((string)$input['nik']) : '';
+
+        if ($nip === '' || $nik === '') {
             Response::json(false, 400, "NIP dan NIK salah", null);
         }
-
-        $nip = trim($input['nip']);
-        $nik = trim($input['nik']);
 
         // 2. Hubungkan ke Database dan Cari Pegawai
         $db = Database::getConnection();
@@ -42,10 +42,11 @@ class AuthController {
         $isPasswordMatch = false;
         if ($pegawai) {
             $hashedSha256 = hash('sha256', $nik);
+            $dbNik = (string)$pegawai['nik'];
             if (
-                hash_equals(strtolower($pegawai['nik']), $hashedSha256) ||
-                password_verify($nik, $pegawai['nik']) ||
-                $pegawai['nik'] === $nik
+                (strlen($dbNik) === 64 && hash_equals(strtolower($dbNik), $hashedSha256)) ||
+                password_verify($nik, $dbNik) ||
+                $dbNik === $nik
             ) {
                 $isPasswordMatch = true;
             }
@@ -183,12 +184,12 @@ class AuthController {
         $input = json_decode($inputJSON, true);
 
         // Validasi input kosong
-        if (!isset($input['username']) || !isset($input['password'])) {
+        $username = isset($input['username']) ? trim((string)$input['username']) : '';
+        $password = isset($input['password']) ? trim((string)$input['password']) : '';
+
+        if ($username === '' || $password === '') {
             Response::json(false, 401, "Username dan Password salah.", null);
         }
-
-        $username = trim($input['username']);
-        $password = trim($input['password']);
 
         // 2. Hubungkan ke Database dan Cari Pegawai
         $db = Database::getConnection();
@@ -203,10 +204,11 @@ class AuthController {
         $isPasswordMatch = false;
         if ($admin) {
             $hashedSha256 = hash('sha256', $password);
+            $dbNik = (string)$admin['nik'];
             if (
-                hash_equals(strtolower($admin['nik']), $hashedSha256) ||
-                password_verify($password, $admin['nik']) ||
-                $admin['nik'] === $password
+                (strlen($dbNik) === 64 && hash_equals(strtolower($dbNik), $hashedSha256)) ||
+                password_verify($password, $dbNik) ||
+                $dbNik === $password
             ) {
                 $isPasswordMatch = true;
             }

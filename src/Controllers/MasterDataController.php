@@ -28,7 +28,7 @@ class MasterDataController {
         $opd = $_GET['opd'] ?? '';
         $installStatus = $_GET['install'] ?? 'semua';
         $syncStatus = $_GET['sync'] ?? 'semua'; // Filter baru untuk status sinkronisasi KV
-        $search = $_GET['search'] ?? '';
+        $search = isset($_GET['search']) ? (string)$_GET['search'] : '';
 
         $sql = "SELECT p.nama_pegawai, p.nip, p.perangkat_daerah, p.jabatan, p.nik, p.jenis_asn, p.last_login, p.kv_sync_status, p.role
                 FROM app_absensi_data_pegawai p";
@@ -156,23 +156,11 @@ class MasterDataController {
         if (!in_array('asn', $newRoles)) $newRoles[] = 'asn';
 
         $rolesStr = implode(',', $newRoles);
-        $rawNikInput = trim($input['nik']);
+        $rawNikInput = (string)trim($input['nik']);
         $hashedNik = (strlen($rawNikInput) === 64 && ctype_xdigit($rawNikInput)) ? strtolower($rawNikInput) : hash('sha256', $rawNikInput);
 
-        $payloadForKv = [
-            'nip' => $input['nip'],
-            'nik' => $hashedNik,
-            'nama_pegawai' => $input['nama_pegawai'],
-            'perangkat_daerah' => $input['perangkat_daerah'],
-            'jabatan' => $input['jabatan'] ?? null,
-            'jenis_asn' => $input['jenis_asn'],
-            'role' => $newRoles
-        ];
-        $syncSuccess = $this->syncPegawaiToKv('PUT', $input['nip'], $payloadForKv, true);
-        $kv_sync_status = $syncSuccess ? 1 : 0;
-
         $sql = "INSERT INTO app_absensi_data_pegawai (nip, nama_pegawai, nik, perangkat_daerah, jabatan, jenis_asn, role, kv_sync_status) 
-                VALUES (:nip, :nama_pegawai, :nik, :perangkat_daerah, :jabatan, :jenis_asn, :role, :kv_sync_status)";
+                VALUES (:nip, :nama_pegawai, :nik, :perangkat_daerah, :jabatan, :jenis_asn, :role, 0)";
         $stmt = $db->prepare($sql);
         $isSuccess = $stmt->execute([
             ':nip'              => $input['nip'],
@@ -182,10 +170,23 @@ class MasterDataController {
             ':jabatan'          => $input['jabatan'] ?? null,
             ':jenis_asn'        => $input['jenis_asn'],
             ':role'             => $rolesStr,
-            ':kv_sync_status'   => $kv_sync_status,
         ]);
 
         if ($isSuccess) {
+            $payloadForKv = [
+                'nip' => $input['nip'],
+                'nik' => $hashedNik,
+                'nama_pegawai' => $input['nama_pegawai'],
+                'perangkat_daerah' => $input['perangkat_daerah'],
+                'jabatan' => $input['jabatan'] ?? null,
+                'jenis_asn' => $input['jenis_asn'],
+                'role' => $newRoles
+            ];
+            $syncSuccess = $this->syncPegawaiToKv('PUT', $input['nip'], $payloadForKv, true);
+            if ($syncSuccess) {
+                $db->prepare("UPDATE app_absensi_data_pegawai SET kv_sync_status = 1 WHERE nip = :nip")->execute([':nip' => $input['nip']]);
+            }
+
             $message = "Pegawai berhasil ditambahkan.";
             if (!$syncSuccess) { $message .= " Gagal sinkronisasi ke cache."; }
             Response::json(true, 200, $message);
@@ -250,20 +251,8 @@ class MasterDataController {
         if (!in_array('asn', $newRoles)) $newRoles[] = 'asn';
         $rolesStr = implode(',', $newRoles);
 
-        $payloadForKv = [
-            'nip' => $nip, 
-            'nik' => $nikToSave,
-            'nama_pegawai' => $input['nama_pegawai'],
-            'perangkat_daerah' => $input['perangkat_daerah'],
-            'jabatan' => $input['jabatan'] ?? null,
-            'jenis_asn' => $input['jenis_asn'],
-            'role' => $newRoles
-        ];
-        $syncSuccess = $this->syncPegawaiToKv('PUT', $nip, $payloadForKv, true);
-        $kv_sync_status = $syncSuccess ? 1 : 0;
-
         $sql = "UPDATE app_absensi_data_pegawai 
-                SET nama_pegawai = :nama_pegawai, nik = :nik, perangkat_daerah = :perangkat_daerah, jabatan = :jabatan, jenis_asn = :jenis_asn, role = :role, kv_sync_status = :kv_sync_status
+                SET nama_pegawai = :nama_pegawai, nik = :nik, perangkat_daerah = :perangkat_daerah, jabatan = :jabatan, jenis_asn = :jenis_asn, role = :role, kv_sync_status = 0
                 WHERE nip = :nip";
         
         $stmt = $db->prepare($sql);
@@ -274,9 +263,26 @@ class MasterDataController {
             ':jabatan'          => $input['jabatan'] ?? null,
             ':jenis_asn'        => $input['jenis_asn'],
             ':role'             => $rolesStr,
-            ':kv_sync_status'   => $kv_sync_status,
             ':nip'              => $nip
         ]);
+
+        if (!$isSuccess) {
+            Response::json(false, 500, "Gagal memperbarui data pegawai.");
+        }
+
+        $payloadForKv = [
+            'nip' => $nip, 
+            'nik' => $nikToSave,
+            'nama_pegawai' => $input['nama_pegawai'],
+            'perangkat_daerah' => $input['perangkat_daerah'],
+            'jabatan' => $input['jabatan'] ?? null,
+            'jenis_asn' => $input['jenis_asn'],
+            'role' => $newRoles
+        ];
+        $syncSuccess = $this->syncPegawaiToKv('PUT', $nip, $payloadForKv, true);
+        if ($syncSuccess) {
+            $db->prepare("UPDATE app_absensi_data_pegawai SET kv_sync_status = 1 WHERE nip = :nip")->execute([':nip' => $nip]);
+        }
 
         $message = "Data pegawai berhasil diperbarui.";
         if (!$syncSuccess) { $message .= " Gagal sinkronisasi ulang ke cache."; }
@@ -728,24 +734,6 @@ class MasterDataController {
                 // Abaikan jika ada error parsing tanggal, biarkan user melanjutkan.
             }
         }
-        $userRoles = array_map('strtolower', array_map('trim', $userRoles));
-        $isAdminOrSuperAdmin = in_array('admin', $userRoles) || in_array('super admin', $userRoles);
-
-        if (!$isAdminOrSuperAdmin && !empty($lastUpdateString) && $lastUpdateString !== '0000-00-00 00:00:00' && strtolower((string)$lastUpdateString) !== 'null') {
-            try {
-                $now = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
-                $lastUpdate = new DateTime($lastUpdateString, new DateTimeZone('Asia/Jakarta'));
-                
-                $nextAllowedUpdate = (clone $lastUpdate)->modify('+1 month');
-
-                if ($now < $nextAllowedUpdate) {
-                    Response::json(false, 429, "Anda hanya dapat mengubah profil sekali dalam sebulan. Perubahan berikutnya dapat dilakukan setelah " . $nextAllowedUpdate->format('d F Y') . ". Hubungi BKPSDM Kota Pariaman jika perlu perubahan mendesak.");
-                    return;
-                }
-            } catch (\Exception $e) {
-                // Abaikan jika ada error parsing tanggal, biarkan user melanjutkan.
-            }
-        }
         // --- AKHIR LOGIKA BARU ---
 
         $inputJSON = file_get_contents('php://input');
@@ -807,7 +795,7 @@ class MasterDataController {
             'jenis_asn' => $pegawaiDbData['jenis_asn'],
             'role' => $pegawaiData['role'] ?? ['asn']
         ];
-        $syncSuccess = $this->syncPegawaiToKvFromProfil('PUT', $nip, $payloadForKv, true);
+        $syncSuccess = $this->syncPegawaiToKv('PUT', $nip, $payloadForKv, true);
         
         if ($syncSuccess) {
             $db->prepare("UPDATE app_absensi_data_pegawai SET kv_sync_status = 1 WHERE nip = :nip")->execute([':nip' => $nip]);
@@ -843,61 +831,4 @@ class MasterDataController {
 
         Response::json(true, 200, $message, $responseData);
     }
-
-    /**
-     * Menjalankan permintaan ke Cloudflare Worker untuk menyinkronkan (PUT/DELETE) cache KV.
-     *
-     * @param string $method Metode HTTP (PUT atau DELETE).
-     * @param string $nip NIP pegawai yang cache-nya akan disinkronkan.
-     * @param array|null $payload Data yang akan dikirim (untuk PUT).
-     * @param bool $waitForResponse Jika true, akan menunggu respons dari worker. Jika false, berjalan di latar belakang.
-     * @return bool|void Mengembalikan boolean jika $waitForResponse true, void jika false.
-     */
-    private function syncPegawaiToKvFromProfil($method, $nip, $payload = null, $waitForResponse = false) {
-        $config = require APP_PATH . '/config/config.php';
-        $workerUrl = $config['worker_url'] ?? null;
-        $workerSecret = $config['worker_secret'] ?? null;
-
-        if (!$workerUrl || !$workerSecret || !$nip) {
-            error_log("[Pegawai KV Sync] Gagal: Konfigurasi Worker URL/secret atau NIP tidak ada untuk NIP: " . $nip);
-            return $waitForResponse ? false : null;
-        }
-
-        $url = rtrim($workerUrl, '/') . '/api/pegawai/' . $nip;
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'X-Worker-Secret: ' . $workerSecret
-        ]);
-
-        if ($waitForResponse) {
-            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-        } else {
-            curl_setopt($ch, CURLOPT_TIMEOUT_MS, 500);
-        }
-
-        if ($payload !== null && $method === 'PUT') {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        }
-
-        $responseBody = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErrorNo = curl_errno($ch);
-        $curlErrorMsg = curl_error($ch);
-        curl_close($ch);
-
-        if ($waitForResponse) {
-            if ($curlErrorNo === 0 && $httpCode >= 200 && $httpCode < 300) {
-                return true; // Sukses
-            }
-            error_log("[Blocking Pegawai KV Sync] Gagal untuk NIP $nip. HTTP Code: $httpCode, cURL Error: $curlErrorMsg");
-            return false; // Gagal
-        } elseif ($curlErrorNo !== 0 && $curlErrorNo !== CURLE_OPERATION_TIMEDOUT) {
-            error_log("[Fire-and-forget Pegawai KV Sync] cURL error untuk NIP $nip: " . $curlErrorMsg);
-        }
-    }
-
 }

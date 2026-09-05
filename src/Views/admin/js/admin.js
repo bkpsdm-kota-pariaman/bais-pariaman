@@ -76,7 +76,7 @@ function renderPaginationControls(containerId, paginationData, onPageChangeName)
     } else if (onPageChangeName === 'pegawai') {
         exportBtnHtml = '<button class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="exportPegawaiToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>';
     } else if (onPageChangeName === 'rekap') {
-        exportBtnHtml = '<button class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="exportRekapToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>';
+        exportBtnHtml = '<button id="btnExportRekapToExcel" class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="exportRekapToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>';
     } else if (onPageChangeName === 'rekapKeseluruhan') {
         exportBtnHtml = '<button class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="exportRekapKeseluruhanToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>';
     } else if (onPageChangeName === 'statistik') {
@@ -533,6 +533,9 @@ function renderJadwalTable(jadwalList) {
         if (jadwal.is_strict_time == 1) {
             rulesBadges.push('<span class="badge bg-info text-dark mb-1 me-1"><i class="bi bi-clock-fill"></i> Wajib Tepat Waktu</span>');
         }
+        if (jadwal.is_strict_opd == 1) {
+            rulesBadges.push('<span class="badge bg-primary mb-1 me-1"><i class="bi bi-building-fill"></i> Wajib Target OPD</span>');
+        }
         if (jadwal.aktifkan_antrian === '1') {
             rulesBadges.push('<span class="badge bg-danger mb-1 me-1"><i class="bi bi-people-fill"></i> Antrian: Aktif</span>');
         } else if (jadwal.aktifkan_antrian === '0') {
@@ -600,6 +603,7 @@ async function bukaModalBuatKegiatan() {
         document.getElementById('geoRadius').value = '100';
         document.getElementById('addStrictLocation').checked = false;
         document.getElementById('addStrictTime').checked = false;
+        if (document.getElementById('addStrictOpd')) document.getElementById('addStrictOpd').checked = false;
         markerAdd.setLatLng(pariamanCoords);
         circleAdd.setLatLng(pariamanCoords);
         circleAdd.setRadius(100);
@@ -656,6 +660,7 @@ async function submitKegiatanBaru(event) {
         target_opd: opdState.add.selected,
         is_strict_time: document.getElementById('addStrictTime').checked ? 1 : 0,
         is_strict_location: document.getElementById('addStrictLocation').checked ? 1 : 0,
+        is_strict_opd: (document.getElementById('addStrictOpd') && document.getElementById('addStrictOpd').checked) ? 1 : 0,
         aktifkan_antrian: (document.getElementById('newAktifkanAntrian') && document.getElementById('newAktifkanAntrian').value !== '') ? document.getElementById('newAktifkanAntrian').value : 0
     };
 
@@ -668,7 +673,7 @@ async function submitKegiatanBaru(event) {
 
         if (result.status) {
             modalBuatKegiatan.hide();
-            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: 'Jadwal berhasil dibuat!' });
+            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: result.message });
             loadJadwalKegiatan();
         } else {
             Swal.fire('Gagal', result.message, 'error');
@@ -696,7 +701,7 @@ async function hapusKegiatan(kodeAkses) {
         });
 
         if (result.status) {
-            Swal.fire('Sukses', 'Jadwal berhasil dihapus.', 'success');
+            Swal.fire('Sukses', result.message, 'success');
             loadJadwalKegiatan();
         } else {
             Swal.fire('Gagal', 'Gagal menghapus: ' + result.message, 'error');
@@ -928,6 +933,7 @@ async function bukaModalEdit(kodeAkses) {
 
         document.getElementById('editStrictTime').checked = (jadwal.is_strict_time == 1);
         document.getElementById('editStrictLocation').checked = (jadwal.is_strict_location == 1);
+        if (document.getElementById('editStrictOpd')) document.getElementById('editStrictOpd').checked = (jadwal.is_strict_opd == 1);
 
 
         // Sembunyikan dan atur nilai untuk pengaturan lanjutan
@@ -969,6 +975,7 @@ async function submitEditKegiatan(event) {
         target_opd: opdState.edit.selected,
         is_strict_time: document.getElementById('editStrictTime').checked ? 1 : 0,
         is_strict_location: document.getElementById('editStrictLocation').checked ? 1 : 0,
+        is_strict_opd: (document.getElementById('editStrictOpd') && document.getElementById('editStrictOpd').checked) ? 1 : 0,
         aktifkan_antrian: document.getElementById('editAktifkanAntrian') ? document.getElementById('editAktifkanAntrian').value : 0
     };
 
@@ -981,7 +988,7 @@ async function submitEditKegiatan(event) {
 
         if (result.status) {
             modalEditKegiatan.hide();
-            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: 'Jadwal berhasil diperbarui!' });
+            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: result.message });
             loadJadwalKegiatan();
         } else {
             Swal.fire('Gagal', result.message, 'error');
@@ -2046,7 +2053,7 @@ async function submitVerifikasi(event) {
 
         if (result.status) {
             modalVerifikasi.hide();
-            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, icon: 'success', title: 'Status berhasil diperbarui!' });
+            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, icon: 'success', title: result.message });
 
             // In-place update data lokal tanpa refetch ulang ke server (posisi scroll & paginasi terjaga)
             const targetNip = document.getElementById('verifNip').value;
@@ -2414,6 +2421,14 @@ async function exportRekapToExcel() {
         Swal.fire('Filter Tidak Tersedia', 'Elemen filter "Status Kehadiran" atau "Status Verifikasi" tidak ditemukan.', 'warning');
         return;
     }
+
+    const btnExport = document.getElementById('btnExportRekapToExcel');
+    const originalBtnHtml = btnExport ? btnExport.innerHTML : null;
+    if (btnExport) {
+        btnExport.disabled = true;
+        btnExport.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Mengunduh...';
+    }
+
     // 3. Panggil API detail untuk mendapatkan data yang akan diexport
     try {
         const result = await fetchWithAuth(`${API_BASE_URL}/admin/rekap/details/${currentRekapData.jadwal.kode_akses}`, {
@@ -2461,6 +2476,11 @@ async function exportRekapToExcel() {
 
     } catch (error) {
         Swal.fire('Kesalahan', 'Terjadi kesalahan saat menyiapkan data untuk diunduh.', 'error');
+    } finally {
+        if (btnExport) {
+            btnExport.disabled = false;
+            btnExport.innerHTML = originalBtnHtml;
+        }
     }
 }
 

@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.17'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.27'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -27,6 +27,7 @@ let deferredPrompt = null;
 let lastInvalidFileAlertKey = null;
 let selfieCameraGeneration = 0;
 let isSubmittingAdminCepat = false;
+let refreshTokenPromise = null;
 
 /**
  * Memigrasikan data dari localStorage (sistem lama) ke localForage (sistem baru).
@@ -430,25 +431,6 @@ async function triggerPwaInstallFromLogin() {
         deferredPrompt = null;
     } else {
         Swal.fire({
-            title: 'Instalasi Tidak Didukung',
-            html: 'Aplikasi tidak support di browser Anda. Silahkan coba browser lain seperti <b>Google Chrome, Firefox, atau Microsoft Edge</b> atau login langsung tanpa install aplikasi.',
-            icon: 'info',
-            confirmButtonColor: '#b91c1c',
-            confirmButtonText: 'Saya Mengerti'
-        });
-    }
-}
-
-// Aksi tombol install utama
-document.getElementById('btnInstallApp')?.addEventListener('click', async () => {
-    if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
-        deferredPrompt = null;
-    } else {
-        // Fallback jika browser menolak prompt otomatis atau tidak mendukung
-        Swal.fire({
             title: 'Konfirmasi Instalasi',
             html: "Apakah jendela/pesan untuk meng-install aplikasi <b>muncul di layar Anda?</b>",
             icon: 'question',
@@ -466,7 +448,8 @@ document.getElementById('btnInstallApp')?.addEventListener('click', async () => 
             }
         });
     }
-});
+}
+window.triggerPwaInstallFromLogin = triggerPwaInstallFromLogin;
 
 window.onload = async () => {
     try {
@@ -1201,7 +1184,7 @@ async function generateUserQrToken() {
             const response = await fetchWithAuth(url, { method: 'POST' });
             if (!response.ok) throw new Error(`Request to ${url} failed with status ${response.status}`);
             const res = await response.json();
-            const newToken = res?.data?.access_token;
+            const newToken = res?.data?.access_token || res?.data?.token;
             if (!res.status || !res.data || !newToken) throw new Error(res.message);
             return newToken;
         };
@@ -1307,15 +1290,6 @@ function setupAdminCepatView() {
     document.getElementById('admin-cepat-kode-akses').value = '';
     document.getElementById('admin-cepat-step1').classList.remove('hidden-view');
     document.getElementById('admin-cepat-step2').classList.add('hidden-view');
-
-    // Hentikan scanner jika masih berjalan
-    const scannerDiv = document.getElementById('admin-cepat-scanner');
-    if (adminCepatState.scanner && adminCepatState.scanner.isScanning) {
-        adminCepatState.scanner.stop().catch(err => console.warn("Gagal menghentikan scanner admin cepat.", err));
-    }
-    if (scannerDiv) {
-        scannerDiv.innerHTML = ''; // Clear the div
-    }
     adminCepatState.scanner = null;
 }
 
@@ -1472,57 +1446,65 @@ async function adminCepatMulaiPindai(mode = 'kamera') {
  * Fungsi ini mengambil token langsung dari localForage.
  */
 async function silentlyRefreshTokenIfNeeded() {
-    try {
-        const token = await localforage.getItem("asn_jwt_token");
-        if (!token) return; // Keluar jika tidak ada token
+    if (refreshTokenPromise) {
+        return refreshTokenPromise;
+    }
+    refreshTokenPromise = (async () => {
+        try {
+            const token = await localforage.getItem("asn_jwt_token");
+            if (!token) return; // Keluar jika tidak ada token
 
-        // Parse payload manually to get 'exp' without changing global parseJwt
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        const payload = JSON.parse(jsonPayload);
+            // Parse payload manually to get 'exp' without changing global parseJwt
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            const payload = JSON.parse(jsonPayload);
 
-        if (!payload || !payload.exp) return;
+            if (!payload || !payload.exp) return;
 
-        const nowInSeconds = Math.floor(Date.now() / 1000);
-        const fiveDaysInSeconds = 5 * 24 * 3600;
+            const nowInSeconds = Math.floor(Date.now() / 1000);
+            const fiveDaysInSeconds = 5 * 24 * 3600;
 
-        // Jika token akan kedaluwarsa dalam 5 hari ke depan
-        if (payload.exp < (nowInSeconds + fiveDaysInSeconds)) {
-            console.log("Masa berlaku token akan segera habis, mencoba memperbarui di latar belakang...");
+            // Jika token akan kedaluwarsa dalam 5 hari ke depan
+            if (payload.exp < (nowInSeconds + fiveDaysInSeconds)) {
+                console.log("Masa berlaku token akan segera habis, mencoba memperbarui di latar belakang...");
 
-            let response;
-            let res;
-            try {
-                // 1. Coba refresh via Worker. fetchWithAuth akan mengambil token dari localForage.
-                response = await fetchWithAuth(`${WORKER_URL}/api/profil/refresh-token`, { method: 'POST' });
-                res = await response.json();
-                const newRefreshedToken = res?.data?.access_token;
-                if (!res.status || !res.data || !newRefreshedToken) throw new Error(res.message);
-            } catch (workerError) {
-                // 2. Jika worker gagal, fallback ke server PHP.
-                console.warn("Refresh token via Worker gagal, fallback ke server utama.", workerError.message);
-                response = await fetchWithAuth(`${API_BASE_URL}/profil/refresh-token`, { method: 'POST' });
-                if (response.ok) {
+                let response;
+                let res;
+                try {
+                    // 1. Coba refresh via Worker. fetchWithAuth akan mengambil token dari localForage.
+                    response = await fetchWithAuth(`${WORKER_URL}/api/profil/refresh-token`, { method: 'POST' });
                     res = await response.json();
+                    const newRefreshedToken = res?.data?.access_token;
+                    if (!res.status || !res.data || !newRefreshedToken) throw new Error(res.message);
+                } catch (workerError) {
+                    // 2. Jika worker gagal, fallback ke server PHP.
+                    console.warn("Refresh token via Worker gagal, fallback ke server utama.", workerError.message);
+                    response = await fetchWithAuth(`${API_BASE_URL}/profil/refresh-token`, { method: 'POST' });
+                    if (response.ok) {
+                        res = await response.json();
+                    }
+                }
+
+                const tokenToSave = res?.data?.access_token;
+                if (res && res.status && res.data && tokenToSave) {
+                    // Ganti token lama di localForage dengan yang baru.
+                    await localforage.setItem("asn_jwt_token", tokenToSave);
+                    console.log("Token berhasil diperbarui di latar belakang.");
+                } else {
+                    console.warn("Gagal memperbarui token di latar belakang:", res?.message);
                 }
             }
-
-            const tokenToSave = res?.data?.access_token;
-            if (res && res.status && res.data && tokenToSave) {
-                // Ganti token lama di localForage dengan yang baru.
-                await localforage.setItem("asn_jwt_token", tokenToSave);
-                console.log("Token berhasil diperbarui di latar belakang.");
-            } else {
-                console.warn("Gagal memperbarui token di latar belakang:", res?.message);
-            }
+        } catch (error) {
+            // Abaikan semua error, jangan sampai memblokir UI.
+            console.error("Terjadi error saat mencoba memperbarui token:", error);
+        } finally {
+            refreshTokenPromise = null;
         }
-    } catch (error) {
-        // Abaikan semua error, jangan sampai memblokir UI.
-        console.error("Terjadi error saat mencoba memperbarui token:", error);
-    }
+    })();
+    return refreshTokenPromise;
 }
 async function refreshProfil() {
     const token = await localforage.getItem("asn_jwt_token");
@@ -1847,6 +1829,8 @@ async function tutupScanner(fromPopState = false) {
  * Ini memastikan alur validasi yang benar diterapkan secara otomatis.
  */
 async function prosesQrCode(kodeOrJwt) {
+    if (window._isProcessingQr) return;
+    window._isProcessingQr = true;
     showLoading(true, "Memvalidasi Jadwal...");
     try {
         const isJwt = (kodeOrJwt.match(/\./g) || []).length === 2;
@@ -1872,6 +1856,8 @@ async function prosesQrCode(kodeOrJwt) {
         Swal.fire("Gagal", `Ada kesalahan di aplikasi, ${error.message || error}`, "error").then(() => {
             batalAbsen();
         });
+    } finally {
+        window._isProcessingQr = false;
     }
 }
 
@@ -2246,6 +2232,30 @@ async function kirimAbsensi() {
         return;
     }
 
+    // Validasi Strict Mode sebelum submit
+    if (currentJadwal && !window._isTidakHadir) {
+        if (currentJadwal.is_strict_time == 1 && isTerlambat) {
+            window._isSubmittingAbsen = false;
+            Swal.fire('Waktu Berakhir', 'Aturan Waktu Berlaku aktif. Absensi Hadir tidak dapat dilakukan karena batas waktu telah lewat.', 'error');
+            return;
+        }
+        if (currentJadwal.is_strict_location == 1 && (isLuarRadius || isGpsError)) {
+            window._isSubmittingAbsen = false;
+            Swal.fire('Di Luar Lokasi', 'Aturan Wajib Sesuai Lokasi aktif. Absensi Hadir tidak dapat dilakukan di luar radius atau tanpa GPS valid.', 'error');
+            return;
+        }
+        if (currentJadwal.is_strict_opd == 1) {
+            const user = token ? parseJwt(token) : null;
+            const targetOpd = Array.isArray(currentJadwal.target_opd) ? currentJadwal.target_opd : [];
+            if (targetOpd.length > 0 && (!user || !user.opd || !targetOpd.includes(user.opd))) {
+                window._isSubmittingAbsen = false;
+                const userOpdName = user?.opd || 'Tidak Diketahui';
+                Swal.fire('Perangkat Daerah Dibatasi', `Aturan Wajib Sesuai Target OPD aktif. Perangkat Daerah Anda (${userOpdName}) tidak terdaftar dalam target kegiatan ini.`, 'error');
+                return;
+            }
+        }
+    }
+
     // Tentukan status kehadiran & verifikasi berdasarkan kondisi
     let statusKehadiran = "Hadir";
     let statusVerifikasi = "Terverifikasi Sistem";
@@ -2442,7 +2452,6 @@ async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
             fallbackBody.append('status_kehadiran', statusKehadiran);
             fallbackBody.append('status_verifikasi', statusVerifikasi);
             if (fotoBase64) fallbackBody.append('foto_base64', fotoBase64);
-            fallbackBody.append('status_verifikasi', statusVerifikasi);
 
             response = await fetchWithAuth(fallbackUrl, { method: "POST", body: fallbackBody, token: adminToken });
             res = await response.json();
@@ -2450,8 +2459,8 @@ async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
 
         if (response.ok && res.status) {
             playBeepSound();
-            const displayName = namaPegawaiPreview;
-            Swal.fire({ toast: true, position: 'bottom', icon: 'success', title: `Berhasil: ${displayName}`, showConfirmButton: false, timer: 1500, timerProgressBar: true });
+            const successMessage = res.message;
+            Swal.fire({ toast: true, position: 'bottom', icon: 'success', title: successMessage, showConfirmButton: false, timer: 2500, timerProgressBar: true });
         } else {
             Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Gagal: ${res.message}`, showConfirmButton: false, timer: 2000 });
         }
@@ -2558,7 +2567,14 @@ function getDistanceInMeters(lat1, lon1, lat2, lon2) {
 }
 
 function lanjutTanpaLokasiValid() {
-    // Tidak ada lagi pengecekan is_strict_location, langsung lanjut ke 'Luar Lokasi'
+    if (currentJadwal && currentJadwal.is_strict_location == 1) {
+        Swal.fire({
+            title: 'Di Luar Lokasi',
+            text: 'Aturan Wajib Sesuai Lokasi aktif. Absensi tidak dapat dilanjutkan tanpa lokasi GPS valid yang sesuai radius kegiatan.',
+            icon: 'error'
+        }).then(() => batalAbsen());
+        return;
+    }
 
     document.getElementById('statusGeoLoading').classList.add('hidden-view');
     isLuarRadius = true; // Force status to be 'luar lokasi'
@@ -2856,6 +2872,7 @@ async function setupAbsenForm(jadwalData) {
     let ketatMsg = [];
     if (currentJadwal.is_strict_time == 1) ketatMsg.push("Aturan Waktu Berlaku");
     if (currentJadwal.is_strict_location == 1) ketatMsg.push("Wajib Sesuai Lokasi");
+    if (currentJadwal.is_strict_opd == 1) ketatMsg.push("Wajib Sesuai Target OPD");
 
     if (ketatMsg.length > 0) {
         teksKetat.innerText = ketatMsg.join(" & ") + " aktif. Keterlambatan atau lokasi tidak sesuai akan langsung ditolak untuk opsi Hadir di Lokasi.";
@@ -2864,6 +2881,22 @@ async function setupAbsenForm(jadwalData) {
         bannerKetat.classList.add('hidden-view');
     }
 
+
+    // Pencegahan awal jika is_strict_opd aktif
+    if (currentJadwal.is_strict_opd == 1) {
+        const token = await localforage.getItem("asn_jwt_token");
+        const user = token ? parseJwt(token) : null;
+        const targetOpd = Array.isArray(currentJadwal.target_opd) ? currentJadwal.target_opd : [];
+        if (targetOpd.length > 0 && (!user || !user.opd || !targetOpd.includes(user.opd))) {
+            const userOpdName = user?.opd || 'Tidak Diketahui';
+            Swal.fire({
+                title: 'Perangkat Daerah Dibatasi',
+                text: `Aturan Wajib Sesuai Target OPD aktif. Perangkat Daerah Anda (${userOpdName}) tidak terdaftar dalam target kegiatan ini.`,
+                icon: 'error'
+            }).then(() => batalAbsen());
+            return;
+        }
+    }
 
     // Tambahkan state ke history browser untuk navigasi tombol kembali
     history.pushState({ view: 'form' }, "Konfirmasi Kehadiran", '#form');
@@ -2902,7 +2935,7 @@ window.prosesKodeManualDariPilihMetode = function (event) {
     prosesQrCode(kode);
 }
 
-window.pilihOpsiKehadiran = function (opsi) {
+window.pilihOpsiKehadiran = async function (opsi) {
     const radioEl = document.querySelector(`input[name="tipeKehadiran"][value="${opsi}"]`);
     if (radioEl) radioEl.checked = true;
 
@@ -2916,6 +2949,21 @@ window.pilihOpsiKehadiran = function (opsi) {
                 icon: 'error'
             }).then(() => batalAbsen());
             return;
+        }
+
+        if (currentJadwal && currentJadwal.is_strict_opd == 1) {
+            const token = await localforage.getItem("asn_jwt_token");
+            const user = token ? parseJwt(token) : null;
+            const targetOpd = Array.isArray(currentJadwal.target_opd) ? currentJadwal.target_opd : [];
+            if (targetOpd.length > 0 && (!user || !user.opd || !targetOpd.includes(user.opd))) {
+                const userOpdName = user?.opd || 'Tidak Diketahui';
+                Swal.fire({
+                    title: 'Perangkat Daerah Dibatasi',
+                    text: `Aturan Wajib Sesuai Target OPD aktif. Perangkat Daerah Anda (${userOpdName}) tidak terdaftar dalam target kegiatan ini.`,
+                    icon: 'error'
+                }).then(() => batalAbsen());
+                return;
+            }
         }
 
         // Reset data dari opsi Tidak Hadir jika sempat diisi sebelumnya

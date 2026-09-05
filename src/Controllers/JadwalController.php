@@ -93,8 +93,8 @@ class JadwalController {
         $db = Database::getConnection(); 
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
         $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 10;
-        $search = trim($_GET['search'] ?? $_GET['q'] ?? '');
-        $kategori = trim($_GET['kategori'] ?? '');
+        $search = trim((string)($_GET['search'] ?? $_GET['q'] ?? ''));
+        $kategori = trim((string)($_GET['kategori'] ?? ''));
         $offset = ($page - 1) * $limit;
 
         $where = [];
@@ -208,28 +208,10 @@ class JadwalController {
         // Generate kode akses unik
         $kodeAkses = strtoupper(substr(bin2hex(random_bytes(4)), 0, 6));
 
-        // --- LOGIKA BARU: Lakukan sinkronisasi SEBELUM menulis ke DB ---
-        $payloadForKv = [
-            'kode_akses' => $kodeAkses,
-            'judul' => $input['judul'] ?? '',
-            'kategori' => $input['kategori'] ?? '',
-            'tanggal' => $input['tanggal'] ?? '',
-            'jam_mulai' => $input['jam_mulai'] ?? '',
-            'jam_selesai' => $input['jam_selesai'] ?? '',
-            'koordinat' => $input['koordinat'] ?? '',
-            'radius_meter' => $input['radius_meter'] ?? 0,
-            'aktifkan_antrian' => $input['aktifkan_antrian'] ?? 0,
-            'is_strict_time' => $input['is_strict_time'] ?? 0,
-            'is_strict_location' => $input['is_strict_location'] ?? 0,
-            'target_opd' => $input['target_opd'] ?? []
-        ];
-        $syncSuccess = $this->syncJadwalToKv('POST', $payloadForKv, null, true); // Blocking call
-        $kv_sync_status = $syncSuccess ? 1 : 0;
-
         try {
             $db->beginTransaction();
 
-            $sqlJadwal = "INSERT INTO app_absensi_jadwal_kegiatan (kode_akses, judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, aktifkan_antrian, kv_sync_status, is_strict_time, is_strict_location) VALUES (:ka, :jd, :kat, :tgl, :jm, :js, :koord, :rad, :aa, :kv_sync_status, :ist, :isl)";
+            $sqlJadwal = "INSERT INTO app_absensi_jadwal_kegiatan (kode_akses, judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, aktifkan_antrian, kv_sync_status, is_strict_time, is_strict_location, is_strict_opd) VALUES (:ka, :jd, :kat, :tgl, :jm, :js, :koord, :rad, :aa, 0, :ist, :isl, :iso)";
             $stmtJadwal = $db->prepare($sqlJadwal);
             $stmtJadwal->execute([
                 ':ka' => $kodeAkses,
@@ -241,35 +223,46 @@ class JadwalController {
                 ':koord' => $input['koordinat'] ?? '',
                 ':rad' => $input['radius_meter'] ?? 0,
                 ':aa' => isset($input['aktifkan_antrian']) ? (int)$input['aktifkan_antrian'] : 0,
-                ':kv_sync_status' => $kv_sync_status,
                 ':ist' => $input['is_strict_time'] ?? 0,
-                ':isl' => $input['is_strict_location'] ?? 0
+                ':isl' => $input['is_strict_location'] ?? 0,
+                ':iso' => $input['is_strict_opd'] ?? 0
             ]);
 
-            // --- LOGIKA BARU: Pre-seed data absensi dengan status ALPA ---
-            $pegawaiToSeed = [];
-            if (!empty($targetOpd)) { // Hanya pre-seed jika ada target OPD yang dipilih
+            // --- Pre-seed data absensi dengan status ALPA menggunakan INSERT INTO ... SELECT ---
+            if (!empty($targetOpd) && is_array($targetOpd)) {
                 $placeholders = implode(',', array_fill(0, count($targetOpd), '?'));
-                $stmtPegawai = $db->prepare("SELECT nip, nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_data_pegawai WHERE perangkat_daerah IN ($placeholders)");
-                $stmtPegawai->execute($targetOpd);
-                $pegawaiToSeed = $stmtPegawai->fetchAll(PDO::FETCH_ASSOC);
-            }
-
-            if (!empty($pegawaiToSeed)) {
-                $sqlSeed = "INSERT INTO app_absensi_data_absensi (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran) VALUES ";
-                $sqlParams = [];
-                $rows = [];
-                foreach ($pegawaiToSeed as $p) {
-                    $rows[] = "(?, ?, ?, ?, ?, ?, 'ALPA', 'Alpa')";
-                    array_push($sqlParams, $kodeAkses, $p['nip'], $p['nama_pegawai'], $p['perangkat_daerah'], $p['jabatan'], $input['kategori']);
-                }
-                $sqlSeed .= implode(', ', $rows);
+                $sqlSeed = "INSERT INTO app_absensi_data_absensi (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran)
+                            SELECT ?, nip, nama_pegawai, perangkat_daerah, jabatan, ?, 'ALPA', 'Alpa'
+                            FROM app_absensi_data_pegawai
+                            WHERE perangkat_daerah IN ($placeholders)";
+                $paramsSeed = array_merge([$kodeAkses, $input['kategori'] ?? ''], $targetOpd);
                 $stmtSeed = $db->prepare($sqlSeed);
-                $stmtSeed->execute($sqlParams);
+                $stmtSeed->execute($paramsSeed);
             }
-            // --- AKHIR LOGIKA BARU ---
 
             $db->commit();
+
+            // Sync ke Cloudflare KV setelah DB commit berhasil
+            $payloadForKv = [
+                'kode_akses' => $kodeAkses,
+                'judul' => $input['judul'] ?? '',
+                'kategori' => $input['kategori'] ?? '',
+                'tanggal' => $input['tanggal'] ?? '',
+                'jam_mulai' => $input['jam_mulai'] ?? '',
+                'jam_selesai' => $input['jam_selesai'] ?? '',
+                'koordinat' => $input['koordinat'] ?? '',
+                'radius_meter' => $input['radius_meter'] ?? 0,
+                'aktifkan_antrian' => $input['aktifkan_antrian'] ?? 0,
+                'is_strict_time' => $input['is_strict_time'] ?? 0,
+                'is_strict_location' => $input['is_strict_location'] ?? 0,
+                'is_strict_opd' => $input['is_strict_opd'] ?? 0,
+                'target_opd' => $targetOpd
+            ];
+            $syncSuccess = $this->syncJadwalToKv('POST', $payloadForKv, null, true);
+            if ($syncSuccess) {
+                $updateKvStmt = $db->prepare("UPDATE app_absensi_jadwal_kegiatan SET kv_sync_status = 1 WHERE kode_akses = :ka");
+                $updateKvStmt->execute([':ka' => $kodeAkses]);
+            }
 
             $message = "Jadwal berhasil dibuat.";
             if (!$syncSuccess) { $message .= " Gagal sinkronisasi ke cache."; }
@@ -289,28 +282,11 @@ class JadwalController {
 
         $targetOpd = $input['target_opd'] ?? [];
 
-        $payloadForKv = [
-            'kode_akses' => $kodeAkses,
-            'judul' => $input['judul'] ?? '',
-            'kategori' => $input['kategori'] ?? '',
-            'tanggal' => $input['tanggal'] ?? '',
-            'jam_mulai' => $input['jam_mulai'] ?? '',
-            'jam_selesai' => $input['jam_selesai'] ?? '',
-            'koordinat' => $input['koordinat'] ?? '',
-            'radius_meter' => $input['radius_meter'] ?? 0,
-            'aktifkan_antrian' => $input['aktifkan_antrian'] ?? 0,
-            'is_strict_time' => $input['is_strict_time'] ?? 0,
-            'is_strict_location' => $input['is_strict_location'] ?? 0,
-            'target_opd' => $input['target_opd'] ?? []
-        ];
-        $syncSuccess = $this->syncJadwalToKv('PUT', $payloadForKv, $kodeAkses, true); // Blocking call
-        $kv_sync_status = $syncSuccess ? 1 : 0;
-
         try {
             $db->beginTransaction();
 
-            // 1. Update tabel jadwal utama
-            $sqlJadwal = "UPDATE app_absensi_jadwal_kegiatan SET judul=:jd, kategori=:kat, tanggal=:tgl, jam_mulai=:jm, jam_selesai=:js, koordinat=:koord, radius_meter=:rad, aktifkan_antrian=:aa, is_strict_time=:ist, is_strict_location=:isl, kv_sync_status = :kv_sync_status WHERE kode_akses = :ka";
+            // 1. Update tabel jadwal utama (kv_sync_status set to 0 first until sync succeeds)
+            $sqlJadwal = "UPDATE app_absensi_jadwal_kegiatan SET judul=:jd, kategori=:kat, tanggal=:tgl, jam_mulai=:jm, jam_selesai=:js, koordinat=:koord, radius_meter=:rad, aktifkan_antrian=:aa, is_strict_time=:ist, is_strict_location=:isl, is_strict_opd=:iso, kv_sync_status = 0 WHERE kode_akses = :ka";
             $stmtJadwal = $db->prepare($sqlJadwal);
             $stmtJadwal->execute([
                 ':jd' => $input['judul'] ?? '',
@@ -323,12 +299,12 @@ class JadwalController {
                 ':aa' => isset($input['aktifkan_antrian']) ? (int)$input['aktifkan_antrian'] : 0,
                 ':ist' => $input['is_strict_time'] ?? 0,
                 ':isl' => $input['is_strict_location'] ?? 0,
-                ':kv_sync_status' => $kv_sync_status,
+                ':iso' => $input['is_strict_opd'] ?? 0,
                 ':ka' => $kodeAkses
             ]);
 
             // 2. Hapus pre-seed data (waktu IS NULL) untuk OPD yang dihapus dari daftar target
-            $selectedOpds = $input['target_opd'] ?? [];
+            $selectedOpds = $targetOpd;
             if (empty($selectedOpds)) {
                 $stmtDel = $db->prepare("DELETE FROM app_absensi_data_absensi WHERE kode_akses = :ka AND waktu IS NULL");
                 $stmtDel->execute([':ka' => $kodeAkses]);
@@ -340,44 +316,42 @@ class JadwalController {
                 $stmtDel->execute($params);
             }
 
-            // a. Dapatkan daftar NIP yang sudah ada di rekap untuk jadwal ini.
-            $stmtExistingNips = $db->prepare("SELECT nip FROM app_absensi_data_absensi WHERE kode_akses = :ka");
-            $stmtExistingNips->execute([':ka' => $kodeAkses]);
-            $existingNips = $stmtExistingNips->fetchAll(PDO::FETCH_COLUMN, 0);
-            $existingNipsSet = array_flip($existingNips); // Gunakan array_flip untuk pencarian yang lebih cepat.
-
-            // b. Dapatkan daftar pegawai dari target OPD yang baru dipilih.
-            $pegawaiToSeed = [];
-            if (!empty($input['target_opd'])) {
-                $placeholdersSnap = implode(',', array_fill(0, count($input['target_opd']), '?'));
-                $stmtPegawai = $db->prepare("SELECT nip, nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_data_pegawai WHERE perangkat_daerah IN ($placeholdersSnap)");
-                $stmtPegawai->execute($input['target_opd']);
-                $pegawaiToSeed = $stmtPegawai->fetchAll(PDO::FETCH_ASSOC);
-            }
-
-            // c. Filter untuk mendapatkan hanya pegawai yang belum ada di rekap.
-            $newPegawaiToSeed = [];
-            foreach ($pegawaiToSeed as $p) {
-                if (!isset($existingNipsSet[$p['nip']])) {
-                    $newPegawaiToSeed[] = $p;
-                }
-            }
-
-            // d. Jika ada pegawai baru, pre-seed mereka ke dalam tabel absensi.
-            if (!empty($newPegawaiToSeed)) {
-                $sqlSeed = "INSERT INTO app_absensi_data_absensi (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran) VALUES ";
-                $sqlParams = [];
-                $rows = [];
-                foreach ($newPegawaiToSeed as $p) {
-                    $rows[] = "(?, ?, ?, ?, ?, ?, 'ALPA', 'Alpa')";
-                    array_push($sqlParams, $kodeAkses, $p['nip'], $p['nama_pegawai'], $p['perangkat_daerah'], $p['jabatan'], $input['kategori']);
-                }
-                $sqlSeed .= implode(', ', $rows);
+            // 3. Pre-seed pegawai baru dari target OPD yang belum ada di rekap
+            if (!empty($targetOpd) && is_array($targetOpd)) {
+                $placeholders = implode(',', array_fill(0, count($targetOpd), '?'));
+                $sqlSeed = "INSERT INTO app_absensi_data_absensi (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran)
+                            SELECT ?, p.nip, p.nama_pegawai, p.perangkat_daerah, p.jabatan, ?, 'ALPA', 'Alpa'
+                            FROM app_absensi_data_pegawai p
+                            LEFT JOIN app_absensi_data_absensi a ON p.nip = a.nip AND a.kode_akses = ?
+                            WHERE p.perangkat_daerah IN ($placeholders) AND a.nip IS NULL";
+                $paramsSeed = array_merge([$kodeAkses, $input['kategori'] ?? '', $kodeAkses], $targetOpd);
                 $stmtSeed = $db->prepare($sqlSeed);
-                $stmtSeed->execute($sqlParams);
+                $stmtSeed->execute($paramsSeed);
             }
 
             $db->commit();
+
+            // Sync ke Cloudflare KV setelah DB commit berhasil
+            $payloadForKv = [
+                'kode_akses' => $kodeAkses,
+                'judul' => $input['judul'] ?? '',
+                'kategori' => $input['kategori'] ?? '',
+                'tanggal' => $input['tanggal'] ?? '',
+                'jam_mulai' => $input['jam_mulai'] ?? '',
+                'jam_selesai' => $input['jam_selesai'] ?? '',
+                'koordinat' => $input['koordinat'] ?? '',
+                'radius_meter' => $input['radius_meter'] ?? 0,
+                'aktifkan_antrian' => $input['aktifkan_antrian'] ?? 0,
+                'is_strict_time' => $input['is_strict_time'] ?? 0,
+                'is_strict_location' => $input['is_strict_location'] ?? 0,
+                'is_strict_opd' => $input['is_strict_opd'] ?? 0,
+                'target_opd' => $targetOpd
+            ];
+            $syncSuccess = $this->syncJadwalToKv('PUT', $payloadForKv, $kodeAkses, true);
+            if ($syncSuccess) {
+                $updateKvStmt = $db->prepare("UPDATE app_absensi_jadwal_kegiatan SET kv_sync_status = 1 WHERE kode_akses = :ka");
+                $updateKvStmt->execute([':ka' => $kodeAkses]);
+            }
 
             $message = "Jadwal berhasil diperbarui.";
             if (!$syncSuccess) { $message .= " Gagal sinkronisasi ulang ke cache."; }
@@ -446,7 +420,7 @@ class JadwalController {
         }
 
         // 1. Ambil data jadwal terbaru dari DB untuk memastikan data di KV adalah yang paling mutakhir.
-        $stmtJadwal = $db->prepare("SELECT kode_akses, judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, aktifkan_antrian, is_strict_time, is_strict_location FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses");
+        $stmtJadwal = $db->prepare("SELECT kode_akses, judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, aktifkan_antrian, is_strict_time, is_strict_location, is_strict_opd FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses");
         $stmtJadwal->bindParam(':kode_akses', $kodeAkses);
         $stmtJadwal->execute();
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);

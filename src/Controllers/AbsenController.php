@@ -113,12 +113,21 @@ class AbsenController {
         }
 
         // Ambil detail jadwal dari DB
-        $stmtJadwal = $db->prepare("SELECT judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, is_strict_time, is_strict_location FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses LIMIT 1");
+        $stmtJadwal = $db->prepare("SELECT judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, is_strict_time, is_strict_location, is_strict_opd FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses LIMIT 1");
         $stmtJadwal->execute([':kode_akses' => $kodeAkses]);
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
 
         if (!$jadwal) {
             throw new \Exception("Jadwal kegiatan tidak valid atau tidak ditemukan.", 404);
+        }
+
+        // Validasi Strict OPD khusus Mandiri (Absen Cepat Admin Dikecualikan)
+        if (!$isAdminOrSuperAdmin && !empty($jadwal['is_strict_opd']) && $jadwal['is_strict_opd'] == 1) {
+            $stmtOpdCheck = $db->prepare("SELECT 1 FROM app_absensi_data_absensi WHERE kode_akses = :kode_akses AND (opd = :opd OR nip = :nip) LIMIT 1");
+            $stmtOpdCheck->execute([':kode_akses' => $kodeAkses, ':opd' => $opd, ':nip' => $nip]);
+            if (!$stmtOpdCheck->fetchColumn()) {
+                throw new \Exception("Gagal: Perangkat Daerah Dibatasi. Perangkat Daerah Anda tidak terdaftar dalam target OPD kegiatan ini.", 403);
+            }
         }
 
         // Validasi jadwal khusus Direct (non-worker)
@@ -987,84 +996,163 @@ class AbsenController {
             return;
         }
 
-        // Ambil data absensi saat ini terlebih dahulu
-        $stmtCurrent = $db->prepare("SELECT waktu, status_kehadiran, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
-        $stmtCurrent->execute([':ka' => $kodeAkses, ':nip' => $nip]);
-        $currentAbsenData = $stmtCurrent->fetch(PDO::FETCH_ASSOC);
+        $db->beginTransaction();
+        try {
+            // Ambil data absensi saat ini terlebih dahulu
+            $stmtCurrent = $db->prepare("SELECT waktu, status_kehadiran, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
+            $stmtCurrent->execute([':ka' => $kodeAkses, ':nip' => $nip]);
+            $currentAbsenData = $stmtCurrent->fetch(PDO::FETCH_ASSOC);
 
-        $newFileName = null;
+            $newFileName = null;
 
-        // Cek apakah ada upload file baru
-        if (!empty($buktiDukung) && $buktiDukung['error'] === UPLOAD_ERR_OK) {
-            if ($buktiDukung['size'] > 1048576) {
-                Response::json(false, 400, "Ukuran file bukti dukung maksimal 1 MB.");
+            // Cek apakah ada upload file baru
+            if (!empty($buktiDukung) && $buktiDukung['error'] === UPLOAD_ERR_OK) {
+                if ($buktiDukung['size'] > 1048576) {
+                    $db->rollBack();
+                    Response::json(false, 400, "Ukuran file bukti dukung maksimal 1 MB.");
+                    return;
+                }
+
+                $allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
+                $ext = strtolower(pathinfo($buktiDukung['name'], PATHINFO_EXTENSION));
+                if (!in_array($ext, $allowedExts)) {
+                    $db->rollBack();
+                    Response::json(false, 400, "Tipe file tidak diizinkan. Hanya JPG, PNG, dan PDF yang diperbolehkan.");
+                    return;
+                }
+
+                // Simpan file
+                $uploadDir = '../uploads/foto_absensi/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+                
+                $randomString = bin2hex(random_bytes(4));
+                $newFileName = 'verif_' . $kodeAkses . '_' . $nip . '_' . time() . '_' . $randomString . '.' . $ext;
+                $uploadPath = $uploadDir . $newFileName;
+
+                if (!move_uploaded_file($buktiDukung['tmp_name'], $uploadPath)) {
+                    $db->rollBack();
+                    Response::json(false, 500, "Gagal menyimpan file bukti dukung.");
+                    return;
+                }
+            } else {
+                // Jika tidak ada upload baru oleh admin, gunakan foto lama atau default jika belum ada
+                $newFileName = ($currentAbsenData && !empty($currentAbsenData['nama_file_foto']) && $currentAbsenData['nama_file_foto'] !== '-')
+                    ? $currentAbsenData['nama_file_foto']
+                    : 'MANUAL_INPUT.jpg';
+            }
+
+            if (!$currentAbsenData) {
+                // Jika data tidak ada, buat baru (mirip seperti set masal)
+                $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_data_pegawai WHERE nip = :nip");
+                $stmtPegawai->execute([':nip' => $nip]);
+                $peg = $stmtPegawai->fetch(PDO::FETCH_ASSOC);
+                if (!$peg) {
+                    $db->rollBack();
+                    Response::json(false, 404, "Data absensi tidak ditemukan untuk NIP ini pada kegiatan ini.");
+                    return;
+                }
+
+                $sql = "INSERT INTO app_absensi_data_absensi 
+                        (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan_verifikasi, status_verifikasi, status_kehadiran)
+                        VALUES 
+                        (:ka, :nip, :nama, :opd, :jabatan, :waktu, 'Diubah oleh Admin (Manual)', :foto, :ket, :sv, :sk)";
+                
+                $stmt = $db->prepare($sql);
+                $stmt->execute([
+                    ':ka' => $kodeAkses,
+                    ':nip' => $nip,
+                    ':nama' => $peg['nama_pegawai'],
+                    ':opd' => $opd ?? $peg['perangkat_daerah'],
+                    ':jabatan' => $jabatan ?? $peg['jabatan'],
+                    ':waktu' => $now->format('Y-m-d H:i:s'),
+                    ':foto' => $newFileName,
+                    ':ket' => $keteranganAdmin,
+                    ':sv' => $statusVerifikasi,
+                    ':sk' => $statusKehadiranBaru ?? 'Hadir Terlambat Diluar Lokasi'
+                ]);
+
+                // Log Absensi
+                LogAbsensi::log(
+                    $db,
+                    $kodeAkses,
+                    $nip,
+                    $peg['nama_pegawai'],
+                    'tambah',
+                    $adminData['username'] ?? '',
+                    $adminData['nama'] ?? '',
+                    $_SERVER['REMOTE_ADDR'] ?? '',
+                    [
+                        'kode_akses' => $kodeAkses,
+                        'nip' => $nip,
+                        'status_verifikasi' => $statusVerifikasi,
+                        'status_kehadiran' => $statusKehadiranBaru ?? 'Hadir Terlambat Diluar Lokasi',
+                        'keterangan' => $keteranganAdmin
+                    ]
+                );
+
+                $insertedWaktu = $now->format('Y-m-d H:i:s');
+                $insertedKehadiran = $statusKehadiranBaru ?? 'Hadir Terlambat Diluar Lokasi';
+
+                $db->commit();
+                Response::json(true, 200, "Status absensi berhasil ditambahkan.", [
+                    'waktu'                 => $insertedWaktu,
+                    'waktu_absen'           => $insertedWaktu,
+                    'status_kehadiran'      => $insertedKehadiran,
+                    'status_verifikasi'     => $statusVerifikasi,
+                    'nama_file_foto'        => $newFileName,
+                    'keterangan_verifikasi' => $keteranganAdmin,
+                    'lokasi'                => 'Diubah oleh Admin (Manual)'
+                ]);
                 return;
             }
 
-            $allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
-            $ext = strtolower(pathinfo($buktiDukung['name'], PATHINFO_EXTENSION));
-            if (!in_array($ext, $allowedExts)) {
-                Response::json(false, 400, "Tipe file tidak diizinkan. Hanya JPG, PNG, dan PDF yang diperbolehkan.");
-                return;
+            // --- UPDATE DATA YANG SUDAH ADA ---
+            $updateWaktu = $currentAbsenData['waktu'];
+            $updateStatusKehadiran = $statusKehadiranBaru ?? $currentAbsenData['status_kehadiran'];
+
+            if ($statusVerifikasi === 'Terverifikasi Oleh Admin' && ($currentAbsenData['waktu'] === null || $currentAbsenData['waktu'] === '' || $currentAbsenData['waktu'] === '0000-00-00 00:00:00')) {
+                $updateWaktu = $now->format('Y-m-d H:i:s');
+                if (!$statusKehadiranBaru) $updateStatusKehadiran = 'Hadir Terlambat Diluar Lokasi';
             }
 
-            // Simpan file
-            $uploadDir = '../uploads/foto_absensi/';
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
-            
-            $randomString = bin2hex(random_bytes(4));
-            $newFileName = 'verif_' . $kodeAkses . '_' . $nip . '_' . time() . '_' . $randomString . '.' . $ext;
-            $uploadPath = $uploadDir . $newFileName;
+            $sql = "UPDATE app_absensi_data_absensi 
+                    SET 
+                        status_verifikasi = :sv, 
+                        keterangan_verifikasi = :ket,
+                        opd = :opd,
+                        jabatan = :jabatan,
+                        waktu = :waktu_new,
+                        status_kehadiran = :status_kehadiran_new,
+                        nama_file_foto = :foto
+                    WHERE kode_akses = :ka AND nip = :nip";
 
-            if (!move_uploaded_file($buktiDukung['tmp_name'], $uploadPath)) {
-                Response::json(false, 500, "Gagal menyimpan file bukti dukung.");
-                return;
-            }
-        } else {
-            // Jika tidak ada upload baru oleh admin, gunakan foto lama atau default jika belum ada
-            $newFileName = ($currentAbsenData && !empty($currentAbsenData['nama_file_foto']) && $currentAbsenData['nama_file_foto'] !== '-')
-                ? $currentAbsenData['nama_file_foto']
-                : 'MANUAL_INPUT.jpg';
-        }
-
-        if (!$currentAbsenData) {
-            // Jika data tidak ada, buat baru (mirip seperti set masal)
-            $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_data_pegawai WHERE nip = :nip");
-            $stmtPegawai->execute([':nip' => $nip]);
-            $peg = $stmtPegawai->fetch(PDO::FETCH_ASSOC);
-            if (!$peg) {
-                Response::json(false, 404, "Data absensi tidak ditemukan untuk NIP ini pada kegiatan ini.");
-                return;
-            }
-
-            $sql = "INSERT INTO app_absensi_data_absensi 
-                    (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan_verifikasi, status_verifikasi, status_kehadiran)
-                    VALUES 
-                    (:ka, :nip, :nama, :opd, :jabatan, :waktu, 'Diubah oleh Admin (Manual)', :foto, :ket, :sv, :sk)";
-            
             $stmt = $db->prepare($sql);
             $stmt->execute([
-                ':ka' => $kodeAkses,
-                ':nip' => $nip,
-                ':nama' => $peg['nama_pegawai'],
-                ':opd' => $opd ?? $peg['perangkat_daerah'],
-                ':jabatan' => $jabatan ?? $peg['jabatan'],
-                ':waktu' => $now->format('Y-m-d H:i:s'),
-                ':foto' => $newFileName,
-                ':ket' => $keteranganAdmin,
                 ':sv' => $statusVerifikasi,
-                ':sk' => $statusKehadiranBaru ?? 'Hadir Terlambat Diluar Lokasi'
+                ':ket' => $keteranganAdmin,
+                ':opd' => $opd,
+                ':jabatan' => $jabatan,
+                ':waktu_new' => $updateWaktu,
+                ':status_kehadiran_new' => $updateStatusKehadiran,
+                ':foto' => $newFileName,
+                ':ka' => $kodeAkses,
+                ':nip' => $nip
             ]);
+
+            // Ambil nama target untuk log
+            $stmtTarget = $db->prepare("SELECT nama_pegawai FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
+            $stmtTarget->execute([':ka' => $kodeAkses, ':nip' => $nip]);
+            $namaTarget = $stmtTarget->fetchColumn() ?: '-';
 
             // Log Absensi
             LogAbsensi::log(
                 $db,
                 $kodeAkses,
                 $nip,
-                $peg['nama_pegawai'],
-                'tambah',
+                $namaTarget,
+                'edit',
                 $adminData['username'] ?? '',
                 $adminData['nama'] ?? '',
                 $_SERVER['REMOTE_ADDR'] ?? '',
@@ -1072,91 +1160,26 @@ class AbsenController {
                     'kode_akses' => $kodeAkses,
                     'nip' => $nip,
                     'status_verifikasi' => $statusVerifikasi,
-                    'status_kehadiran' => $statusKehadiranBaru ?? 'Hadir Terlambat Diluar Lokasi',
+                    'status_kehadiran' => $updateStatusKehadiran,
                     'keterangan' => $keteranganAdmin
                 ]
             );
 
-            $insertedWaktu = $now->format('Y-m-d H:i:s');
-            $insertedKehadiran = $statusKehadiranBaru ?? 'Hadir Terlambat Diluar Lokasi';
-
-            Response::json(true, 200, "Status absensi berhasil ditambahkan.", [
-                'waktu'                 => $insertedWaktu,
-                'waktu_absen'           => $insertedWaktu,
-                'status_kehadiran'      => $insertedKehadiran,
+            $db->commit();
+            Response::json(true, 200, "Status absensi berhasil diperbarui.", [
+                'waktu'                 => $updateWaktu,
+                'waktu_absen'           => $updateWaktu,
+                'status_kehadiran'      => $updateStatusKehadiran,
                 'status_verifikasi'     => $statusVerifikasi,
                 'nama_file_foto'        => $newFileName,
-                'keterangan_verifikasi' => $keteranganAdmin,
-                'lokasi'                => 'Diubah oleh Admin (Manual)'
+                'keterangan_verifikasi' => $keteranganAdmin
             ]);
-            return;
+        } catch (\Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            Response::json(false, 500, "Gagal memverifikasi absensi: " . $e->getMessage());
         }
-
-        // --- UPDATE DATA YANG SUDAH ADA ---
-        $updateWaktu = $currentAbsenData['waktu'];
-        $updateStatusKehadiran = $statusKehadiranBaru ?? $currentAbsenData['status_kehadiran'];
-
-        if ($statusVerifikasi === 'Terverifikasi Oleh Admin' && ($currentAbsenData['waktu'] === null || $currentAbsenData['waktu'] === '' || $currentAbsenData['waktu'] === '0000-00-00 00:00:00')) {
-            $updateWaktu = $now->format('Y-m-d H:i:s');
-            if (!$statusKehadiranBaru) $updateStatusKehadiran = 'Hadir Terlambat Diluar Lokasi';
-        }
-
-        $sql = "UPDATE app_absensi_data_absensi 
-                SET 
-                    status_verifikasi = :sv, 
-                    keterangan_verifikasi = :ket,
-                    opd = :opd,
-                    jabatan = :jabatan,
-                    waktu = :waktu_new,
-                    status_kehadiran = :status_kehadiran_new,
-                    nama_file_foto = :foto
-                WHERE kode_akses = :ka AND nip = :nip";
-
-        $stmt = $db->prepare($sql);
-        $stmt->execute([
-            ':sv' => $statusVerifikasi,
-            ':ket' => $keteranganAdmin,
-            ':opd' => $opd,
-            ':jabatan' => $jabatan,
-            ':waktu_new' => $updateWaktu,
-            ':status_kehadiran_new' => $updateStatusKehadiran,
-            ':foto' => $newFileName,
-            ':ka' => $kodeAkses,
-            ':nip' => $nip
-        ]);
-
-        // Ambil nama target untuk log
-        $stmtTarget = $db->prepare("SELECT nama_pegawai FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
-        $stmtTarget->execute([':ka' => $kodeAkses, ':nip' => $nip]);
-        $namaTarget = $stmtTarget->fetchColumn() ?: '-';
-
-        // Log Absensi
-        LogAbsensi::log(
-            $db,
-            $kodeAkses,
-            $nip,
-            $namaTarget,
-            'edit',
-            $adminData['username'] ?? '',
-            $adminData['nama'] ?? '',
-            $_SERVER['REMOTE_ADDR'] ?? '',
-            [
-                'kode_akses' => $kodeAkses,
-                'nip' => $nip,
-                'status_verifikasi' => $statusVerifikasi,
-                'status_kehadiran' => $updateStatusKehadiran,
-                'keterangan' => $keteranganAdmin
-            ]
-        );
-
-        Response::json(true, 200, "Status absensi berhasil diperbarui.", [
-            'waktu'                 => $updateWaktu,
-            'waktu_absen'           => $updateWaktu,
-            'status_kehadiran'      => $updateStatusKehadiran,
-            'status_verifikasi'     => $statusVerifikasi,
-            'nama_file_foto'        => $newFileName,
-            'keterangan_verifikasi' => $keteranganAdmin
-        ]);
     }
 
     public function verifikasiAbsenMasal() {
@@ -1277,45 +1300,55 @@ class AbsenController {
             return;
         }
 
-        // Ambil nama pegawai dan nama file foto sebelum delete untuk log & cleanup file
-        $stmtTarget = $db->prepare("SELECT nama_pegawai, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
-        $stmtTarget->execute([':ka' => $kodeAkses, ':nip' => $nip]);
-        $targetData = $stmtTarget->fetch(PDO::FETCH_ASSOC);
-        $namaTarget = $targetData['nama_pegawai'] ?? '-';
-        $fotoTarget = $targetData['nama_file_foto'] ?? null;
+        $db->beginTransaction();
+        try {
+            // Ambil nama pegawai dan nama file foto sebelum delete untuk log & cleanup file
+            $stmtTarget = $db->prepare("SELECT nama_pegawai, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
+            $stmtTarget->execute([':ka' => $kodeAkses, ':nip' => $nip]);
+            $targetData = $stmtTarget->fetch(PDO::FETCH_ASSOC);
+            $namaTarget = $targetData['nama_pegawai'] ?? '-';
+            $fotoTarget = $targetData['nama_file_foto'] ?? null;
 
-        $sql = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip";
-        $stmt = $db->prepare($sql);
-        $stmt->execute([
-            ':ka' => $kodeAkses,
-            ':nip' => $nip
-        ]);
+            $sql = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip";
+            $stmt = $db->prepare($sql);
+            $stmt->execute([
+                ':ka' => $kodeAkses,
+                ':nip' => $nip
+            ]);
 
-        if ($stmt->rowCount() > 0) {
-            // Hapus file foto fisik jika ada dan bukan link URL atau file default
-            if ($fotoTarget && $fotoTarget !== '-' && $fotoTarget !== 'MANUAL_INPUT.jpg') {
-                if (!preg_match('/^https?:\/\//i', $fotoTarget)) {
-                    $filePath = __DIR__ . '/../../uploads/foto_absensi/' . $fotoTarget;
-                    if (file_exists($filePath)) {
-                        @unlink($filePath);
+            if ($stmt->rowCount() > 0) {
+                // Hapus file foto fisik jika ada dan bukan link URL atau file default
+                if ($fotoTarget && $fotoTarget !== '-' && $fotoTarget !== 'MANUAL_INPUT.jpg') {
+                    if (!preg_match('/^https?:\/\//i', $fotoTarget)) {
+                        $filePath = __DIR__ . '/../../uploads/foto_absensi/' . $fotoTarget;
+                        if (file_exists($filePath)) {
+                            @unlink($filePath);
+                        }
                     }
                 }
-            }
 
-            LogAbsensi::log(
-                $db,
-                $kodeAkses,
-                $nip,
-                $namaTarget,
-                'hapus',
-                $adminData['username'] ?? '',
-                $adminData['nama'] ?? '',
-                $_SERVER['REMOTE_ADDR'] ?? '',
-                ['kode_akses' => $kodeAkses, 'nip' => $nip]
-            );
-            Response::json(true, 200, "Data absensi pegawai berhasil dihapus dari rekap.");
-        } else {
-            Response::json(false, 404, "Data absensi tidak ditemukan untuk dihapus.");
+                LogAbsensi::log(
+                    $db,
+                    $kodeAkses,
+                    $nip,
+                    $namaTarget,
+                    'hapus',
+                    $adminData['username'] ?? '',
+                    $adminData['nama'] ?? '',
+                    $_SERVER['REMOTE_ADDR'] ?? '',
+                    ['kode_akses' => $kodeAkses, 'nip' => $nip]
+                );
+                $db->commit();
+                Response::json(true, 200, "Data absensi pegawai berhasil dihapus dari rekap.");
+            } else {
+                $db->rollBack();
+                Response::json(false, 404, "Data absensi tidak ditemukan untuk dihapus.");
+            }
+        } catch (\Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            Response::json(false, 500, "Gagal menghapus data absensi: " . $e->getMessage());
         }
     }
 
@@ -1338,19 +1371,19 @@ class AbsenController {
         $params = [];
         
         if ($includeAll) {
-            $sql = "SELECT nip, nama_pegawai, jabatan, perangkat_daerah FROM app_absensi_data_pegawai WHERE 1=1";
+            $sql = "SELECT p.nip, p.nama_pegawai, p.jabatan, p.perangkat_daerah FROM app_absensi_data_pegawai p WHERE 1=1";
         } else {
-            // Query untuk mendapatkan semua NIP yang sudah ada di rekap kegiatan ini
-            $subQuery = "SELECT nip FROM app_absensi_data_absensi WHERE kode_akses = ?";
-            // Query utama untuk mendapatkan semua pegawai yang NIP-nya TIDAK ADA di subquery
-            $sql = "SELECT nip, nama_pegawai, jabatan, perangkat_daerah FROM app_absensi_data_pegawai WHERE nip NOT IN ($subQuery)";
+            // Optimasi dengan LEFT JOIN: dapatkan pegawai yang belum ada di rekap kegiatan ini
+            $sql = "SELECT p.nip, p.nama_pegawai, p.jabatan, p.perangkat_daerah 
+                    FROM app_absensi_data_pegawai p 
+                    LEFT JOIN app_absensi_data_absensi a ON p.nip = a.nip AND a.kode_akses = ? 
+                    WHERE a.nip IS NULL";
             $params[] = $kodeAkses;
         }
 
-
         // Tambahkan filter pencarian
         if (!empty($searchFilter)) {
-            $sql .= " AND (nip LIKE ? OR nama_pegawai LIKE ? OR jabatan LIKE ?)";
+            $sql .= " AND (p.nip LIKE ? OR p.nama_pegawai LIKE ? OR p.jabatan LIKE ?)";
             $params[] = '%' . $searchFilter . '%';
             $params[] = '%' . $searchFilter . '%';
             $params[] = '%' . $searchFilter . '%';
@@ -1358,11 +1391,11 @@ class AbsenController {
 
         // Tambahkan filter OPD
         if ($opdFilter !== 'semua' && !empty($opdFilter)) {
-            $sql .= " AND perangkat_daerah = ?";
+            $sql .= " AND p.perangkat_daerah = ?";
             $params[] = $opdFilter;
         }
 
-        $sql .= " ORDER BY nama_pegawai ASC";
+        $sql .= " ORDER BY p.nama_pegawai ASC";
         
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
@@ -1388,77 +1421,102 @@ class AbsenController {
             Response::json(false, 400, "Data tidak lengkap. Semua field wajib diisi.");
         }
 
-        // 1. Cek apakah pegawai sudah ada di rekap ini
-        $stmtCheck = $db->prepare("SELECT COUNT(*) FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
-        $stmtCheck->execute([':ka' => $kodeAkses, ':nip' => $nip]);
-        if ($stmtCheck->fetchColumn() > 0) {
-            Response::json(false, 409, "Pegawai ini sudah ada dalam daftar absensi kegiatan ini.");
-        }
+        $db->beginTransaction();
+        try {
+            // 1. Cek apakah pegawai sudah ada di rekap ini
+            $stmtCheck = $db->prepare("SELECT COUNT(*) FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
+            $stmtCheck->execute([':ka' => $kodeAkses, ':nip' => $nip]);
+            if ($stmtCheck->fetchColumn() > 0) {
+                $db->rollBack();
+                Response::json(false, 409, "Pegawai ini sudah ada dalam daftar absensi kegiatan ini.");
+                return;
+            }
 
-        // 2. Ambil detail pegawai dari tabel master
-        $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_data_pegawai WHERE nip = :nip");
-        $stmtPegawai->execute([':nip' => $nip]);
-        $pegawai = $stmtPegawai->fetch(PDO::FETCH_ASSOC);
-        if (!$pegawai) {
-            Response::json(false, 404, "Data master untuk NIP yang dipilih tidak ditemukan.");
-        }
+            // 2. Ambil detail pegawai dari tabel master
+            $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_data_pegawai WHERE nip = :nip");
+            $stmtPegawai->execute([':nip' => $nip]);
+            $pegawai = $stmtPegawai->fetch(PDO::FETCH_ASSOC);
+            if (!$pegawai) {
+                $db->rollBack();
+                Response::json(false, 404, "Data master untuk NIP yang dipilih tidak ditemukan.");
+                return;
+            }
 
-        // 3. Ambil kategori dari jadwal
-        $stmtJadwal = $db->prepare("SELECT kategori FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :ka");
-        $stmtJadwal->execute([':ka' => $kodeAkses]);
-        $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
-        if (!$jadwal) {
-            Response::json(false, 404, "Jadwal kegiatan tidak ditemukan.");
-        }
+            // 3. Ambil kategori dari jadwal
+            $stmtJadwal = $db->prepare("SELECT kategori FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :ka");
+            $stmtJadwal->execute([':ka' => $kodeAkses]);
+            $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
+            if (!$jadwal) {
+                $db->rollBack();
+                Response::json(false, 404, "Jadwal kegiatan tidak ditemukan.");
+                return;
+            }
 
-        // 4. Tentukan waktu berdasarkan status kehadiran
-        $waktu = null;
-        if ($statusKehadiran !== 'Alpa') {
-            $now = new \DateTime('now', new \DateTimeZone('Asia/Jakarta'));
-            $waktu = $now->format('Y-m-d H:i:s');
-        }
+            // 4. Tentukan waktu berdasarkan status kehadiran
+            $waktu = null;
+            if ($statusKehadiran !== 'Alpa') {
+                $now = new \DateTime('now', new \DateTimeZone('Asia/Jakarta'));
+                $waktu = $now->format('Y-m-d H:i:s');
+            }
 
-        // 5. Insert data baru ke tabel absensi
-        $sql = "INSERT INTO app_absensi_data_absensi 
-                    (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran, keterangan_verifikasi, waktu, nama_file_foto, lokasi) 
-                VALUES 
-                    (:ka, :nip, :nama, :opd, :jabatan, :kategori, :sv, :sk, :ket, :waktu, 'MANUAL_INPUT.jpg', 'MANUAL_INPUT_ADMIN')";
-        
-        $stmtInsert = $db->prepare($sql);
-        $stmtInsert->execute([
-            ':ka' => $kodeAkses,
-            ':nip' => $nip,
-            ':nama' => $pegawai['nama_pegawai'],
-            ':opd' => $pegawai['perangkat_daerah'],
-            ':jabatan' => $pegawai['jabatan'],
-            ':kategori' => $jadwal['kategori'],
-            ':sv' => $statusVerifikasi,
-            ':sk' => $statusKehadiran,
-            ':ket' => $keterangan,
-            ':waktu' => $waktu
-        ]);
+            // 5. Insert data baru ke tabel absensi
+            $sql = "INSERT INTO app_absensi_data_absensi 
+                        (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran, keterangan_verifikasi, waktu, nama_file_foto, lokasi) 
+                    VALUES 
+                        (:ka, :nip, :nama, :opd, :jabatan, :kategori, :sv, :sk, :ket, :waktu, 'MANUAL_INPUT.jpg', 'MANUAL_INPUT_ADMIN')";
+            
+            $stmtInsert = $db->prepare($sql);
+            $stmtInsert->execute([
+                ':ka' => $kodeAkses,
+                ':nip' => $nip,
+                ':nama' => $pegawai['nama_pegawai'],
+                ':opd' => $pegawai['perangkat_daerah'],
+                ':jabatan' => $pegawai['jabatan'],
+                ':kategori' => $jadwal['kategori'],
+                ':sv' => $statusVerifikasi,
+                ':sk' => $statusKehadiran,
+                ':ket' => $keterangan,
+                ':waktu' => $waktu
+            ]);
 
-        if ($stmtInsert->rowCount() > 0) {
-            LogAbsensi::log(
-                $db,
-                $kodeAkses,
-                $nip,
-                $pegawai['nama_pegawai'],
-                'tambah',
-                $adminData['username'] ?? '',
-                $adminData['nama'] ?? '',
-                $_SERVER['REMOTE_ADDR'] ?? '',
-                [
-                    'kode_akses' => $kodeAkses,
-                    'nip' => $nip,
-                    'status_verifikasi' => $statusVerifikasi,
-                    'status_kehadiran' => $statusKehadiran,
-                    'keterangan' => $keterangan
-                ]
-            );
-            Response::json(true, 200, "Peserta berhasil ditambahkan ke dalam rekap.");
-        } else {
-            Response::json(false, 500, "Gagal menambahkan peserta ke dalam rekap.");
+            if ($stmtInsert->rowCount() > 0) {
+                LogAbsensi::log(
+                    $db,
+                    $kodeAkses,
+                    $nip,
+                    $pegawai['nama_pegawai'],
+                    'tambah',
+                    $adminData['username'] ?? '',
+                    $adminData['nama'] ?? '',
+                    $_SERVER['REMOTE_ADDR'] ?? '',
+                    [
+                        'kode_akses' => $kodeAkses,
+                        'nip' => $nip,
+                        'status_verifikasi' => $statusVerifikasi,
+                        'status_kehadiran' => $statusKehadiran,
+                        'keterangan' => $keterangan
+                    ]
+                );
+                $db->commit();
+                Response::json(true, 200, "Peserta berhasil ditambahkan ke dalam rekap.");
+            } else {
+                $db->rollBack();
+                Response::json(false, 500, "Gagal menambahkan peserta ke dalam rekap.");
+            }
+        } catch (\PDOException $pdoEx) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            if ($pdoEx->getCode() == 23000) {
+                Response::json(false, 409, "Pegawai ini sudah ada dalam daftar absensi kegiatan ini.");
+            } else {
+                Response::json(false, 500, "Gagal menambahkan peserta: " . $pdoEx->getMessage());
+            }
+        } catch (\Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            Response::json(false, 500, "Gagal menambahkan peserta: " . $e->getMessage());
         }
     }
 
@@ -1654,53 +1712,63 @@ class AbsenController {
         $placeholders = implode(',', array_fill(0, count($sanitizedNips), '?'));
         $params = array_merge([$kodeAkses], $sanitizedNips);
 
-        // Ambil nama pegawai dan foto yang akan dihapus untuk audit log & cleanup file
-        $stmtTargets = $db->prepare("SELECT nip, nama_pegawai, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)");
-        $stmtTargets->execute($params);
-        $targetsData = $stmtTargets->fetchAll(PDO::FETCH_ASSOC);
+        $db->beginTransaction();
+        try {
+            // Ambil nama pegawai dan foto yang akan dihapus untuk audit log & cleanup file
+            $stmtTargets = $db->prepare("SELECT nip, nama_pegawai, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)");
+            $stmtTargets->execute($params);
+            $targetsData = $stmtTargets->fetchAll(PDO::FETCH_ASSOC);
 
-        $targets = [];
-        $fotosToClean = [];
-        foreach ($targetsData as $row) {
-            $targets[$row['nip']] = $row['nama_pegawai'];
-            if (!empty($row['nama_file_foto']) && $row['nama_file_foto'] !== '-' && $row['nama_file_foto'] !== 'MANUAL_INPUT.jpg') {
-                if (!preg_match('/^https?:\/\//i', $row['nama_file_foto'])) {
-                    $fotosToClean[] = $row['nama_file_foto'];
-                }
-            }
-        }
-
-        $sql = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)";
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-
-        $deletedCount = $stmt->rowCount();
-
-        if ($deletedCount > 0) {
-            // Hapus file fisik lokal yang terkait
-            foreach ($fotosToClean as $fotoFile) {
-                $filePath = __DIR__ . '/../../uploads/foto_absensi/' . $fotoFile;
-                if (file_exists($filePath)) {
-                    @unlink($filePath);
+            $targets = [];
+            $fotosToClean = [];
+            foreach ($targetsData as $row) {
+                $targets[$row['nip']] = $row['nama_pegawai'];
+                if (!empty($row['nama_file_foto']) && $row['nama_file_foto'] !== '-' && $row['nama_file_foto'] !== 'MANUAL_INPUT.jpg') {
+                    if (!preg_match('/^https?:\/\//i', $row['nama_file_foto'])) {
+                        $fotosToClean[] = $row['nama_file_foto'];
+                    }
                 }
             }
 
-            foreach ($sanitizedNips as $nipDel) {
-                LogAbsensi::log(
-                    $db,
-                    $kodeAkses,
-                    $nipDel,
-                    $targets[$nipDel] ?? '-',
-                    'hapus',
-                    $adminData['username'] ?? '',
-                    $adminData['nama'] ?? '',
-                    $_SERVER['REMOTE_ADDR'] ?? '',
-                    ['kode_akses' => $kodeAkses, 'nip' => $nipDel]
-                );
+            $sql = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)";
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
+
+            $deletedCount = $stmt->rowCount();
+
+            if ($deletedCount > 0) {
+                // Hapus file fisik lokal yang terkait
+                foreach ($fotosToClean as $fotoFile) {
+                    $filePath = __DIR__ . '/../../uploads/foto_absensi/' . $fotoFile;
+                    if (file_exists($filePath)) {
+                        @unlink($filePath);
+                    }
+                }
+
+                foreach ($sanitizedNips as $nipDel) {
+                    LogAbsensi::log(
+                        $db,
+                        $kodeAkses,
+                        $nipDel,
+                        $targets[$nipDel] ?? '-',
+                        'hapus',
+                        $adminData['username'] ?? '',
+                        $adminData['nama'] ?? '',
+                        $_SERVER['REMOTE_ADDR'] ?? '',
+                        ['kode_akses' => $kodeAkses, 'nip' => $nipDel]
+                    );
+                }
+                $db->commit();
+                Response::json(true, 200, "$deletedCount data absensi berhasil dihapus dari rekap.");
+            } else {
+                $db->rollBack();
+                Response::json(false, 404, "Tidak ada data absensi yang cocok untuk dihapus.");
             }
-            Response::json(true, 200, "$deletedCount data absensi berhasil dihapus dari rekap.");
-        } else {
-            Response::json(false, 404, "Tidak ada data absensi yang cocok untuk dihapus.");
+        } catch (\Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            Response::json(false, 500, "Gagal menghapus bulk data absensi: " . $e->getMessage());
         }
     }
 
