@@ -14,6 +14,19 @@ Sistem BAIS Pariaman menggunakan arsitektur **Hybrid Edge-Origin**:
 > **PENTING Mengenai Mekanisme Fallback:**
 > Server Worker **TIDAK AKAN PERNAH melakukan fallback secara langsung di dalam server worker** ke server PHP origin. Mekanisme fallback diatur 100% di sisi **Frontend (PWA / Client)**. Jika Worker mengembalikan respon Error (misal 404 / 401 / 500 / Network Failure), Frontend PWA akan secara otomatis mencoba request ulang ke URL Fallback Server PHP Origin.
 
+## Aturan Kepatuhan Kontrak API
+
+- Gunakan **nama field, struktur object, tipe data, dan lokasi field** persis seperti yang didokumentasikan di file ini.
+- **Jangan menebak, mengganti, atau membuat alias nama field** berdasarkan nama field yang ditemukan di kode lama, database, atau endpoint lain.
+- **Jangan menambahkan fallback field** yang tidak tercantum dalam dokumentasi API.
+- Jika response API mendokumentasikan `data.judul`, maka kode **WAJIB menggunakan `data.judul`**.
+- Jangan mengubahnya menjadi `data.judul || data.nama_kegiatan`, `data.nama_kegiatan`, `data.title`, atau variasi nama lainnya kecuali fallback tersebut **secara eksplisit didokumentasikan** di sini.
+- Kode lama yang menggunakan nama field berbeda **tidak boleh dijadikan dasar untuk mengubah atau menambahkan field pada kontrak API**.
+- Jika terdapat perbedaan antara kode yang sudah ada dengan `api.md`, **ikuti `api.md`** dan jangan membuat solusi kompatibilitas secara diam-diam.
+- Jika struktur response API tidak sesuai dengan dokumentasi atau terdapat ketidakjelasan, **berhenti dan laporkan konflik tersebut sebelum melakukan perubahan**.
+- Hindari kode defensif yang tidak diperlukan. Jangan menambahkan fallback, normalisasi, alias, atau transformasi field hanya karena dianggap "lebih aman".
+- Tujuan implementasi adalah **mengikuti kontrak API yang terdokumentasi secara tepat**, bukan mengakomodasi kemungkinan response lain yang tidak didokumentasikan.
+
 ### Tabel Pemetaan Fallback Endpoint Worker ke Server PHP (Client-Side Fallback)
 
 | Endpoint Worker (`[WORKER]`) | Method | Ada Fallback? | URL Path Fallback Server PHP Origin (`[CONTROLLER]`) | Keterangan Pemicu Fallback di Frontend |

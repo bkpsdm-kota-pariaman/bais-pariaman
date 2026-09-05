@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.15'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.17'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -922,7 +922,7 @@ async function prosesLogin(e) {
                 if (res.code === 401 || res.code >= 500) {
                     throw new Error("Worker Cache MISS / Server Error");
                 }
-                Swal.fire('Gagal', res.message || 'Terjadi kesalahan saat login.', 'error');
+                Swal.fire('Gagal', res.message, 'error');
                 return;
             }
         } catch (workerError) {
@@ -940,7 +940,7 @@ async function prosesLogin(e) {
         if (res && res.status && accessToken) {
             await handleSuccessfulLogin(accessToken);
         } else {
-            Swal.fire('Gagal', res?.message || 'Terjadi kesalahan saat login.', 'error');
+            Swal.fire('Gagal', res?.message, 'error');
         }
     } catch (error) {
         console.error("Login gagal:", error);
@@ -1052,9 +1052,9 @@ async function requestWithResponseHandler(data, urlUtama, callbackSuccess, callb
         const response = await fetchWithAuth(urlUtama, requestOptions);
         const json = await response.json();
         if (json?.status === false && Number(json.code) >= 500) {
-            throw new Error(json.message || `HTTP ${json.code}`);
+            throw new Error(json.message);
         }
-        if (json?.status === false) return callbackError(json.message || 'Request ditolak.', json, null);
+        if (json?.status === false) return callbackError(json.message, json, null);
         return callbackSuccess(json, response);
     } catch (primaryError) {
         if (!urlFallback) return callbackError(primaryError.message, null, primaryError);
@@ -1068,7 +1068,7 @@ async function requestWithResponseHandler(data, urlUtama, callbackSuccess, callb
             });
             const fallbackJson = await fallbackResponse.json();
             if (fallbackJson?.status) return callbackSuccess(fallbackJson, fallbackResponse);
-            return callbackError(fallbackJson?.message || 'Server PHP menolak request.', fallbackJson, null);
+            return callbackError(fallbackJson?.message, fallbackJson, null);
         } catch (fallbackError) {
             console.error('[PWA Fallback] Server PHP error lengkap:', fallbackError);
             return callbackError(fallbackError.message, null, fallbackError);
@@ -1202,7 +1202,7 @@ async function generateUserQrToken() {
             if (!response.ok) throw new Error(`Request to ${url} failed with status ${response.status}`);
             const res = await response.json();
             const newToken = res?.data?.access_token;
-            if (!res.status || !res.data || !newToken) throw new Error(res.message || `Request to ${url} gagal.`);
+            if (!res.status || !res.data || !newToken) throw new Error(res.message);
             return newToken;
         };
 
@@ -1500,7 +1500,7 @@ async function silentlyRefreshTokenIfNeeded() {
                 response = await fetchWithAuth(`${WORKER_URL}/api/profil/refresh-token`, { method: 'POST' });
                 res = await response.json();
                 const newRefreshedToken = res?.data?.access_token;
-                if (!res.status || !res.data || !newRefreshedToken) throw new Error(res.message || "Gagal refresh token di worker");
+                if (!res.status || !res.data || !newRefreshedToken) throw new Error(res.message);
             } catch (workerError) {
                 // 2. Jika worker gagal, fallback ke server PHP.
                 console.warn("Refresh token via Worker gagal, fallback ke server utama.", workerError.message);
@@ -1542,7 +1542,7 @@ async function refreshProfil() {
             console.log("Mencoba sinkronisasi profil via Worker...");
             const response = await fetchWithAuth(`${WORKER_URL}/api/profil/sync`, { method: "POST" });
             res = await response.json();
-            if (!res.status) throw new Error(res.message || "Gagal sinkronisasi profil di worker");
+            if (!res.status) throw new Error(res.message);
         } catch (workerError) {
             console.warn("Gagal sinkronisasi profil via Worker, fallback ke server utama:", workerError.message);
             const fallbackResponse = await fetchWithAuth(`${API_BASE_URL}/profil/sync`, { method: "POST" });
@@ -1556,9 +1556,9 @@ async function refreshProfil() {
         if (res && res.status && res.data && syncToken) {
             await localforage.setItem("asn_jwt_token", syncToken);
             renderProfil();
-            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3500, icon: 'success', title: res.message || 'Profil berhasil diperbarui!' });
+            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3500, icon: 'success', title: res.message });
         } else {
-            Swal.fire('Gagal Sinkronisasi', res?.message || 'Gagal menyinkronkan profil.', 'error');
+            Swal.fire('Gagal Sinkronisasi', res?.message, 'error');
         }
     } catch (finalError) {
         console.error("Error saat sinkronisasi profil (termasuk fallback):", finalError);
@@ -1654,7 +1654,7 @@ async function simpanProfil(e) {
             // Render ulang profil di dashboard
             renderProfil();
             // Tampilkan pesan sukses dari server
-            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, icon: 'success', title: res.message || 'Profil berhasil disimpan!' });
+            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, icon: 'success', title: res.message });
         } else {
             // Jika gagal, tampilkan pesan error dari server
             Swal.fire('Gagal', res.message, 'error');
@@ -2335,15 +2335,18 @@ async function kirimAbsensi() {
                 playBeepSound();
                 const userForHistory = await parseJwt(token);
                 if (userForHistory && userForHistory.nip && currentJadwal) {
-                    const waktuServer = res.data?.waktu || getCurrentServerTime().toISOString();
+                    let waktuServer = getCurrentServerTime().toISOString();
+                    if (res.data && res.data.waktu) {
+                        waktuServer = res.data.waktu;
+                    }
                     await simpanRiwayatLokal(currentJadwal.judul, currentJadwal.kategori, waktuServer, currentJadwal.kode_akses, userForHistory.nip);
                 }
-                Swal.fire('BERHASIL!', res.message || 'Data Absensi telah diterima.', 'success');
+                Swal.fire('BERHASIL!', res.message, 'success');
                 batalAbsen();
             },
             (message, res, error) => {
                 if (error) console.error('Error saat kirim absensi:', error);
-                const pesanError = error ? `Ada kesalahan di aplikasi, ${error.message || error}` : (message || res?.message || 'Data absensi ditolak.');
+                const pesanError = error ? `Ada kesalahan di aplikasi, ${error.message}` : (message ? message : (res?.message ? res.message : 'Data absensi ditolak.'));
                 Swal.fire('Gagal Mengirim', pesanError, 'error');
             },
             fallbackUrl
@@ -2422,7 +2425,7 @@ async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
             }
             res = await response.json();
             if (res && res.status === false && Number(res.code) >= 500) {
-                throw new Error(res.message || 'Worker server error / limit exceeded');
+                throw new Error(res.message);
             }
         } catch (workerError) {
             // Block catch HANYA menangani error 500 / network error
@@ -2450,7 +2453,7 @@ async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
             const displayName = namaPegawaiPreview;
             Swal.fire({ toast: true, position: 'bottom', icon: 'success', title: `Berhasil: ${displayName}`, showConfirmButton: false, timer: 1500, timerProgressBar: true });
         } else {
-            Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Gagal: ${res.message || 'Error'}`, showConfirmButton: false, timer: 2000 });
+            Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Gagal: ${res.message}`, showConfirmButton: false, timer: 2000 });
         }
     } catch (e) {
         console.error("Error saat kirim absensi cepat:", e);

@@ -528,29 +528,34 @@
             // Coba fetch dari Worker KV dulu, jika error fallback ke PHP origin API
             var cacheBuster = '?_t=' + Date.now();
             fetch(WORKER_JADWAL_API + encodeURIComponent(kode) + cacheBuster)
-                .then(function (res) { return res.json(); })
+                .then(function (res) {
+                    if (!res.ok && res.status >= 500) {
+                        throw new Error('FALLBACK_NEEDED');
+                    }
+                    return res.json();
+                })
                 .then(function (resData) {
-                    if (resData && (resData.status === true || resData.code === 200) && resData.data) {
+                    if (resData && resData.status === true && resData.data) {
                         return resData.data;
                     }
-                    // Jika worker return error message (misal jadwal belum dibuka / 404), throw error dengan pesan dari API
-                    if (resData && resData.message) {
+                    // Jika API mengembalikan status: false (misal 404/403/400), tangkap pesan error resmi
+                    if (resData && resData.status === false && resData.message) {
                         throw new Error(resData.message);
                     }
                     throw new Error('FALLBACK_NEEDED');
                 })
                 .catch(function (err) {
-                    if (err.message && err.message !== 'FALLBACK_NEEDED' && !err.message.includes('fetch')) {
-                        throw err; // pesan dari server (misal belum dibuka/404)
+                    if (err.message && err.message !== 'FALLBACK_NEEDED' && !err.message.includes('fetch') && !err.message.includes('Failed to fetch')) {
+                        throw err; // Pesan error resmi dari server (misal belum dibuka / 404)
                     }
-                    // Fallback ke PHP Controller API
+                    // Fallback ke PHP Controller API jika Worker network error / 500
                     return fetch(PHP_JADWAL_API + encodeURIComponent(kode) + cacheBuster)
                         .then(function (resPhp) { return resPhp.json(); })
                         .then(function (phpData) {
-                            if (phpData && (phpData.status === true || phpData.code === 200) && phpData.data) {
+                            if (phpData && phpData.status === true && phpData.data) {
                                 return phpData.data;
                             }
-                            throw new Error((phpData && phpData.message) ? phpData.message : 'Jadwal tidak ditemukan.');
+                            throw new Error(phpData.message);
                         });
                 })
                 .then(function (jadwal) {
@@ -559,7 +564,7 @@
 
                     // Set value hidden input nama kegiatan
                     var inpNamaKeg = document.getElementById('inpNamaKegiatan');
-                    if (inpNamaKeg) inpNamaKeg.value = jadwal.nama_kegiatan || '';
+                    if (inpNamaKeg) inpNamaKeg.value = jadwal.judul;
 
                     // Populasi Card Detail
                     var detKategori = document.getElementById('detKategori');
@@ -567,13 +572,13 @@
                     var detWaktu = document.getElementById('detWaktu');
                     var detLokasi = document.getElementById('detLokasi');
 
-                    if (detKategori) detKategori.innerText = (jadwal.kategori || 'KEGIATAN').toUpperCase();
-                    if (detNamaKegiatan) detNamaKegiatan.innerText = jadwal.nama_kegiatan || '-';
+                    if (detKategori) detKategori.innerText = (jadwal.kategori).toUpperCase();
+                    if (detNamaKegiatan) detNamaKegiatan.innerText = jadwal.judul;
 
-                    var txtWaktu = (jadwal.tanggal || '') + ' (' + (jadwal.jam_mulai || '') + ' - ' + (jadwal.jam_selesai || '') + ' WIB)';
+                    var txtWaktu = jadwal.tanggal + ' (' + jadwal.jam_mulai + ' - ' + jadwal.jam_selesai + ' WIB)';
                     if (detWaktu) detWaktu.innerText = txtWaktu;
 
-                    var txtLokasi = (jadwal.lokasi || 'Lokasi Kegiatan') + (jadwal.radius ? ' (Radius ' + jadwal.radius + 'm)' : '');
+                    var txtLokasi = 'Koordinat: ' + jadwal.koordinat + (jadwal.radius_meter ? ' (Radius ' + jadwal.radius_meter + 'm)' : '');
                     if (detLokasi) detLokasi.innerText = txtLokasi;
 
                     // Tampilkan Card Detail
@@ -588,7 +593,7 @@
                     Swal.fire({
                         icon: 'error',
                         title: 'Jadwal Tidak Ditemukan',
-                        text: errFinal.message || 'Kode akses kegiatan tidak valid atau belum dibuka untuk hari ini.',
+                        text: errFinal.message,
                         confirmButtonText: 'Coba Lagi'
                     });
                 });
@@ -609,7 +614,7 @@
             // Update Summary Ringkasan
             var sumNama = document.getElementById('summaryNamaKegiatan');
             var sumKode = document.getElementById('summaryKode');
-            if (sumNama) sumNama.innerText = selectedJadwal.nama_kegiatan || '-';
+            if (sumNama) sumNama.innerText = selectedJadwal.judul;
             if (sumKode) sumKode.innerText = 'Kode: ' + kode;
 
             // Switch view
@@ -921,22 +926,20 @@
                     showLoading(false);
 
                     if (res && res.status) {
-                        var dataRes = res.data || {};
+                        // Tampilkan Data ke Receipt berdasarkan variabel input lokal
+                        document.getElementById('rcpWaktu').innerText = new Date().toLocaleString('id-ID');
+                        document.getElementById('rcpKode').innerText = kode;
+                        document.getElementById('rcpNamaKegiatan').innerText = namaKegiatan;
+                        document.getElementById('rcpNama').innerText = nama;
+                        document.getElementById('rcpNip').innerText = nip;
+                        document.getElementById('rcpJabatan').innerText = jabatan;
+                        document.getElementById('rcpOpd').innerText = opd;
+                        document.getElementById('rcpKeterangan').innerText = nilaiKeterangan;
 
-                        // Tampilkan Data ke Receipt
-                        document.getElementById('rcpWaktu').innerText = dataRes.waktu || new Date().toLocaleString('id-ID');
-                        document.getElementById('rcpKode').innerText = dataRes.kode || kode;
-                        document.getElementById('rcpNamaKegiatan').innerText = dataRes.nama_kegiatan || namaKegiatan;
-                        document.getElementById('rcpNama').innerText = dataRes.nama || nama;
-                        document.getElementById('rcpNip').innerText = dataRes.nip || nip;
-                        document.getElementById('rcpJabatan').innerText = dataRes.jabatan || jabatan;
-                        document.getElementById('rcpOpd').innerText = dataRes.opd || opd;
-                        document.getElementById('rcpKeterangan').innerText = dataRes.keterangan || nilaiKeterangan;
-
-                        // Buat QR Code yang berisi Link Google Drive fileUrl
+                        // Buat QR Code yang berisi identitas absensi cadangan
                         var qrContainer = document.getElementById('receiptQrContainer');
                         qrContainer.innerHTML = '';
-                        var targetQrContent = dataRes.fileUrl || ("BAIS_CADANGAN_" + nip + "_" + kode + "_" + Date.now());
+                        var targetQrContent = "BAIS_CADANGAN_" + nip + "_" + kode + "_" + Date.now();
 
                         new QRCode(qrContainer, {
                             text: targetQrContent,
@@ -953,7 +956,7 @@
                         window.scrollTo(0, 0);
 
                     } else {
-                        Swal.fire('Gagal Menyimpan', (res && res.message) ? res.message : 'Terjadi kesalahan saat menyimpan data.', 'error');
+                        Swal.fire('Gagal Menyimpan', res.message, 'error');
                     }
                 })
                 .catch(function (err) {

@@ -215,7 +215,7 @@ async function prosesLogin() {
             body: JSON.stringify({ username, password })
         });
 
-        const adminToken = result?.data?.access_token || result?.data?.token;
+        const adminToken = result?.data?.access_token;
         if (result.status && adminToken) {
             // Jika login berhasil, simpan token ke localStorage
             localStorage.setItem('admin_jwt_token', adminToken);
@@ -2065,8 +2065,8 @@ async function submitVerifikasi(event) {
                         if (p.nip === targetNip && p.kode_akses === targetKodeAkses) {
                             const oldVerif = p.status_verifikasi;
                             p.status_verifikasi = newVerifStatus;
-                            p.status_kehadiran = newKehadiranStatus || updatedData.status_kehadiran || p.status_kehadiran || 'Hadir';
-                            p.waktu_absen = updatedData.waktu_absen || updatedData.waktu || p.waktu_absen || p.waktu || new Date().toISOString();
+                            p.status_kehadiran = newKehadiranStatus;
+                            if (updatedData.waktu_absen) p.waktu_absen = updatedData.waktu_absen;
                             p.waktu = p.waktu_absen;
                             if (updatedData.nama_file_foto) p.nama_file_foto = updatedData.nama_file_foto;
                             if (updatedData.lokasi) p.lokasi_absen = updatedData.lokasi;
@@ -2088,8 +2088,8 @@ async function submitVerifikasi(event) {
                         if (p.nip === targetNip) {
                             const oldVerif = p.status_verifikasi;
                             p.status_verifikasi = newVerifStatus;
-                            p.status_kehadiran = newKehadiranStatus || updatedData.status_kehadiran || p.status_kehadiran || 'Hadir';
-                            p.waktu_absen = updatedData.waktu_absen || updatedData.waktu || p.waktu_absen || p.waktu || new Date().toISOString();
+                            p.status_kehadiran = newKehadiranStatus;
+                            if (updatedData.waktu_absen) p.waktu_absen = updatedData.waktu_absen;
                             p.waktu = p.waktu_absen;
                             if (updatedData.nama_file_foto) p.nama_file_foto = updatedData.nama_file_foto;
                             if (updatedData.lokasi) p.lokasi_absen = updatedData.lokasi;
@@ -2427,7 +2427,7 @@ async function exportRekapToExcel() {
             })
         });
 
-        const rawData = (result.data && result.data.data) ? result.data.data : (Array.isArray(result.data) ? result.data : []);
+        const rawData = result?.data?.data ? result.data.data : [];
 
         if (!result.status || rawData.length === 0) {
             Swal.fire('Informasi', 'Tidak ada data untuk diunduh berdasarkan filter yang dipilih.', 'info');
@@ -2441,7 +2441,7 @@ async function exportRekapToExcel() {
             'NIP': p.nip,
             'Jabatan': p.jabatan || '-',
             'Perangkat Daerah': p.perangkat_daerah,
-            'Status Kehadiran': p.status_kehadiran || p.status, // Use new status_kehadiran, fallback to old status
+            'Status Kehadiran': p.status_kehadiran,
             'Waktu Absen': p.waktu_absen || '-',
             'Lokasi Absen': p.lokasi_absen || '-',
             'Status Verifikasi': p.status_verifikasi,
@@ -3923,7 +3923,7 @@ async function bukaHalamanPengaturanAplikasi() {
         const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
         showAdminLoading(false);
         if (res && res.status && res.data) {
-            listPengaturanCache = Array.isArray(res.data) ? res.data : (Array.isArray(res.data.list) ? res.data.list : []);
+            listPengaturanCache = Array.isArray(res.data) ? res.data : [];
             renderTabelPengaturanAplikasi(listPengaturanCache);
         } else {
             Swal.fire('Gagal', (res && res.message) ? res.message : 'Gagal memuat pengaturan.', 'error');
@@ -3950,7 +3950,7 @@ async function bukaModalPengaturanAplikasi() {
         const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
         showAdminLoading(false);
         if (res && res.status && res.data) {
-            listPengaturanCache = Array.isArray(res.data) ? res.data : (Array.isArray(res.data.list) ? res.data.list : []);
+            listPengaturanCache = Array.isArray(res.data) ? res.data : [];
             renderTabelPengaturanAplikasi(listPengaturanCache);
             modalInst.show();
         } else {
@@ -4106,7 +4106,7 @@ async function submitFormPengaturanItem(event) {
             // Refresh daftar pengaturan di modal utama
             const refreshRes = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
             if (refreshRes.status && refreshRes.data) {
-                listPengaturanCache = Array.isArray(refreshRes.data) ? refreshRes.data : (Array.isArray(refreshRes.data.list) ? refreshRes.data.list : []);
+                listPengaturanCache = Array.isArray(refreshRes.data) ? refreshRes.data : [];
                 renderTabelPengaturanAplikasi(listPengaturanCache);
             }
 
@@ -4206,7 +4206,7 @@ async function hapusPengaturan(kodeEnc, namaEnc) {
             // Refresh list pengaturan
             const refreshRes = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
             if (refreshRes && refreshRes.status && refreshRes.data) {
-                listPengaturanCache = Array.isArray(refreshRes.data) ? refreshRes.data : (Array.isArray(refreshRes.data.list) ? refreshRes.data.list : []);
+                listPengaturanCache = Array.isArray(refreshRes.data) ? refreshRes.data : [];
                 renderTabelPengaturanAplikasi(listPengaturanCache);
             }
 
@@ -4214,7 +4214,7 @@ async function hapusPengaturan(kodeEnc, namaEnc) {
                 toast: true,
                 position: 'top-end',
                 icon: 'success',
-                title: res.message || 'Pengaturan berhasil dihapus!',
+                title: res.message,
                 showConfirmButton: false,
                 timer: 2500
             });
