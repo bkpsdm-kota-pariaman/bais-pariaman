@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.43'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.45'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -1952,7 +1952,7 @@ async function handleServerValidation(kode, bypassHistoryCheck = false) {
             }
             res = await response.json();
             if (!res.status) {
-                if (res.code === 404 || res.code >= 500) {
+                if (res.code === 404) {
                     throw new Error("Worker Cache MISS");
                 }
                 throw new Error(res.message);
