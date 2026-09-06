@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.38'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.40'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -1982,13 +1982,14 @@ async function masukkanKodeManual() {
 }
 
 function bukaInputKode() {
-    document.getElementById('inputKodeManual').value = '';
+    const inputEl = document.getElementById('inputKodeManualScanner');
+    if (inputEl) inputEl.value = '';
     switchView('view-input-kode');
     history.pushState({ view: 'input-kode' }, "Input Kode", "#input-kode");
 }
 
 function prosesKodeManualInput() {
-    const kode = document.getElementById('inputKodeManual').value.trim().toUpperCase();
+    const kode = document.getElementById('inputKodeManualScanner') ? document.getElementById('inputKodeManualScanner').value.trim().toUpperCase() : '';
     if (!kode) {
         Swal.fire({ icon: 'warning', title: 'Oops...', text: 'Silakan masukkan kode akses!' });
         return;
@@ -3027,7 +3028,6 @@ window.prosesKodeManualDariPilihMetode = function (event) {
     const kode = document.getElementById('inputKodeManual').value.trim();
     if (kode === "") return;
     document.getElementById('inputKodeManual').value = ""; // reset
-    batalPilihMetode();
     prosesQrCode(kode);
 }
 
