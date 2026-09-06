@@ -165,9 +165,11 @@
                     class="bi bi-building me-2"></i> Perangkat Daerah (OPD)</a></li>
               <li id="menuDividerPengaturanAplikasi" class="dropdown-divider d-none"></li>
               <li id="menuItemAbsensiError" class="d-none"><a class="dropdown-item fw-semibold text-danger" href="#"
-                  onclick="bukaHalamanAbsensiError(); return false;"><i class="bi bi-exclamation-triangle-fill me-2"></i> Absensi Error</a></li>
-              <li id="menuItemPengaturanAplikasi" class="d-none"><a class="dropdown-item fw-semibold text-danger" href="#"
-                  onclick="bukaHalamanPengaturanAplikasi(); return false;"><i class="bi bi-gear-fill me-2"></i> Pengaturan Aplikasi</a></li>
+                  onclick="bukaHalamanAbsensiError(); return false;"><i
+                    class="bi bi-exclamation-triangle-fill me-2"></i> Absensi Error</a></li>
+              <li id="menuItemPengaturanAplikasi" class="d-none"><a class="dropdown-item fw-semibold text-danger"
+                  href="#" onclick="bukaHalamanPengaturanAplikasi(); return false;"><i class="bi bi-gear-fill me-2"></i>
+                  Pengaturan Aplikasi</a></li>
             </ul>
           </li>
 
@@ -221,7 +223,9 @@
           <div class="row g-2 align-items-end">
             <div class="col-md-5">
               <label class="form-label fw-bold small text-secondary mb-1">Cari Kode Akses / Judul Kegiatan</label>
-              <input type="text" id="filterJadwalSearch" class="form-control form-control-sm" placeholder="Ketik Kode Akses atau Judul Kegiatan..." onkeypress="if(event.key==='Enter') terapkanFilterJadwal()">
+              <input type="text" id="filterJadwalSearch" class="form-control form-control-sm"
+                placeholder="Ketik Kode Akses atau Judul Kegiatan..."
+                onkeypress="if(event.key==='Enter') terapkanFilterJadwal()">
             </div>
             <div class="col-md-4">
               <label class="form-label fw-bold small text-secondary mb-1">Kategori Kegiatan</label>
@@ -235,8 +239,10 @@
               </select>
             </div>
             <div class="col-md-3 d-flex gap-2">
-              <button class="btn btn-danger btn-sm flex-grow-1 fw-bold" onclick="terapkanFilterJadwal()"><i class="bi bi-search"></i> CARI</button>
-              <button class="btn btn-outline-secondary btn-sm" onclick="resetFilterJadwal()"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
+              <button class="btn btn-danger btn-sm flex-grow-1 fw-bold" onclick="terapkanFilterJadwal()"><i
+                  class="bi bi-search"></i> CARI</button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="resetFilterJadwal()"><i
+                  class="bi bi-arrow-counterclockwise"></i> Reset</button>
             </div>
           </div>
         </div>
@@ -286,14 +292,11 @@
         <div class="d-flex justify-content-between align-items-start mb-3">
           <div class="d-flex gap-2">
             <button class="btn btn-danger" onclick="bukaModalTambahPeserta()"><i class="bi bi-person-plus-fill"></i>
-              Tambah Peserta / Set Kehadiran Massal</button>
+              Tambah Peserta Absen</button>
             <button class="btn btn-warning text-dark fw-bold" onclick="bukaModalImportAbsen()"><i
                 class="bi bi-upload"></i>
               Import Data Absen</button>
-            <button id="btnHapusTerpilih" class="btn btn-danger d-none" onclick="hapusDataAbsensiMassal()"><i
-                class="bi bi-trash-fill"></i> Hapus Terpilih</button>
-            <button id="btnEditTerpilih" class="btn btn-primary d-none ms-1" onclick="bukaModalEditMasal()"><i
-                class="bi bi-pencil-square"></i> Set Kehadiran & Verifikasi (<span id="countEditTerpilih">0</span> Terpilih)</button>
+
           </div>
           <div class="d-flex">
             <button id="btnDownloadExcel" class="btn btn-outline-danger ms-2 fw-bold" onclick="exportRekapToExcel()"><i
@@ -356,6 +359,11 @@
 
         <!-- TOP PAGINATION REKAP -->
         <div id="rekapPaginationTop" class="d-none"></div>
+        <button id="btnHapusTerpilih" class="btn btn-danger d-none" onclick="hapusDataAbsensiMassal()"><i
+            class="bi bi-trash-fill"></i> Hapus Terpilih</button>
+        <button id="btnEditTerpilih" class="btn btn-primary d-none ms-1" onclick="bukaModalEditMasal()"><i
+            class="bi bi-pencil-square"></i> Set Kehadiran & Verifikasi (<span id="countEditTerpilih">0</span>
+          Terpilih)</button>
         <div id="rekapTableView" class="table-responsive">
           <table class="table table-hover table-bordered align-middle" id="rekapDataTable">
             <thead>
@@ -706,12 +714,16 @@
       <div class="box-container">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <div>
-            <h4 class="fw-bold mb-1 text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Data Absensi Error (Queue Gagal)</h4>
-            <span class="small text-muted">Mencatat pesan antrian absensi yang gagal masuk ke database PHP (misal server overload/timeout). Sumber data: Worker DEAD_LETTER_KV.</span>
+            <h4 class="fw-bold mb-1 text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Data Absensi Error
+              (Queue Gagal)</h4>
+            <span class="small text-muted">Mencatat pesan antrian absensi yang gagal masuk ke database PHP (misal server
+              overload/timeout). Sumber data: Worker DEAD_LETTER_KV.</span>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary fw-bold shadow-sm" onclick="bukaHalamanAbsensiError()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
-            <button id="btnRetryAllDlq" class="btn btn-danger fw-bold px-4 shadow-sm" onclick="retryAllDlq()"><i class="bi bi-play-circle-fill"></i> Coba Ulang Semua (Retry All)</button>
+            <button class="btn btn-outline-secondary fw-bold shadow-sm" onclick="bukaHalamanAbsensiError()"><i
+                class="bi bi-arrow-clockwise"></i> Refresh</button>
+            <button id="btnRetryAllDlq" class="btn btn-danger fw-bold px-4 shadow-sm" onclick="retryAllDlq()"><i
+                class="bi bi-play-circle-fill"></i> Coba Ulang Semua (Retry All)</button>
           </div>
         </div>
 
@@ -731,7 +743,9 @@
             </thead>
             <tbody id="absensiErrorTableBody">
               <tr>
-                <td colspan="8" class="text-center text-muted py-4"><div class="spinner-border text-danger spinner-border-sm me-2"></div>Memuat data absensi error...</td>
+                <td colspan="8" class="text-center text-muted py-4">
+                  <div class="spinner-border text-danger spinner-border-sm me-2"></div>Memuat data absensi error...
+                </td>
               </tr>
             </tbody>
           </table>
@@ -862,10 +876,12 @@
             <p class="mb-0 text-muted small">Kelola konfigurasi dan parameter sistem BAIS Pariaman.</p>
           </div>
           <div class="d-flex gap-2">
-            <button type="button" class="btn btn-danger fw-bold px-3 shadow-sm" onclick="bukaModalFormPengaturan('tambah')">
+            <button type="button" class="btn btn-danger fw-bold px-3 shadow-sm"
+              onclick="bukaModalFormPengaturan('tambah')">
               <i class="bi bi-plus-circle me-1"></i> Tambah Pengaturan
             </button>
-            <button type="button" id="btnSyncPengaturanKvPage" onclick="syncPengaturanKv()" class="btn btn-outline-danger fw-bold px-3 shadow-sm">
+            <button type="button" id="btnSyncPengaturanKvPage" onclick="syncPengaturanKv()"
+              class="btn btn-outline-danger fw-bold px-3 shadow-sm">
               <i class="bi bi-cloud-upload me-1"></i> Sinkronkan ke Worker KV
             </button>
           </div>
@@ -876,7 +892,8 @@
           <i class="bi bi-exclamation-triangle-fill text-warning fs-3 me-3 flex-shrink-0"></i>
           <div>
             <strong class="d-block text-dark">PERINGATAN SANGAT PENTING:</strong>
-            <span>Silakan konsultasikan dengan programmer terlebih dahulu sebelum menggunakan fitur ini. Kesalahan dalam pengisian dapat menyebabkan aplikasi error.</span>
+            <span>Silakan konsultasikan dengan programmer terlebih dahulu sebelum menggunakan fitur ini. Kesalahan dalam
+              pengisian dapat menyebabkan aplikasi error.</span>
           </div>
         </div>
 
@@ -979,7 +996,8 @@
             <div class="mb-4">
               <label class="fw-bold small text-muted">Upload Bukti Dukung (Opsional, Maks 1MB)</label>
               <input type="file" id="verifBuktiDukung" class="form-control" accept="image/*,application/pdf">
-              <small class="text-muted">Format: JPG, PNG, PDF. Opsional. Jika mengunggah file baru, bukti dukung lama akan ditimpa.</small>
+              <small class="text-muted">Format: JPG, PNG, PDF. Opsional. Jika mengunggah file baru, bukti dukung lama
+                akan ditimpa.</small>
             </div>
 
             <button type="submit" id="btnSimpanVerif" class="btn btn-danger w-100 fw-bold py-2"><i
@@ -995,12 +1013,13 @@
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content border-0 shadow-lg">
         <div class="modal-header bg-primary text-white border-0">
-          <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square"></i> Set Kehadiran & Verifikasi Massal</h5>
+          <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square"></i> Set Kehadiran Absensi</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4">
           <form id="formEditPesertaBulk" onsubmit="submitEditPesertaBulk(event)">
-            <p class="text-muted small mb-3">Mengubah status kehadiran dan verifikasi untuk <strong id="editBulkCountText">0</strong> pegawai yang dicentang.</p>
+            <p class="text-muted small mb-3">Mengubah status kehadiran dan verifikasi untuk <strong
+                id="editBulkCountText">0</strong> pegawai yang dicentang.</p>
             <div class="row g-3">
               <div class="col-md-6">
                 <label class="form-label small fw-bold">Status Kehadiran</label>
@@ -1024,19 +1043,23 @@
               </div>
               <div class="col-12">
                 <label class="form-label small fw-bold">Keterangan / Alasan Admin</label>
-                <input type="text" id="editBulkKeterangan" class="form-control form-control-sm" placeholder="Opsional (contoh: Diverifikasi massal oleh admin)">
+                <input type="text" id="editBulkKeterangan" class="form-control form-control-sm"
+                  placeholder="Opsional (contoh: Diverifikasi massal oleh admin)">
               </div>
               <div class="col-12">
                 <label class="form-label small fw-bold">Bukti Dukung (Opsional, Maks 1MB)</label>
-                <input type="file" id="editBulkBuktiDukung" class="form-control form-control-sm" accept="image/*,application/pdf">
-                <small class="text-muted" style="font-size: 0.75rem;">Format: JPG, PNG, PDF. Jika diunggah, file ini akan digunakan sebagai bukti dukung untuk seluruh pegawai yang dipilih.</small>
+                <input type="file" id="editBulkBuktiDukung" class="form-control form-control-sm"
+                  accept="image/*,application/pdf">
+                <small class="text-muted" style="font-size: 0.75rem;">Format: JPG, PNG, PDF. Jika diunggah, file ini
+                  akan digunakan sebagai bukti dukung untuk seluruh pegawai yang dipilih.</small>
               </div>
             </div>
           </form>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-          <button type="submit" form="formEditPesertaBulk" id="btnSimpanEditPesertaBulk" class="btn btn-primary fw-bold"><i class="bi bi-floppy"></i> Simpan Perubahan Massal</button>
+          <button type="submit" form="formEditPesertaBulk" id="btnSimpanEditPesertaBulk"
+            class="btn btn-primary fw-bold"><i class="bi bi-floppy"></i> Simpan Perubahan Massal</button>
         </div>
       </div>
     </div>
@@ -1047,7 +1070,7 @@
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content border-0 shadow-lg">
         <div class="modal-header bg-danger text-white border-0">
-          <h5 class="modal-title fw-bold"><i class="bi bi-person-plus-fill"></i> Tambah Peserta & Set Kehadiran Massal
+          <h5 class="modal-title fw-bold"><i class="bi bi-person-plus-fill"></i> Tambah Peserta Absensi
           </h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
@@ -1086,7 +1109,8 @@
                   <label class="form-label small fw-bold">Bukti Dukung (Opsional, Maks 1MB)</label>
                   <input type="file" id="bulkBuktiDukung" class="form-control form-control-sm"
                     accept="image/*,application/pdf">
-                  <small class="text-muted" style="font-size: 0.75rem;">Format: JPG, PNG, PDF. Opsional. Jika mengunggah file baru, bukti dukung lama akan ditimpa.</small>
+                  <small class="text-muted" style="font-size: 0.75rem;">Format: JPG, PNG, PDF. Opsional. Jika mengunggah
+                    file baru, bukti dukung lama akan ditimpa.</small>
                 </div>
               </div>
             </div>
@@ -1257,8 +1281,8 @@
               <div class="col-md-4 d-flex align-items-center">
                 <div class="form-check form-switch form-switch-md">
                   <input class="form-check-input" type="checkbox" id="addStrictOpd" style="cursor: pointer;">
-                  <label class="form-check-label small fw-bold ms-2" for="addStrictOpd"
-                    style="cursor: pointer;">Wajib Target OPD</label>
+                  <label class="form-check-label small fw-bold ms-2" for="addStrictOpd" style="cursor: pointer;">Wajib
+                    Target OPD</label>
                 </div>
               </div>
               <div class="col-12 mt-1">
@@ -1397,8 +1421,8 @@
               <div class="col-md-4 d-flex align-items-center">
                 <div class="form-check form-switch form-switch-md">
                   <input class="form-check-input" type="checkbox" id="editStrictOpd" style="cursor: pointer;">
-                  <label class="form-check-label small fw-bold ms-2" for="editStrictOpd"
-                    style="cursor: pointer;">Target OPD Ketat</label>
+                  <label class="form-check-label small fw-bold ms-2" for="editStrictOpd" style="cursor: pointer;">Target
+                    OPD Ketat</label>
                 </div>
               </div>
               <div class="col-12 mt-1">
@@ -1665,13 +1689,15 @@
                   <li><code>opd</code>: nama OPD atau instansi. Contoh: <code>Dinas Komunikasi dan Informatika</code>
                   </li>
                   <li><code>lokasi</code>: nama lokasi absensi. Contoh: <code>Kantor Walikota</code></li>
-                  <li><code>lat</code> dan <code>lng</code>: koordinat lokasi absensi dalam angka desimal valid (-90 s/d 90 untuk lat, -180 s/d 180 untuk lng). Contoh: <code>-0.6276</code> dan
+                  <li><code>lat</code> dan <code>lng</code>: koordinat lokasi absensi dalam angka desimal valid (-90 s/d
+                    90 untuk lat, -180 s/d 180 untuk lng). Contoh: <code>-0.6276</code> dan
                     <code>100.1209</code>
                   </li>
                   <li><code>nama_file_foto</code>: nama file foto atau link Google Drive bukti absensi. Contoh:
                     <code>foto_budi.jpg</code> atau <code>https://drive.google.com/file/d/xxxx/view</code>
                   </li>
-                  <li><code>keterangan</code>: keterangan absensi dari file CSV (opsional). Contoh: <code>Hadir tepat waktu</code>
+                  <li><code>keterangan</code>: keterangan absensi dari file CSV (opsional). Contoh:
+                    <code>Hadir tepat waktu</code>
                   </li>
                 </ul>
               </div>
@@ -1743,7 +1769,8 @@
                 </div>
                 <div class="col-md-12 mt-2">
                   <label class="form-label fw-bold small">Keterangan Admin (Universal)</label>
-                  <textarea id="importKeteranganAdmin" class="form-control" rows="2" placeholder="Catatan/keterangan verifikasi dari admin secara universal (opsional)..."></textarea>
+                  <textarea id="importKeteranganAdmin" class="form-control" rows="2"
+                    placeholder="Catatan/keterangan verifikasi dari admin secara universal (opsional)..."></textarea>
                 </div>
               </div>
             </div>
@@ -1774,15 +1801,18 @@
             <i class="bi bi-exclamation-triangle-fill text-warning fs-4 me-3 flex-shrink-0"></i>
             <div class="small">
               <strong class="d-block text-dark">PERINGATAN:</strong>
-              Silakan konsultasikan dengan programmer terlebih dahulu sebelum menggunakan fitur ini. Kesalahan dalam pengisian dapat menyebabkan aplikasi error.
+              Silakan konsultasikan dengan programmer terlebih dahulu sebelum menggunakan fitur ini. Kesalahan dalam
+              pengisian dapat menyebabkan aplikasi error.
             </div>
           </div>
 
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-            <button type="button" class="btn btn-sm btn-danger fw-bold shadow-sm" onclick="bukaModalFormPengaturan('tambah')">
+            <button type="button" class="btn btn-sm btn-danger fw-bold shadow-sm"
+              onclick="bukaModalFormPengaturan('tambah')">
               <i class="bi bi-plus-circle me-1"></i> Tambah Pengaturan
             </button>
-            <button type="button" id="btnSyncPengaturanKv" onclick="syncPengaturanKv()" class="btn btn-sm btn-outline-danger fw-bold shadow-sm">
+            <button type="button" id="btnSyncPengaturanKv" onclick="syncPengaturanKv()"
+              class="btn btn-sm btn-outline-danger fw-bold shadow-sm">
               <i class="bi bi-cloud-upload me-1"></i> Sinkronkan ke Worker KV
             </button>
           </div>
@@ -1829,19 +1859,20 @@
             <i class="bi bi-exclamation-triangle-fill text-warning fs-4 me-3 flex-shrink-0"></i>
             <div class="small">
               <strong class="d-block text-dark">PERINGATAN:</strong>
-              Silakan konsultasikan dengan programmer terlebih dahulu sebelum menggunakan fitur ini. Kesalahan dalam pengisian dapat menyebabkan aplikasi error.
+              Silakan konsultasikan dengan programmer terlebih dahulu sebelum menggunakan fitur ini. Kesalahan dalam
+              pengisian dapat menyebabkan aplikasi error.
             </div>
           </div>
 
           <form onsubmit="submitFormPengaturanItem(event)">
             <input type="hidden" id="formPengaturanMode" value="tambah">
-            
+
             <div class="mb-3">
               <label for="inpNamaPengaturan" class="form-label fw-bold small text-secondary">
                 Nama Pengaturan (Caption) <span class="text-danger">*</span>
               </label>
-              <input type="text" id="inpNamaPengaturan" class="form-control" 
-                placeholder="Contoh: Link Absensi Cadangan" required>
+              <input type="text" id="inpNamaPengaturan" class="form-control" placeholder="Contoh: Link Absensi Cadangan"
+                required>
               <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
                 Nama atau judul pengaturan yang akan muncul di antarmuka sistem.
               </small>
@@ -1851,7 +1882,7 @@
               <label for="inpKodePengaturan" class="form-label fw-bold small text-secondary">
                 Kode Pengaturan (Kunci Unik) <span class="text-danger">*</span>
               </label>
-              <input type="text" id="inpKodePengaturan" class="form-control font-monospace" 
+              <input type="text" id="inpKodePengaturan" class="form-control font-monospace"
                 placeholder="Contoh: link_absensi_cadangan" required>
               <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
                 Kunci unik sistem (hanya huruf, angka, underscore). Tidak dapat diubah saat mode edit.
@@ -1862,7 +1893,7 @@
               <label for="inpNilaiPengaturan" class="form-label fw-bold small text-secondary">
                 Nilai Pengaturan <span class="text-danger">*</span>
               </label>
-              <textarea id="inpNilaiPengaturan" class="form-control font-monospace small" rows="3" 
+              <textarea id="inpNilaiPengaturan" class="form-control font-monospace small" rows="3"
                 placeholder="Masukkan nilai pengaturan..." required></textarea>
             </div>
 
