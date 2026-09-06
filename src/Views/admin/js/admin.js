@@ -2513,6 +2513,89 @@ function bukaModalEditMasal() {
 async function submitEditPesertaBulk(event) {
     if (event) event.preventDefault();
 
+    const isKeseluruhan = !document.getElementById('rekapKeseluruhanContainer').classList.contains('d-none');
+
+    if (isKeseluruhan) {
+        const checkedBoxes = document.querySelectorAll('.rekap-keseluruhan-pilih-checkbox:checked');
+        const items = Array.from(checkedBoxes).map(cb => {
+            const [nip, kodeAkses] = cb.value.split('|');
+            return { nip, kodeAkses };
+        });
+
+        if (items.length === 0) {
+            Swal.fire('Tidak Ada yang Dipilih', 'Silakan centang minimal satu pegawai.', 'warning');
+            return;
+        }
+
+        const btn = document.getElementById('btnSimpanEditPesertaBulk');
+        const statusKehadiran = document.getElementById('editBulkStatusKehadiran').value;
+        const statusVerifikasi = document.getElementById('editBulkStatusVerifikasi').value;
+        const keterangan = document.getElementById('editBulkKeterangan').value;
+        const buktiInput = document.getElementById('editBulkBuktiDukung');
+
+        if (buktiInput.files.length > 0 && buktiInput.files[0].size > 1048576) {
+            Swal.fire('File Terlalu Besar', 'Maksimal ukuran file bukti dukung adalah 1MB.', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Menyimpan...';
+
+        const grouped = {};
+        items.forEach(item => {
+            if (!grouped[item.kodeAkses]) grouped[item.kodeAkses] = [];
+            grouped[item.kodeAkses].push(item.nip);
+        });
+
+        try {
+            let success = true;
+            let lastMsg = '';
+
+            for (const kodeAkses in grouped) {
+                const formData = new FormData();
+                formData.append('kode_akses', kodeAkses);
+                formData.append('nips', JSON.stringify(grouped[kodeAkses]));
+                formData.append('status_kehadiran', statusKehadiran);
+                formData.append('status_verifikasi', statusVerifikasi);
+                formData.append('keterangan', keterangan || 'Diset massal oleh admin.');
+
+                if (buktiInput.files[0]) {
+                    formData.append('bukti_dukung', buktiInput.files[0]);
+                }
+
+                const result = await fetchWithAuth(`${API_BASE_URL}/admin/rekap/entry/bulk/${kodeAkses}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!result.status) {
+                    success = false;
+                    lastMsg = result.message;
+                }
+            }
+
+            if (success) {
+                modalEditPesertaBulk.hide();
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Berhasil!',
+                    text: 'Perubahan status kehadiran massal berhasil disimpan.'
+                });
+                terapkanFilterRekapKeseluruhan(true);
+            } else {
+                Swal.fire('Gagal', lastMsg || 'Gagal menyimpan beberapa perubahan massal.', 'error');
+                terapkanFilterRekapKeseluruhan(true);
+            }
+        } catch (error) {
+            console.error('Error mass editing attendance:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan perubahan kehadiran massal.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-floppy"></i> Simpan Perubahan Massal';
+        }
+        return;
+    }
+
     const checkedBoxes = document.querySelectorAll('.rekap-pilih-checkbox:checked');
     const nips = Array.from(checkedBoxes).map(cb => cb.value);
 
@@ -3085,8 +3168,16 @@ async function bukaHalamanRekapKeseluruhan() {
 
     populateOpdCheckboxContainer('rekapKeseluruhanFilterOpdContainer', allOpdList);
 
+    // Reset checkbox massal & tombol hapus massal
+    const selectAll = document.getElementById('rekapKeseluruhanPilihSemua');
+    if (selectAll) selectAll.checked = false;
+    const btnHapus = document.getElementById('btnHapusTerpilihKeseluruhan');
+    if (btnHapus) btnHapus.classList.add('d-none');
+    const btnEdit = document.getElementById('btnEditTerpilihKeseluruhan');
+    if (btnEdit) btnEdit.classList.add('d-none');
+
     // Reset state
-    document.getElementById('rekapKeseluruhanTableBody').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-funnel h3"></i><br>Pilih filter di atas dan tekan "Tampilkan Data" untuk menampilkan rekap.</td></tr>';
+    document.getElementById('rekapKeseluruhanTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-funnel h3"></i><br>Pilih filter di atas dan tekan "Tampilkan Data" untuk menampilkan rekap.</td></tr>';
 
     resetRekapKeseluruhanFilters();
 }
@@ -3097,6 +3188,118 @@ function resetRekapKeseluruhanFilters() {
     document.getElementById('rekapKeseluruhanSearchInput').value = '';
     document.getElementById('rekapKeseluruhanFilterStatus').value = 'semua';
     document.getElementById('rekapKeseluruhanFilterVerifikasi').value = 'semua';
+}
+
+function togglePilihSemuaRekapKeseluruhan() {
+    const isChecked = document.getElementById('rekapKeseluruhanPilihSemua').checked;
+    document.querySelectorAll('.rekap-keseluruhan-pilih-checkbox').forEach(checkbox => {
+        checkbox.checked = isChecked;
+    });
+    updateTombolHapusMassalKeseluruhan();
+}
+
+function updateTombolHapusMassalKeseluruhan() {
+    const checkedBoxes = document.querySelectorAll('.rekap-keseluruhan-pilih-checkbox:checked');
+    const btnHapus = document.getElementById('btnHapusTerpilihKeseluruhan');
+    const btnEdit = document.getElementById('btnEditTerpilihKeseluruhan');
+    const countEdit = document.getElementById('countEditTerpilihKeseluruhan');
+
+    if (checkedBoxes.length > 0) {
+        if (btnHapus) {
+            btnHapus.classList.remove('d-none');
+            btnHapus.textContent = `Hapus ${checkedBoxes.length} Terpilih`;
+        }
+        if (btnEdit) {
+            btnEdit.classList.remove('d-none');
+            if (countEdit) countEdit.textContent = checkedBoxes.length;
+        }
+    } else {
+        if (btnHapus) btnHapus.classList.add('d-none');
+        if (btnEdit) btnEdit.classList.add('d-none');
+    }
+}
+
+function bukaModalEditMasalKeseluruhan() {
+    const checkedBoxes = document.querySelectorAll('.rekap-keseluruhan-pilih-checkbox:checked');
+    if (checkedBoxes.length === 0) {
+        Swal.fire('Tidak Ada yang Dipilih', 'Silakan centang minimal satu pegawai terlebih dahulu.', 'warning');
+        return;
+    }
+
+    const countText = document.getElementById('editBulkCountText');
+    if (countText) countText.textContent = checkedBoxes.length;
+
+    // Reset form fields
+    document.getElementById('editBulkStatusKehadiran').value = 'Hadir';
+    document.getElementById('editBulkStatusVerifikasi').value = 'Terverifikasi Oleh Admin';
+    document.getElementById('editBulkKeterangan').value = '';
+    document.getElementById('editBulkBuktiDukung').value = '';
+
+    modalEditPesertaBulk.show();
+}
+
+async function hapusDataAbsensiMassalKeseluruhan() {
+    const checkedBoxes = document.querySelectorAll('.rekap-keseluruhan-pilih-checkbox:checked');
+    if (checkedBoxes.length === 0) {
+        Swal.fire('Tidak Ada yang Dipilih', 'Silakan centang minimal satu pegawai untuk dihapus.', 'warning');
+        return;
+    }
+
+    const items = Array.from(checkedBoxes).map(cb => {
+        const [nip, kodeAkses] = cb.value.split('|');
+        return { nip, kodeAkses };
+    });
+
+    const confirmation = await Swal.fire({
+        title: 'Anda Yakin?',
+        html: `Anda akan menghapus <b>${items.length}</b> data absensi pegawai dari rekap ini. <br><br><strong class="text-danger">Aksi ini tidak dapat dibatalkan.</strong>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Ya, Hapus!',
+        cancelButtonText: 'Batal'
+    });
+
+    if (confirmation.isConfirmed) {
+        const grouped = {};
+        items.forEach(item => {
+            if (!grouped[item.kodeAkses]) grouped[item.kodeAkses] = [];
+            grouped[item.kodeAkses].push(item.nip);
+        });
+
+        showAdminLoading(true, 'Menghapus data absensi...');
+        try {
+            let success = true;
+            let lastMsg = '';
+            for (const kodeAkses in grouped) {
+                const payload = {
+                    kode_akses: kodeAkses,
+                    nips: grouped[kodeAkses]
+                };
+                const result = await fetchWithAuth(`${API_BASE_URL}/admin/rekap/entry/bulk-delete`, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                if (!result.status) {
+                    success = false;
+                    lastMsg = result.message;
+                }
+            }
+            showAdminLoading(false);
+            if (success) {
+                Swal.fire('Terhapus!', 'Data absensi terpilih berhasil dihapus.', 'success');
+                terapkanFilterRekapKeseluruhan(true);
+            } else {
+                Swal.fire('Gagal Sebagian/Seluruhnya', lastMsg || 'Gagal menghapus beberapa data.', 'error');
+                terapkanFilterRekapKeseluruhan(true);
+            }
+        } catch (error) {
+            showAdminLoading(false);
+            console.error("Gagal menghapus data absensi massal keseluruhan:", error);
+            Swal.fire('Gagal', 'Terjadi kesalahan jaringan atau server saat menghapus data.', 'error');
+        }
+    }
 }
 
 async function terapkanFilterRekapKeseluruhan(isFromPagination = false) {
@@ -3121,7 +3324,7 @@ async function terapkanFilterRekapKeseluruhan(isFromPagination = false) {
 
 
     tableView.classList.remove('d-none');
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div> Memuat data keseluruhan...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div> Memuat data keseluruhan...</td></tr>';
 
 
 
@@ -3141,11 +3344,11 @@ async function terapkanFilterRekapKeseluruhan(isFromPagination = false) {
 
             }
         } else {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Gagal memuat data: ${result.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Gagal memuat data: ${result.message}</td></tr>`;
         }
     } catch (error) {
         console.error('Error fetching rekap keseluruhan:', error);
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Terjadi kesalahan koneksi.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Terjadi kesalahan koneksi.</td></tr>`;
     }
 }
 
@@ -3172,10 +3375,18 @@ function renderRekapKeseluruhanTable(data, pagination = null) {
         warningContainer.innerHTML = '';
     }
 
+    const checkAllHeader = document.getElementById('rekapKeseluruhanPilihSemua').parentElement;
+    document.getElementById('rekapKeseluruhanPilihSemua').checked = false;
+    document.getElementById('btnHapusTerpilihKeseluruhan')?.classList.add('d-none');
+    document.getElementById('btnEditTerpilihKeseluruhan')?.classList.add('d-none');
+
     if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Tidak ada data yang cocok dengan filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Tidak ada data yang cocok dengan filter.</td></tr>';
+        checkAllHeader.classList.add('d-none');
         return;
     }
+
+    checkAllHeader.classList.remove('d-none');
 
     tbody.innerHTML = data.map((p, i) => {
         const bln = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -3247,6 +3458,7 @@ function renderRekapKeseluruhanTable(data, pagination = null) {
         const statusKeteranganInfo = `${verifikasiBadge}${fotoLink}${keteranganHtml}`;
 
         return `<tr>
+            <td class="text-center align-middle"><input class="form-check-input rekap-keseluruhan-pilih-checkbox" type="checkbox" value="${p.nip}|${p.kode_akses}" onchange="updateTombolHapusMassalKeseluruhan()"></td>
             <td class="text-center align-middle">${(paginasiState.page - 1) * paginasiState.limit + i + 1}</td>
             <td class="align-middle">${kegiatanInfo}</td>
             <td class="align-middle">${pegawaiInfo}</td>

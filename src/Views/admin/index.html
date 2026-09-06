@@ -432,9 +432,9 @@
             </select>
           </div>
           <div class="col-md-3">
-            <label class="form-label fw-bold small">Cari (NIP/Nama)</label>
+            <label class="form-label fw-bold small">Cari Pegawai (NIP/Nama/Jabatan)</label>
             <input type="text" id="rekapKeseluruhanSearchInput" class="form-control"
-              placeholder="Ketik NIP atau Nama...">
+              placeholder="Ketik NIP, Nama, atau Jabatan...">
           </div>
 
           <div class="col-md-6">
@@ -475,9 +475,16 @@
         <!-- TOP PAGINATION REKAP KESELURUHAN -->
         <div id="rekapKeseluruhanPaginationTop" class="d-none"></div>
         <div id="rekapKeseluruhanTableView" class="table-responsive">
+          <button id="btnHapusTerpilihKeseluruhan" class="btn btn-danger d-none mb-2" onclick="hapusDataAbsensiMassalKeseluruhan()"><i
+              class="bi bi-trash-fill"></i> Hapus Terpilih</button>
+          <button id="btnEditTerpilihKeseluruhan" class="btn btn-primary d-none mb-2 ms-1" onclick="bukaModalEditMasalKeseluruhan()"><i
+              class="bi bi-pencil-square"></i> Verifikasi Absen (<span id="countEditTerpilihKeseluruhan">0</span>
+            Terpilih)</button>
           <table class="table table-hover table-bordered align-middle" id="rekapKeseluruhanDataTable">
             <thead>
               <tr>
+                <th class="text-center" style="width: 3%;"><input class="form-check-input" type="checkbox"
+                    id="rekapKeseluruhanPilihSemua" onclick="togglePilihSemuaRekapKeseluruhan()"></th>
                 <th class="text-center" style="width: 5%;">No</th>
                 <th style="width: 20%;">Kegiatan & Tanggal</th>
                 <th style="width: 20%;">Pegawai & OPD</th>
@@ -488,7 +495,7 @@
             </thead>
             <tbody id="rekapKeseluruhanTableBody">
               <tr>
-                <td colspan="6" class="text-center text-muted py-4"><i class="bi bi-funnel h3"></i><br>Pilih rentang
+                <td colspan="7" class="text-center text-muted py-4"><i class="bi bi-funnel h3"></i><br>Pilih rentang
                   tanggal, filter, dan tekan "Tampilkan Data".</td>
               </tr>
             </tbody>
