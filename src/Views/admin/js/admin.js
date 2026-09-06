@@ -2128,7 +2128,7 @@ async function bukaModalTambahPeserta() {
     document.getElementById('searchAvailablePeserta').value = '';
     document.getElementById('searchSelectedPeserta').value = '';
     searchInput.value = '';
-    
+
     // Reset Form Input
     document.getElementById('formTambahPesertaBulk').reset();
 
@@ -3402,6 +3402,7 @@ function renderRekapKeseluruhanTable(data, pagination = null) {
         const pegawaiInfo = `
             <strong class="d-block">${p.nama_pegawai}</strong>
             <small class="text-muted">NIP: ${p.nip}</small>
+            <small class="d-block text-muted">Jabatan: <span class="fw-medium">${p.jabatan}</span></small>
             <small class="d-block text-muted">OPD: <span class="fw-medium">${p.perangkat_daerah}</span></small>
         `;
 
