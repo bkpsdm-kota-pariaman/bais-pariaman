@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.30'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.32'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -551,8 +551,15 @@ function switchView(viewId) {
         }
     }
 
-    // Matikan selfie kamera jika bukan di view-form
-    if (viewId !== 'view-form') {
+    // Matikan kamera admin jika bukan di view-kamera-admin
+    if (viewId !== 'view-kamera-admin') {
+        if (typeof tutupKameraAdmin === 'function') {
+            tutupKameraAdmin();
+        }
+    }
+
+    // Matikan selfie kamera jika bukan di view-form dan bukan di view-kamera-admin
+    if (viewId !== 'view-form' && viewId !== 'view-kamera-admin') {
         if (typeof videoStream !== 'undefined' && videoStream) {
             try {
                 videoStream.getTracks().forEach(track => {
@@ -572,8 +579,9 @@ function switchView(viewId) {
             } catch (e) { }
             v.srcObject = null;
         }
-        // Pastikan juga mematikan semua elemen video aktif di DOM
+        // Pastikan juga mematikan semua elemen video aktif di DOM (kecuali kamera-admin jika beralih ke view-kamera-admin)
         document.querySelectorAll('video').forEach(video => {
+            if (video.id === 'kamera-admin' && viewId === 'view-kamera-admin') return;
             if (video.srcObject) {
                 try {
                     const stream = video.srcObject;
@@ -3133,56 +3141,171 @@ window.checkIzinForm = function () {
  * Membedakan antara alur absensi normal dan alur absensi cepat admin.
  * @param {string} decodedText - Teks dari hasil pindaian QR.
  */
-async function ambilSnapshotFotoCepat() {
-    return new Promise((resolve) => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.setAttribute('capture', 'user');
-        input.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) {
-                resolve(null);
-                return;
+let adminFotoResolve = null;
+let adminVideoStream = null;
+
+function bukaKameraAdmin() {
+    return new Promise(async (resolve) => {
+        adminFotoResolve = resolve;
+
+        switchView('view-kamera-admin');
+
+        const video = document.getElementById('kamera-admin');
+        const img = document.getElementById('hasilFoto-admin');
+        const btnJepret = document.getElementById('btnJepretAdmin');
+        const btnBatal = document.getElementById('btnBatalKameraAdmin');
+        const btnUlang = document.getElementById('btnUlangAdmin');
+        const btnKirim = document.getElementById('btnKirimFotoAdmin');
+
+        if (video) video.classList.remove('hidden-view');
+        if (img) {
+            img.classList.add('hidden-view');
+            img.src = '';
+        }
+        if (btnJepret) btnJepret.classList.remove('hidden-view');
+        if (btnBatal) btnBatal.classList.remove('hidden-view');
+        if (btnUlang) btnUlang.classList.add('hidden-view');
+        if (btnKirim) btnKirim.classList.add('hidden-view');
+
+        try {
+            tutupKameraAdmin();
+            const constraints = {
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
+                audio: false
+            };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            adminVideoStream = stream;
+            if (video) {
+                video.srcObject = stream;
+                await video.play();
             }
-            try {
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const maxDim = 480;
-                        let w = img.width;
-                        let h = img.height;
-                        if (w > h && w > maxDim) {
-                            h = Math.round((h * maxDim) / w);
-                            w = maxDim;
-                        } else if (h > maxDim) {
-                            w = Math.round((w * maxDim) / h);
-                            h = maxDim;
-                        }
-                        canvas.width = w;
-                        canvas.height = h;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, w, h);
-                        let quality = 0.65;
-                        let compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-                        while (compressedBase64.length > 133333 && quality > 0.1) {
-                            quality -= 0.1;
-                            compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-                        }
-                        resolve(compressedBase64);
-                    };
-                    img.src = evt.target.result;
-                };
-                reader.readAsDataURL(file);
-            } catch (err) {
-                console.warn("Gagal memproses snapshot kamera:", err);
-                resolve(null);
-            }
-        };
-        input.click();
+        } catch (err) {
+            console.error("Gagal membuka kamera admin:", err);
+            Swal.fire({
+                title: "Kamera Tidak Dapat Diakses",
+                text: "Pastikan izin kamera sudah diberikan di browser.",
+                icon: "error"
+            });
+            batalKameraAdmin();
+        }
     });
+}
+
+function ambilFotoAdmin() {
+    const video = document.getElementById('kamera-admin');
+    const canvas = document.getElementById('canvas-admin');
+    const img = document.getElementById('hasilFoto-admin');
+    const btnJepret = document.getElementById('btnJepretAdmin');
+    const btnBatal = document.getElementById('btnBatalKameraAdmin');
+    const btnUlang = document.getElementById('btnUlangAdmin');
+    const btnKirim = document.getElementById('btnKirimFotoAdmin');
+
+    if (!video || !video.videoWidth || !video.videoHeight || !canvas) {
+        return;
+    }
+
+    const maxDim = 480;
+    let w = video.videoWidth;
+    let h = video.videoHeight;
+    if (w > h && w > maxDim) {
+        h = Math.round((h * maxDim) / w);
+        w = maxDim;
+    } else if (h > maxDim) {
+        w = Math.round((w * maxDim) / h);
+        h = maxDim;
+    }
+
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, w, h);
+
+    let quality = 0.65;
+    let compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+    while (compressedBase64.length > 133333 && quality > 0.1) {
+        quality -= 0.1;
+        compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+    }
+
+    if (img) {
+        img.src = compressedBase64;
+        img.classList.remove('hidden-view');
+    }
+    video.classList.add('hidden-view');
+
+    if (btnJepret) btnJepret.classList.add('hidden-view');
+    if (btnBatal) btnBatal.classList.add('hidden-view');
+    if (btnUlang) btnUlang.classList.remove('hidden-view');
+    if (btnKirim) btnKirim.classList.remove('hidden-view');
+}
+
+function ulangFotoAdmin() {
+    const video = document.getElementById('kamera-admin');
+    const img = document.getElementById('hasilFoto-admin');
+    const btnJepret = document.getElementById('btnJepretAdmin');
+    const btnBatal = document.getElementById('btnBatalKameraAdmin');
+    const btnUlang = document.getElementById('btnUlangAdmin');
+    const btnKirim = document.getElementById('btnKirimFotoAdmin');
+
+    if (img) {
+        img.src = '';
+        img.classList.add('hidden-view');
+    }
+    if (video) video.classList.remove('hidden-view');
+
+    if (btnJepret) btnJepret.classList.remove('hidden-view');
+    if (btnBatal) btnBatal.classList.remove('hidden-view');
+    if (btnUlang) btnUlang.classList.add('hidden-view');
+    if (btnKirim) btnKirim.classList.add('hidden-view');
+}
+
+function kirimFotoAdmin() {
+    const img = document.getElementById('hasilFoto-admin');
+    const fotoBase64 = img ? (img.src || null) : null;
+    tutupKameraAdmin();
+    switchView('view-scanner');
+    if (adminFotoResolve) {
+        const resolve = adminFotoResolve;
+        adminFotoResolve = null;
+        resolve(fotoBase64);
+    }
+}
+
+function batalKameraAdmin() {
+    tutupKameraAdmin();
+    switchView('view-scanner');
+    if (adminFotoResolve) {
+        const resolve = adminFotoResolve;
+        adminFotoResolve = null;
+        resolve(null);
+    }
+}
+
+function tutupKameraAdmin() {
+    if (adminVideoStream) {
+        try {
+            adminVideoStream.getTracks().forEach(track => track.stop());
+        } catch (e) { }
+        adminVideoStream = null;
+    }
+    const video = document.getElementById('kamera-admin');
+    if (video && video.srcObject) {
+        try {
+            const stream = video.srcObject;
+            if (stream.getTracks) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        } catch (e) { }
+        video.srcObject = null;
+    }
+}
+
+async function ambilSnapshotFotoCepat() {
+    return await bukaKameraAdmin();
 }
 
 async function handleScanSuccess(decodedText) {
@@ -3201,7 +3324,6 @@ async function handleScanSuccess(decodedText) {
         if (isProfileToken) {
             const token = cleanText;
             const modeFoto = adminCepatState.mode_foto || 'tidak';
-            const userData = cleanText.startsWith("BB:") ? (parseJwt(cleanText.replace("BB:", ""), true) || { nama: 'Pegawai ASN', nip: '-' }) : { nama: 'Pegawai ASN (E-Presensi Pass)', nip: '-' };
 
             try {
                 let fotoBase64 = null;
@@ -3210,12 +3332,7 @@ async function handleScanSuccess(decodedText) {
                     showLoading(false);
                     const promptResult = await Swal.fire({
                         title: 'QR Code Terverifikasi',
-                        html: `<div class="text-left text-sm space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                <div><strong class="text-gray-700">Nama:</strong> ${userData.nama || '-'}</div>
-                                <div><strong class="text-gray-700">NIP:</strong> <span class="font-mono">${userData.nip || '-'}</span></div>
-                                <div><strong class="text-gray-700">OPD:</strong> ${userData.opd || '-'}</div>
-                               </div>
-                               <p class="text-xs text-gray-500 mt-3">Apakah Anda ingin menyertakan foto pegawai atau kirim langsung?</p>`,
+                        html: `<p class="text-xs text-gray-500 mt-2">Apakah Anda ingin menyertakan foto pegawai atau kirim langsung?</p>`,
                         icon: 'question',
                         showCancelButton: true,
                         confirmButtonText: '<i class="bi bi-camera-fill"></i> Foto Pegawai',
@@ -3229,8 +3346,10 @@ async function handleScanSuccess(decodedText) {
 
                     if (promptResult.isConfirmed) {
                         fotoBase64 = await ambilSnapshotFotoCepat();
-                        showLoading(true, "Mengirim Absensi + Foto...");
-                        await adminCepatKirimAbsensi(token, fotoBase64);
+                        if (fotoBase64) {
+                            showLoading(true, "Mengirim Absensi + Foto...");
+                            await adminCepatKirimAbsensi(token, fotoBase64);
+                        }
                     } else if (promptResult.isDismissed && promptResult.dismiss === Swal.DismissReason.cancel) {
                         showLoading(true, "Memproses Absensi...");
                         await adminCepatKirimAbsensi(token, null);

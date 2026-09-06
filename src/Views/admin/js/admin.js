@@ -166,6 +166,7 @@ const modalVerifikasi = new bootstrap.Modal(document.getElementById('modalVerifi
 const modalRingkasan = new bootstrap.Modal(document.getElementById('modalRingkasan'));
 const modalPegawai = new bootstrap.Modal(document.getElementById('modalPegawai'));
 const modalTambahPeserta = new bootstrap.Modal(document.getElementById('modalTambahPeserta'));
+const modalEditPesertaBulk = new bootstrap.Modal(document.getElementById('modalEditPesertaBulk'));
 const modalOpd = new bootstrap.Modal(document.getElementById('modalOpd'));
 const modalImportAbsen = new bootstrap.Modal(document.getElementById('modalImportAbsen'));
 
@@ -1269,6 +1270,8 @@ async function lihatRekap(kodeAkses) {
     if (selectAll) selectAll.checked = false;
     const btnHapus = document.getElementById('btnHapusTerpilih');
     if (btnHapus) btnHapus.classList.add('d-none');
+    const btnEdit = document.getElementById('btnEditTerpilih');
+    if (btnEdit) btnEdit.classList.add('d-none');
 
     // Reset tampilan tabel dan foto ke default (tabel)
     const tableView = document.getElementById('rekapTableView');
@@ -1435,7 +1438,8 @@ async function terapkanFilterRekap(isFromPagination = false) {
         photoGridView.classList.remove('d-none');
         photoGridView.innerHTML = '<div class="col-12 text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div> Memuat foto...</div>';
         checkAllHeader.classList.add('d-none');
-        document.getElementById('btnHapusTerpilih').classList.add('d-none');
+        document.getElementById('btnHapusTerpilih')?.classList.add('d-none');
+        document.getElementById('btnEditTerpilih')?.classList.add('d-none');
     }
 
     // Selalu sembunyikan tombol download saat filter baru diterapkan
@@ -1686,7 +1690,8 @@ function renderRekapTable(filteredPegawai, pagination = null) {
 
     const checkAllHeader = document.getElementById('rekapPilihSemua').parentElement;
     document.getElementById('rekapPilihSemua').checked = false;
-    document.getElementById('btnHapusTerpilih').classList.add('d-none');
+    document.getElementById('btnHapusTerpilih')?.classList.add('d-none');
+    document.getElementById('btnEditTerpilih')?.classList.add('d-none');
 
     if (filteredPegawai.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Tidak ada data yang cocok dengan filter.</td></tr>';
@@ -2163,7 +2168,7 @@ async function cariEligiblePegawai() {
             body: JSON.stringify({
                 search: filterText,
                 opd_list: selectedOpds,
-                include_all: true
+                include_all: false
             })
         });
 
@@ -2474,11 +2479,110 @@ function togglePilihSemuaRekap() {
 function updateTombolHapusMassal() {
     const checkedBoxes = document.querySelectorAll('.rekap-pilih-checkbox:checked');
     const btnHapus = document.getElementById('btnHapusTerpilih');
+    const btnEdit = document.getElementById('btnEditTerpilih');
+    const countEdit = document.getElementById('countEditTerpilih');
+
     if (checkedBoxes.length > 0) {
-        btnHapus.classList.remove('d-none');
-        btnHapus.textContent = `Hapus ${checkedBoxes.length} Terpilih`;
+        if (btnHapus) {
+            btnHapus.classList.remove('d-none');
+            btnHapus.textContent = `Hapus ${checkedBoxes.length} Terpilih`;
+        }
+        if (btnEdit) {
+            btnEdit.classList.remove('d-none');
+            if (countEdit) countEdit.textContent = checkedBoxes.length;
+        }
     } else {
-        btnHapus.classList.add('d-none');
+        if (btnHapus) btnHapus.classList.add('d-none');
+        if (btnEdit) btnEdit.classList.add('d-none');
+    }
+}
+
+function bukaModalEditMasal() {
+    const checkedBoxes = document.querySelectorAll('.rekap-pilih-checkbox:checked');
+    if (checkedBoxes.length === 0) {
+        Swal.fire('Tidak Ada yang Dipilih', 'Silakan centang minimal satu pegawai terlebih dahulu.', 'warning');
+        return;
+    }
+
+    const countText = document.getElementById('editBulkCountText');
+    if (countText) countText.textContent = checkedBoxes.length;
+
+    // Reset form fields
+    document.getElementById('editBulkStatusKehadiran').value = 'Hadir';
+    document.getElementById('editBulkStatusVerifikasi').value = 'Terverifikasi Oleh Admin';
+    document.getElementById('editBulkKeterangan').value = '';
+    document.getElementById('editBulkBuktiDukung').value = '';
+
+    modalEditPesertaBulk.show();
+}
+
+async function submitEditPesertaBulk(event) {
+    if (event) event.preventDefault();
+
+    const checkedBoxes = document.querySelectorAll('.rekap-pilih-checkbox:checked');
+    const nips = Array.from(checkedBoxes).map(cb => cb.value);
+
+    if (nips.length === 0) {
+        Swal.fire('Tidak Ada yang Dipilih', 'Silakan centang minimal satu pegawai.', 'warning');
+        return;
+    }
+
+    const kodeAkses = currentRekapData?.jadwal?.kode_akses;
+    if (!kodeAkses) {
+        Swal.fire('Gagal', 'Kode akses kegiatan tidak valid.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btnSimpanEditPesertaBulk');
+    const statusKehadiran = document.getElementById('editBulkStatusKehadiran').value;
+    const statusVerifikasi = document.getElementById('editBulkStatusVerifikasi').value;
+    const keterangan = document.getElementById('editBulkKeterangan').value;
+    const buktiInput = document.getElementById('editBulkBuktiDukung');
+
+    if (buktiInput.files.length > 0 && buktiInput.files[0].size > 1048576) {
+        Swal.fire('File Terlalu Besar', 'Maksimal ukuran file bukti dukung adalah 1MB.', 'warning');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Menyimpan...';
+
+    const formData = new FormData();
+    formData.append('kode_akses', kodeAkses);
+    formData.append('nips', JSON.stringify(nips));
+    formData.append('status_kehadiran', statusKehadiran);
+    formData.append('status_verifikasi', statusVerifikasi);
+    formData.append('keterangan', keterangan || 'Diset massal oleh admin.');
+
+    if (buktiInput.files[0]) {
+        formData.append('bukti_dukung', buktiInput.files[0]);
+    }
+
+    try {
+        const result = await fetchWithAuth(`${API_BASE_URL}/admin/rekap/entry/bulk/${kodeAkses}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (result.status) {
+            modalEditPesertaBulk.hide();
+            Swal.fire({
+                icon: 'success',
+                title: 'Berhasil!',
+                text: result.message
+            });
+
+            terapkanFilterRekap();
+            refreshRekapSummary();
+        } else {
+            Swal.fire('Gagal', result.message, 'error');
+        }
+    } catch (error) {
+        console.error('Error mass editing attendance:', error);
+        Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan perubahan kehadiran massal.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-floppy"></i> Simpan Perubahan Massal';
     }
 }
 

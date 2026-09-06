@@ -1361,6 +1361,23 @@ class AbsenController {
             Response::json(false, 400, "Kode akses kegiatan tidak disediakan.");
         }
 
+        // Check strict OPD configuration from event schedule
+        $stmtJadwal = $db->prepare("SELECT is_strict_opd FROM app_absensi_jadwal_kegiatan WHERE kode_akses = ? LIMIT 1");
+        $stmtJadwal->execute([$kodeAkses]);
+        $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
+
+        $allowedOpds = null;
+        if ($jadwal && !empty($jadwal['is_strict_opd']) && $jadwal['is_strict_opd'] == 1) {
+            $stmtOpd = $db->prepare("SELECT opd FROM app_absensi_data_absensi WHERE kode_akses = ? AND opd IS NOT NULL AND opd != '' GROUP BY opd");
+            $stmtOpd->execute([$kodeAkses]);
+            $allowedOpds = $stmtOpd->fetchAll(PDO::FETCH_COLUMN, 0);
+
+            if (empty($allowedOpds)) {
+                Response::json(true, 200, "Daftar pegawai yang dapat ditambahkan berhasil diambil.", []);
+                return;
+            }
+        }
+
         // Ambil filter dari body request POST
         $inputJSON = file_get_contents('php://input');
         $filters = json_decode($inputJSON, true);
@@ -1381,6 +1398,15 @@ class AbsenController {
             $params[] = $kodeAkses;
         }
 
+        // Tambahkan filter strict OPD jika aktif
+        if ($allowedOpds !== null && !empty($allowedOpds)) {
+            $placeholders = implode(',', array_fill(0, count($allowedOpds), '?'));
+            $sql .= " AND p.perangkat_daerah IN ($placeholders)";
+            foreach ($allowedOpds as $allowedOpd) {
+                $params[] = $allowedOpd;
+            }
+        }
+
         // Tambahkan filter pencarian
         if (!empty($searchFilter)) {
             $sql .= " AND (p.nip LIKE ? OR p.nama_pegawai LIKE ? OR p.jabatan LIKE ?)";
@@ -1391,8 +1417,16 @@ class AbsenController {
 
         // Tambahkan filter OPD
         if ($opdFilter !== 'semua' && !empty($opdFilter)) {
-            $sql .= " AND p.perangkat_daerah = ?";
-            $params[] = $opdFilter;
+            if (is_array($opdFilter)) {
+                $placeholders = implode(',', array_fill(0, count($opdFilter), '?'));
+                $sql .= " AND p.perangkat_daerah IN ($placeholders)";
+                foreach ($opdFilter as $opdItem) {
+                    $params[] = $opdItem;
+                }
+            } else {
+                $sql .= " AND p.perangkat_daerah = ?";
+                $params[] = $opdFilter;
+            }
         }
 
         $sql .= " ORDER BY p.nama_pegawai ASC";

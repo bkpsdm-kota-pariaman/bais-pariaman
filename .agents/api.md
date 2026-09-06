@@ -2250,11 +2250,14 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 - **Method:** `POST`
 - **Path:** `/api/admin/rekap/eligible-pegawai/{kode_akses}`
 - **Akses:** Bearer Token (Admin)
+- **Keterangan:** Mengambil daftar pegawai yang dapat ditambahkan manual ke dalam rekap absensi kegiatan. Secara default memfilter pegawai yang sudah ada di `app_absensi_data_absensi` untuk kegiatan tersebut. Jika jadwal memiliki `is_strict_opd = 1`, daftar pegawai dibatasi hanya dari OPD target kegiatan tersebut.
 
 **Input Payload (JSON):**
 ```json
 {
-  "opd": "Dinas Contoh"
+  "search": "nama atau nip",
+  "opd_list": ["Dinas Contoh A", "Dinas Contoh B"],
+  "include_all": false
 }
 ```
 
@@ -2263,11 +2266,13 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 {
   "status": true,
   "code": 200,
-  "message": "OK",
+  "message": "Daftar pegawai yang dapat ditambahkan berhasil diambil.",
   "data": [
     {
       "nip": "123456789012345678",
-      "nama_pegawai": "Nama Pegawai Contoh"
+      "nama_pegawai": "Nama Pegawai Contoh",
+      "jabatan": "Pranata Komputer",
+      "perangkat_daerah": "Dinas Komunikasi dan Informatika"
     }
   ]
 }
@@ -2277,8 +2282,8 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
 ```json
 {
   "status": false,
-  "code": 404,
-  "message": "Jadwal kegiatan tidak ditemukan.",
+  "code": 400,
+  "message": "Kode akses kegiatan tidak disediakan.",
   "data": null
 }
 ```

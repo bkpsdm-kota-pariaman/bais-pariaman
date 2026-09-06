@@ -516,6 +516,38 @@
                     <i class="bi bi-arrow-left-circle"></i>
                     <span>Batal</span>
                 </button>
+        </div>
+
+        <!-- View Kamera Admin (Foto Pegawai Absensi Cepat) -->
+        <div id="view-kamera-admin" class="hidden-view fade-in min-h-screen bg-gray-900 flex flex-col">
+            <div class="p-4 bg-red-700 text-white flex items-center shadow-md border-b border-red-500">
+                <i class="bi bi-camera-fill text-2xl text-red-200"></i>
+                <h5 class="ml-3 font-bold text-lg">Ambil Foto Pegawai</h5>
+            </div>
+            <div class="flex-1 flex flex-col items-center justify-center p-4">
+                <p class="text-xs text-gray-300 mb-4 bg-gray-800 p-2.5 rounded-lg border border-gray-700 text-center">
+                    Posisikan kamera agar <strong>wajah pegawai</strong> terlihat jelas.
+                </p>
+                <div class="w-full max-w-[300px] h-[380px] rounded-2xl overflow-hidden bg-black relative border-[6px] border-white shadow-lg mb-4">
+                    <video id="kamera-admin" class="w-full h-full object-cover" autoplay playsinline></video>
+                    <img id="hasilFoto-admin" class="w-full h-full object-cover hidden-view">
+                    <canvas id="canvas-admin" class="hidden-view"></canvas>
+                    <div id="face-guide-admin" class="absolute inset-0 border-[3px] border-dashed border-white/50 m-8 rounded-xl pointer-events-none"></div>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-900 border-t border-gray-800 grid grid-cols-2 gap-3 pb-8">
+                <button id="btnBatalKameraAdmin" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3.5 rounded-xl transition active:scale-95 flex items-center justify-center gap-2" onclick="batalKameraAdmin()">
+                    <i class="bi bi-x-circle"></i> Batal
+                </button>
+                <button id="btnJepretAdmin" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3.5 rounded-xl transition active:scale-95 flex items-center justify-center gap-2 shadow-md" onclick="ambilFotoAdmin()">
+                    <i class="bi bi-camera"></i> Ambil Foto
+                </button>
+                <button id="btnUlangAdmin" class="hidden-view w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3.5 rounded-xl transition active:scale-95 flex items-center justify-center gap-2" onclick="ulangFotoAdmin()">
+                    <i class="bi bi-arrow-counterclockwise"></i> Foto Ulang
+                </button>
+                <button id="btnKirimFotoAdmin" class="hidden-view w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-xl transition active:scale-95 flex items-center justify-center gap-2 shadow-md" onclick="kirimFotoAdmin()">
+                    <i class="bi bi-send-fill"></i> Kirim Absen
+                </button>
             </div>
         </div>
 

@@ -14,14 +14,26 @@ if (ENVIRONMENT === 'development') {
     ini_set('display_errors', '0');
 }
 
+// ==============================================================================
+// 2. KONFIGURASI CORS & HEADER
+// ==============================================================================
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
 // Setel zona waktu default untuk semua fungsi tanggal/waktu di PHP
 date_default_timezone_set('Asia/Jakarta');
 
 // ==============================================================================
-// 2. LOAD COMPOSER AUTOLOADER
+// 3. LOAD COMPOSER AUTOLOADER
 // ==============================================================================
 // Definisikan path root aplikasi sebagai konstanta agar bisa diakses secara global
-define('APP_PATH', realpath(__DIR__ . '../'));
+define('APP_PATH', realpath(__DIR__ . '/../../'));
 $autoloadPath = APP_PATH.'/vendor/autoload.php';
 
 if (!file_exists($autoloadPath)) {
@@ -34,17 +46,6 @@ require $autoloadPath;
 use App\Helpers\Response;
 use FastRoute\Dispatcher;
 
-// ==============================================================================
-// 3. KONFIGURASI CORS & HEADER
-// ==============================================================================
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
 
 // ==============================================================================
 // 4. ROUTING LOGIC
