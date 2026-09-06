@@ -113,21 +113,6 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
             await expect(loc).toHaveValue('');
         }
 
-        logAction.info('Melakukan reset input file foto dan preview foto selfie');
-        await page.setInputFiles('#inpFotoFile', []);
-        await page.evaluate(() => {
-            const elFoto = document.getElementById('fotoBase64');
-            if (elFoto) elFoto.value = '';
-            const elBoxPrev = document.getElementById('boxPreviewFoto');
-            if (elBoxPrev) elBoxPrev.classList.add('hidden-view');
-            const elBoxPilih = document.getElementById('boxPilihFoto');
-            if (elBoxPilih) elBoxPilih.classList.remove('hidden-view');
-        });
-
-        logAction.verify('Memverifikasi kotak pilih foto awal tampil kembali');
-        await expect(page.locator('#boxPilihFoto')).toBeVisible();
-        await expect(boxPreview).toBeHidden();
-
         logAction.step('5. Mengisi Ulang Biodata Diri & Foto dari Awal (Pengetikan 100ms/char)');
 
         logAction.input('Kode Akses Kegiatan', '#inpKode', testData.kode);

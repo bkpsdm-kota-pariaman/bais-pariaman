@@ -2264,15 +2264,6 @@ function moveAllPegawai(action) {
     renderTambahPesertaView();
 }
 
-function toggleBulkVerifikasi() {
-    const statusKehadiran = document.getElementById('bulkStatusKehadiran').value;
-    const colVerifikasi = document.getElementById('colBulkVerifikasi');
-    if (statusKehadiran === 'Belum Absen') {
-        colVerifikasi.style.display = 'none';
-    } else {
-        colVerifikasi.style.display = 'block';
-    }
-}
 
 async function submitTambahPesertaBulk(event) {
     if (event) event.preventDefault();

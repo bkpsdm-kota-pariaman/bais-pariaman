@@ -67,26 +67,24 @@ test.describe('E2E Suite 4: Admin Absensi Cepat, QR Scan & Siklus Penuh Presensi
 
         logAction.click('Tombol Scan Absenkan Pegawai Lain', '#btnAdminAbsenkanLain');
         const btnScanAdmin = page.locator('#btnAdminAbsenkanLain');
-        if (await btnScanAdmin.isVisible()) {
-            await btnScanAdmin.click();
+        await expect(btnScanAdmin).toBeVisible({ timeout: 10000 });
+        await btnScanAdmin.click();
 
-            logAction.verify('Memverifikasi view Absensi Cepat Admin');
-            const adminCepatView = page.locator('#view-admin-cepat');
-            await expect(adminCepatView).toBeVisible({ timeout: 10000 });
+        logAction.verify('Memverifikasi view Absensi Cepat Admin');
+        const adminCepatView = page.locator('#view-admin-cepat');
+        await expect(adminCepatView).toBeVisible({ timeout: 10000 });
 
-            const txtInput = page.locator('#adminInputManualToken');
-            if (await txtInput.isVisible()) {
-                logAction.input('NIP Pegawai Target', '#adminInputManualToken', targetAsn.nip);
-                await txtInput.pressSequentially(targetAsn.nip, { delay: 100 });
-                await expect(txtInput).toHaveValue(targetAsn.nip);
-            }
+        const txtInput = page.locator('#admin-cepat-kode-akses');
+        await expect(txtInput).toBeVisible({ timeout: 10000 });
+        logAction.input('Kode Akses Jadwal', '#admin-cepat-kode-akses', 'TEST123');
+        await txtInput.pressSequentially('TEST123', { delay: 100 });
+        await expect(txtInput).toHaveValue('TEST123');
 
-            logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
-            expect(consoleErrors).toEqual([]);
-            expect(pageErrors).toEqual([]);
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
 
-            logAction.success('Absensi Cepat Admin Input Manual diverifikasi');
-        }
+        logAction.success('Absensi Cepat Admin Input Manual diverifikasi');
     });
 
     test('2. Absensi Cepat Admin (Scan QR Code) — Mode Kamera Scanner di PWA via UI', async ({ page }) => {
@@ -94,19 +92,18 @@ test.describe('E2E Suite 4: Admin Absensi Cepat, QR Scan & Siklus Penuh Presensi
 
         logAction.click('Tombol Scan Absenkan Pegawai Lain', '#btnAdminAbsenkanLain');
         const btnScanAdmin = page.locator('#btnAdminAbsenkanLain');
-        if (await btnScanAdmin.isVisible()) {
-            await btnScanAdmin.click();
+        await expect(btnScanAdmin).toBeVisible({ timeout: 10000 });
+        await btnScanAdmin.click();
 
-            logAction.verify('Memverifikasi view Scanner Kamera Absensi Cepat');
-            const adminCepatView = page.locator('#view-admin-cepat');
-            await expect(adminCepatView).toBeVisible({ timeout: 10000 });
+        logAction.verify('Memverifikasi view Scanner Kamera Absensi Cepat');
+        const adminCepatView = page.locator('#view-admin-cepat');
+        await expect(adminCepatView).toBeVisible({ timeout: 10000 });
 
-            logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
-            expect(consoleErrors).toEqual([]);
-            expect(pageErrors).toEqual([]);
+        logAction.verify('Memverifikasi tidak ada console.error dan pageerror');
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
 
-            logAction.success('Mode Kamera Scanner Absensi Cepat diverifikasi');
-        }
+        logAction.success('Mode Kamera Scanner Absensi Cepat diverifikasi');
     });
 
     test('3. Siklus Presensi Admin Dashboard — Login Admin & Verifikasi Dashboard', async ({ page }) => {

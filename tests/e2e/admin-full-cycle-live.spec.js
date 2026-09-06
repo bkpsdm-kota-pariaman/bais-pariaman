@@ -88,8 +88,7 @@ test.describe('E2E Live Full Cycle: Realtime Activity Schedule, Cloudflare Worke
         }, todayStr);
 
         logAction.click('Pilih Semua OPD', '#modalBuatKegiatan button:has-text("Pilih Semua")');
-        await page.waitForFunction(() => typeof selectAllOpd === 'function' && (opdState.add.available.length > 0 || opdState.add.selected.length > 0), { timeout: 10000 }).catch(() => { });
-        await page.evaluate(() => selectAllOpd('add'));
+        await page.click('#modalBuatKegiatan button:has-text("Pilih Semua")');
 
         logAction.click('Tombol Simpan Kegiatan', '#btnSimpanKegiatan');
         const btnSimpan = page.locator('#btnSimpanKegiatan');

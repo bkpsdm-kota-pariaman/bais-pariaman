@@ -1085,7 +1085,7 @@
               <div class="row g-3">
                 <div class="col-md-3">
                   <label class="form-label small fw-bold">Status Kehadiran</label>
-                  <select id="bulkStatusKehadiran" class="form-select form-select-sm" onchange="toggleBulkVerifikasi()">
+                  <select id="bulkStatusKehadiran" class="form-select form-select-sm">
                     <option value="Belum Absen">Belum Absen (Hanya Tambah)</option>
                     <option value="Hadir">Hadir</option>
                     <option value="Sakit">Sakit</option>
@@ -1096,10 +1096,11 @@
                     <option value="Dinas Luar Daerah">Dinas Luar Daerah</option>
                   </select>
                 </div>
-                <div class="col-md-3" id="colBulkVerifikasi" style="display: none;">
+                <div class="col-md-3" id="colBulkVerifikasi">
                   <label class="form-label small fw-bold">Status Verifikasi</label>
                   <select id="bulkStatusVerifikasi" class="form-select form-select-sm">
                     <option value="Terverifikasi Oleh Admin">✅ Sahkan Kehadiran</option>
+                    <option value="Ditolak Oleh Admin">❌ Tolak Kehadiran (Ditolak)</option>
                   </select>
                 </div>
                 <div class="col-md-3">

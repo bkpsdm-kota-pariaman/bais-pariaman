@@ -159,16 +159,12 @@ test.describe('E2E Suite: Admin Import Data Absensi CSV', () => {
             }
         }, todayStr);
 
-        await page.locator('#newJamMulai').fill('07:00');
-        await page.locator('#newJamSelesai').fill('17:00');
+        await page.locator('#newJamMulai').pressSequentially('07:00', { delay: 100 });
+        await page.locator('#newJamSelesai').pressSequentially('17:00', { delay: 100 });
 
         // Pastikan opsi OPD TIDAK DIPILIH (uncheck all OPD)
         logAction.step('Pastikan opsi OPD tidak dipilih (Deselect All OPD)');
-        await page.evaluate(() => {
-            if (typeof deselectAllOpd === 'function') {
-                deselectAllOpd('add');
-            }
-        });
+        await page.click('#modalBuatKegiatan button:has-text("Hapus Semua")');
 
         logAction.click('Tombol Simpan Jadwal', '#btnSimpanKegiatan');
         await Promise.all([

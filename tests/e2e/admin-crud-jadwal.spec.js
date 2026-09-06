@@ -93,17 +93,13 @@ test.describe('E2E Suite: Admin CRUD Jadwal Kegiatan', () => {
         }, todayStr);
 
         logAction.input('Jam Mulai', '#newJamMulai', '07:00');
-        await page.locator('#newJamMulai').fill('07:00');
+        await page.locator('#newJamMulai').pressSequentially('07:00', { delay: 100 });
 
         logAction.input('Jam Selesai', '#newJamSelesai', '09:00');
-        await page.locator('#newJamSelesai').fill('09:00');
+        await page.locator('#newJamSelesai').pressSequentially('09:00', { delay: 100 });
 
-        logAction.click('Tombol Pilih Semua OPD Target', 'button:has-text("Pilih Semua")');
-        await page.evaluate(() => {
-            if (typeof selectAllOpd === 'function') {
-                selectAllOpd('add');
-            }
-        });
+        logAction.click('Tombol Pilih Semua OPD Target', '#modalBuatKegiatan button:has-text("Pilih Semua")');
+        await page.click('#modalBuatKegiatan button:has-text("Pilih Semua")');
 
         logAction.click('Tombol Simpan Jadwal', '#btnSimpanKegiatan');
         await Promise.all([
@@ -171,10 +167,10 @@ test.describe('E2E Suite: Admin CRUD Jadwal Kegiatan', () => {
 
         // 4d. Edit Jam Mulai & Selesai
         logAction.input('Jam Mulai Revisi', '#editJamMulai', '08:00');
-        await page.locator('#editJamMulai').fill('08:00');
+        await page.locator('#editJamMulai').pressSequentially('08:00', { delay: 100 });
 
         logAction.input('Jam Selesai Revisi', '#editJamSelesai', '11:00');
-        await page.locator('#editJamSelesai').fill('11:00');
+        await page.locator('#editJamSelesai').pressSequentially('11:00', { delay: 100 });
 
         // 4e. Edit Radius Geofence
         logAction.input('Radius Meter Revisi', '#editGeoRadius', '150');
@@ -186,11 +182,7 @@ test.describe('E2E Suite: Admin CRUD Jadwal Kegiatan', () => {
 
         // 4f. Edit Target OPD (Select OPD Dinas)
         logAction.step('Perbarui Target Perangkat Daerah');
-        await page.evaluate(() => {
-            if (typeof selectOpdDinas === 'function') {
-                selectOpdDinas('edit');
-            }
-        });
+        await page.click('#modalEditKegiatan button:has-text("Pilih Dinas/Badan")');
 
         // 4g. Toggle Strict Mode Waktu & Lokasi
         logAction.step('Perbarui Pengaturan Strict Mode Waktu & Lokasi');
