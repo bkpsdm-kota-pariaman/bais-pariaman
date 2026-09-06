@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.40'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.43'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -449,10 +449,17 @@ async function triggerPwaInstallFromLogin() {
         });
     }
 }
-window.triggerPwaInstallFromLogin = triggerPwaInstallFromLogin;
+function tampilkanVersiAplikasi() {
+    const elList = document.querySelectorAll('.app-version-display');
+    elList.forEach(el => {
+        el.textContent = `Versi ${APP_VERSION}`;
+    });
+}
+window.tampilkanVersiAplikasi = tampilkanVersiAplikasi;
 
 window.onload = async () => {
     try {
+        tampilkanVersiAplikasi();
         // Konfigurasi localForage. Nama database sekarang dinamis berdasarkan APP_ENV.
         // Ini akan membuat database terpisah untuk versi produksi dan beta.
         localforage.config({
@@ -1977,7 +1984,6 @@ async function handleServerValidation(kode, bypassHistoryCheck = false) {
 
 
 async function masukkanKodeManual() {
-    batalScan();
     bukaInputKode();
 }
 
@@ -2825,8 +2831,11 @@ function ambilFoto() {
 
 
 function ulangFoto() {
-    document.getElementById('fotoBase64').value = "";
-    document.getElementById('hasilFoto').classList.add('hidden-view');
+    const fotoBase64 = document.getElementById('fotoBase64');
+    if (fotoBase64) fotoBase64.value = "";
+
+    const hasilFoto = document.getElementById('hasilFoto');
+    if (hasilFoto) hasilFoto.classList.add('hidden-view');
 
     const kamera = document.getElementById('kamera');
     if (kamera) kamera.classList.remove('hidden-view');
@@ -2836,6 +2845,15 @@ function ulangFoto() {
 
     const btnUlang = document.getElementById('btnUlang');
     if (btnUlang) btnUlang.classList.add('hidden-view');
+
+    const btnUlangFoto = document.getElementById('btnUlangFoto');
+    if (btnUlangFoto) btnUlangFoto.classList.add('hidden-view');
+
+    const flowKeteranganKamera = document.getElementById('flowKeteranganKamera');
+    if (flowKeteranganKamera) flowKeteranganKamera.classList.add('hidden-view');
+
+    const boxKameraGagal = document.getElementById('boxKameraGagal');
+    if (boxKameraGagal) boxKameraGagal.classList.add('hidden-view');
 
     validasiTombolKirim();
 }
