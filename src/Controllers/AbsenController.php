@@ -663,8 +663,21 @@ class AbsenController {
 
         // Tambahkan filter OPD hanya jika ada yang dipilih dan bukan 'semua'
         if ($opdFilter !== 'semua' && !empty($opdFilter)) {
-            $sql .= " AND opd = ?";
-            $params[] = $opdFilter;
+            if (is_array($opdFilter)) {
+                $cleanOpds = array_values(array_filter($opdFilter, function($item) {
+                    return $item !== 'semua' && !empty($item);
+                }));
+                if (!empty($cleanOpds)) {
+                    $placeholders = implode(',', array_fill(0, count($cleanOpds), '?'));
+                    $sql .= " AND opd IN ($placeholders)";
+                    foreach ($cleanOpds as $opdItem) {
+                        $params[] = $opdItem;
+                    }
+                }
+            } else {
+                $sql .= " AND opd = ?";
+                $params[] = $opdFilter;
+            }
         }
 
         // Tambahkan kondisi pencarian jika ada input dari user
@@ -768,8 +781,21 @@ class AbsenController {
         $params = [$startDate, $endDate];
 
         if ($opdFilter !== 'semua' && !empty($opdFilter)) {
-            $sql .= " AND a.opd = ?";
-            $params[] = $opdFilter;
+            if (is_array($opdFilter)) {
+                $cleanOpds = array_values(array_filter($opdFilter, function($item) {
+                    return $item !== 'semua' && !empty($item);
+                }));
+                if (!empty($cleanOpds)) {
+                    $placeholders = implode(',', array_fill(0, count($cleanOpds), '?'));
+                    $sql .= " AND a.opd IN ($placeholders)";
+                    foreach ($cleanOpds as $opdItem) {
+                        $params[] = $opdItem;
+                    }
+                }
+            } else {
+                $sql .= " AND a.opd = ?";
+                $params[] = $opdFilter;
+            }
         }
 
         if (!empty($searchFilter)) {
@@ -878,8 +904,21 @@ class AbsenController {
         ];
 
         if ($opdFilter !== 'semua' && !empty($opdFilter)) {
-            $sql .= " AND a.opd = ?";
-            $params[] = $opdFilter;
+            if (is_array($opdFilter)) {
+                $cleanOpds = array_values(array_filter($opdFilter, function($item) {
+                    return $item !== 'semua' && !empty($item);
+                }));
+                if (!empty($cleanOpds)) {
+                    $placeholders = implode(',', array_fill(0, count($cleanOpds), '?'));
+                    $sql .= " AND a.opd IN ($placeholders)";
+                    foreach ($cleanOpds as $opdItem) {
+                        $params[] = $opdItem;
+                    }
+                }
+            } else {
+                $sql .= " AND a.opd = ?";
+                $params[] = $opdFilter;
+            }
         }
 
         $sql .= " GROUP BY a.nip, a.nama_pegawai, a.jabatan, a.opd HAVING jumlah > 0 ORDER BY jumlah DESC, a.opd ASC, a.nama_pegawai ASC";

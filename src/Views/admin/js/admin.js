@@ -1405,7 +1405,7 @@ function populateRekapFilters(opdList) {
 
 function resetRekapFilters() {
     const opdSelect = document.getElementById('rekapFilterOpdContainer');
-    if (opdSelect && opdSelect.tomselect) opdSelect.tomselect.setValue('semua');
+    if (opdSelect && opdSelect.tomselect) opdSelect.tomselect.setValue(['semua']);
     document.getElementById('rekapSearchInput').value = '';
     // Saat direset, defaultnya adalah semua data
     document.getElementById('rekapFilterStatus').value = 'semua';
@@ -2830,31 +2830,32 @@ function populateOpdCheckboxContainer(containerId, opdArray) {
     const select = document.getElementById(containerId);
     if (!select) return;
 
-    // Simpan OPD yang sedang terpilih
-    const selectedOpd = select.value || 'semua';
-
-    // Update existing TomSelect instance if any
+    let selectedValues = ['semua'];
     if (select.tomselect) {
+        const val = select.tomselect.getValue();
+        if (Array.isArray(val) && val.length > 0) selectedValues = val;
+        else if (typeof val === 'string' && val) selectedValues = [val];
+
         select.tomselect.clear();
         select.tomselect.clearOptions();
         select.tomselect.addOption({ value: 'semua', text: '-- Semua OPD --' });
         opdArray.forEach(opd => {
             select.tomselect.addOption({ value: opd, text: opd });
         });
-        select.tomselect.setValue(selectedOpd, true);
+        select.tomselect.setValue(selectedValues, true);
         return;
     }
 
     let html = '<option value="semua">-- Semua OPD --</option>';
     html += opdArray.map(opd => {
-        const isSelected = (selectedOpd === opd) ? 'selected' : '';
-        return `<option value="${opd}" ${isSelected}>${opd}</option>`;
+        return `<option value="${opd}">${opd}</option>`;
     }).join('');
 
     select.innerHTML = html;
 
-    // Initialize TomSelect
+    // Initialize TomSelect with remove_button plugin for multi-select support
     new TomSelect(select, {
+        plugins: ['remove_button'],
         create: false,
         sortField: {
             field: "text",
@@ -2862,12 +2863,29 @@ function populateOpdCheckboxContainer(containerId, opdArray) {
         },
         maxOptions: null
     });
+
+    if (select.tomselect) {
+        select.tomselect.setValue(['semua'], true);
+    }
 }
 
 function getSelectedOpdFromCheckbox(containerId) {
     const select = document.getElementById(containerId);
     if (!select) return 'semua';
-    return select.value;
+    if (select.tomselect) {
+        const val = select.tomselect.getValue();
+        if (Array.isArray(val)) {
+            if (val.length === 0 || val.includes('semua')) return 'semua';
+            return val;
+        }
+        return (val && val !== 'semua') ? val : 'semua';
+    }
+    if (select.multiple) {
+        const selectedOptions = Array.from(select.selectedOptions).map(opt => opt.value);
+        if (selectedOptions.length === 0 || selectedOptions.includes('semua')) return 'semua';
+        return selectedOptions;
+    }
+    return select.value || 'semua';
 }
 
 function populateOpdDropdown(selectId, selectedValue = '') {
@@ -3075,7 +3093,7 @@ async function bukaHalamanRekapKeseluruhan() {
 
 function resetRekapKeseluruhanFilters() {
     const opdSelect = document.getElementById('rekapKeseluruhanFilterOpdContainer');
-    if (opdSelect && opdSelect.tomselect) opdSelect.tomselect.setValue('semua');
+    if (opdSelect && opdSelect.tomselect) opdSelect.tomselect.setValue(['semua']);
     document.getElementById('rekapKeseluruhanSearchInput').value = '';
     document.getElementById('rekapKeseluruhanFilterStatus').value = 'semua';
     document.getElementById('rekapKeseluruhanFilterVerifikasi').value = 'semua';
@@ -3390,7 +3408,7 @@ async function bukaHalamanStatistikKehadiran() {
 
 function resetStatistikFilters() {
     const opdSelect = document.getElementById('statistikFilterOpdContainer');
-    if (opdSelect && opdSelect.tomselect) opdSelect.tomselect.setValue('semua');
+    if (opdSelect && opdSelect.tomselect) opdSelect.tomselect.setValue(['semua']);
     document.getElementById('statAlpaKes').checked = true;
 }
 
