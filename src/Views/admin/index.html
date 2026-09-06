@@ -359,12 +359,13 @@
 
         <!-- TOP PAGINATION REKAP -->
         <div id="rekapPaginationTop" class="d-none"></div>
-        <button id="btnHapusTerpilih" class="btn btn-danger d-none" onclick="hapusDataAbsensiMassal()"><i
-            class="bi bi-trash-fill"></i> Hapus Terpilih</button>
-        <button id="btnEditTerpilih" class="btn btn-primary d-none ms-1" onclick="bukaModalEditMasal()"><i
-            class="bi bi-pencil-square"></i> Set Kehadiran & Verifikasi (<span id="countEditTerpilih">0</span>
-          Terpilih)</button>
+
         <div id="rekapTableView" class="table-responsive">
+          <button id="btnHapusTerpilih" class="btn btn-danger d-none" onclick="hapusDataAbsensiMassal()"><i
+              class="bi bi-trash-fill"></i> Hapus Terpilih</button>
+          <button id="btnEditTerpilih" class="btn btn-primary d-none ms-1" onclick="bukaModalEditMasal()"><i
+              class="bi bi-pencil-square"></i> Verifikasi Absen (<span id="countEditTerpilih">0</span>
+            Terpilih)</button>
           <table class="table table-hover table-bordered align-middle" id="rekapDataTable">
             <thead>
               <tr>
