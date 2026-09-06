@@ -2128,6 +2128,9 @@ async function bukaModalTambahPeserta() {
     document.getElementById('searchAvailablePeserta').value = '';
     document.getElementById('searchSelectedPeserta').value = '';
     searchInput.value = '';
+    
+    // Reset Form Input
+    document.getElementById('formTambahPesertaBulk').reset();
 
     modalTambahPeserta.show();
 
