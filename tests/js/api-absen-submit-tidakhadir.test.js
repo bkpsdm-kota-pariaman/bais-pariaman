@@ -180,6 +180,8 @@ describe('Uji Coba Endpoint Submit Absensi ASN (Status Kehadiran: TIDAK HADIR)',
                     radius_meter: 50000,
                     is_strict_time: 0,
                     is_strict_location: 0,
+                    is_strict_opd: 0,
+                    target_opd: [],
                     aktifkan_antrian: 1
                 })
             });

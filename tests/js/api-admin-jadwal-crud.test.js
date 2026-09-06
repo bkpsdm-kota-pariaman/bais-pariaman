@@ -267,6 +267,7 @@ describe('Uji Coba Endpoint CRUD Data Jadwal Kegiatan Admin (PHP Origin Direct)'
             aktifkan_antrian: 1,
             is_strict_time: 1,
             is_strict_location: 1,
+            is_strict_opd: 1,
             target_opd: ['BADAN KEPEGAWAIAN DAN PENGEMBANGAN SUMBER DAYA MANUSIA']
         };
 
@@ -408,6 +409,7 @@ describe('Uji Coba Endpoint CRUD Data Jadwal Kegiatan Admin (PHP Origin Direct)'
             aktifkan_antrian: 1,
             is_strict_time: 0,
             is_strict_location: 1,
+            is_strict_opd: 0,
             target_opd: ['BADAN KEPEGAWAIAN DAN PENGEMBANGAN SUMBER DAYA MANUSIA']
         };
 

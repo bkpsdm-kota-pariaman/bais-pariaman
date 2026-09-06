@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.35'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.38'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -2191,6 +2191,9 @@ function cleanupAbsenForm() {
     // Reset radio button
     const radioInputs = document.querySelectorAll('input[name="tipeKehadiran"]');
     radioInputs.forEach(radio => radio.checked = false);
+
+    // Hard reset semua state DOM form
+    document.getElementById('formAbsensiUtama')?.reset();
 
     // 6. Reset visibilitas & tampilan container UI form
     const addCls = (id, cls) => {

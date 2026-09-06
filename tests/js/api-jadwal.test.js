@@ -209,6 +209,11 @@ describe('Uji Coba Endpoint Jadwal Kegiatan: Worker Edge & Direct PHP Origin', (
             expect(workerData.data.tanggal).toBe(originData.data.tanggal);
             expect(workerData.data.jam_mulai).toBe(originData.data.jam_mulai);
             expect(workerData.data.jam_selesai).toBe(originData.data.jam_selesai);
+            expect(workerData.data.is_strict_time).toBe(originData.data.is_strict_time);
+            expect(workerData.data.is_strict_location).toBe(originData.data.is_strict_location);
+            expect(workerData.data.is_strict_opd).toBe(originData.data.is_strict_opd);
+            expect(workerData.data.target_opd).toEqual(originData.data.target_opd);
+            expect(workerData.data.is_terlambat).toBe(originData.data.is_terlambat);
         }
 
         // --- 2.4 Validasi Kesesuaian Terhadap Format .agents/api.md ---
