@@ -506,7 +506,7 @@
         // =========================================================================
         // VERIFIKASI KODE AKSES KEGIATAN (STEP 1)
         // =========================================================================
-        function cekKodeAkses() {
+        async function cekKodeAkses() {
             var inputKode = document.getElementById('inpKode');
             var kode = inputKode ? inputKode.value.trim().toUpperCase() : '';
 
@@ -525,78 +525,80 @@
             document.getElementById('cardDetailKegiatan').classList.add('hidden-view');
             document.getElementById('stepDataDiri').classList.add('hidden-view');
 
-            // Coba fetch dari Worker KV dulu, jika error fallback ke PHP origin API
             var cacheBuster = '?_t=' + Date.now();
-            fetch(WORKER_JADWAL_API + encodeURIComponent(kode) + cacheBuster)
-                .then(function (res) {
-                    if (!res.ok && res.status >= 500) {
-                        throw new Error('FALLBACK_NEEDED');
+            try {
+                var jadwal = null;
+                try {
+                    // 1. Coba ambil dari Worker KV
+                    var resWorker = await fetch(WORKER_JADWAL_API + encodeURIComponent(kode) + cacheBuster);
+                    if (!resWorker.ok && resWorker.status >= 500) {
+                        throw new Error('Worker web server error HTTP ' + resWorker.status);
                     }
-                    return res.json();
-                })
-                .then(function (resData) {
-                    if (resData && resData.status === true && resData.data) {
-                        return resData.data;
+                    var jsonWorker = await resWorker.json();
+                    if (!jsonWorker.status) {
+                        if (jsonWorker.code === 404) {
+                            throw new Error('Worker Cache MISS');
+                        }
+                        throw new Error(jsonWorker.message || 'Data jadwal tidak ditemukan.');
                     }
-                    // Jika API mengembalikan status: false (misal 404/403/400), tangkap pesan error resmi
-                    if (resData && resData.status === false && resData.message) {
-                        throw new Error(resData.message);
+                    jadwal = jsonWorker.data;
+                } catch (workerErr) {
+                    if (workerErr.message !== 'Worker Cache MISS' && !workerErr.message.includes('500') && !workerErr.message.includes('fetch') && !workerErr.message.includes('Failed to fetch') && !workerErr.message.includes('NetworkError') && !(workerErr instanceof SyntaxError)) {
+                        throw workerErr;
                     }
-                    throw new Error('FALLBACK_NEEDED');
-                })
-                .catch(function (err) {
-                    if (err.message && err.message !== 'FALLBACK_NEEDED' && !err.message.includes('fetch') && !err.message.includes('Failed to fetch')) {
-                        throw err; // Pesan error resmi dari server (misal belum dibuka / 404)
+                    // 2. Fallback ke server utama (PHP Origin Controller)
+                    var resPhp = await fetch(PHP_JADWAL_API + encodeURIComponent(kode) + cacheBuster);
+                    if (!resPhp.ok) {
+                        throw new Error('Server utama merespon dengan status ' + resPhp.status);
                     }
-                    // Fallback ke PHP Controller API jika Worker network error / 500
-                    return fetch(PHP_JADWAL_API + encodeURIComponent(kode) + cacheBuster)
-                        .then(function (resPhp) { return resPhp.json(); })
-                        .then(function (phpData) {
-                            if (phpData && phpData.status === true && phpData.data) {
-                                return phpData.data;
-                            }
-                            throw new Error(phpData.message);
-                        });
-                })
-                .then(function (jadwal) {
-                    showLoading(false);
-                    selectedJadwal = jadwal;
-
-                    // Set value hidden input nama kegiatan
-                    var inpNamaKeg = document.getElementById('inpNamaKegiatan');
-                    if (inpNamaKeg) inpNamaKeg.value = jadwal.judul;
-
-                    // Populasi Card Detail
-                    var detKategori = document.getElementById('detKategori');
-                    var detNamaKegiatan = document.getElementById('detNamaKegiatan');
-                    var detWaktu = document.getElementById('detWaktu');
-                    var detLokasi = document.getElementById('detLokasi');
-
-                    if (detKategori) detKategori.innerText = (jadwal.kategori).toUpperCase();
-                    if (detNamaKegiatan) detNamaKegiatan.innerText = jadwal.judul;
-
-                    var txtWaktu = jadwal.tanggal + ' (' + jadwal.jam_mulai + ' - ' + jadwal.jam_selesai + ' WIB)';
-                    if (detWaktu) detWaktu.innerText = txtWaktu;
-
-                    var txtLokasi = 'Koordinat: ' + jadwal.koordinat + (jadwal.radius_meter ? ' (Radius ' + jadwal.radius_meter + 'm)' : '');
-                    if (detLokasi) detLokasi.innerText = txtLokasi;
-
-                    // Tampilkan Card Detail
-                    var cardDetail = document.getElementById('cardDetailKegiatan');
-                    if (cardDetail) {
-                        cardDetail.classList.remove('hidden-view');
-                        cardDetail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    var jsonPhp = await resPhp.json();
+                    if (!jsonPhp.status) {
+                        throw new Error(jsonPhp.message || 'Jadwal kegiatan tidak ditemukan atau sudah tidak berlaku.');
                     }
-                })
-                .catch(function (errFinal) {
-                    showLoading(false);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Jadwal Tidak Ditemukan',
-                        text: errFinal.message,
-                        confirmButtonText: 'Coba Lagi'
-                    });
+                    jadwal = jsonPhp.data;
+                }
+
+                showLoading(false);
+                selectedJadwal = jadwal;
+
+                // Set value hidden input nama kegiatan
+                var inpNamaKeg = document.getElementById('inpNamaKegiatan');
+                if (inpNamaKeg) inpNamaKeg.value = jadwal.judul;
+
+                // Populasi Card Detail
+                var detKategori = document.getElementById('detKategori');
+                var detNamaKegiatan = document.getElementById('detNamaKegiatan');
+                var detWaktu = document.getElementById('detWaktu');
+                var detLokasi = document.getElementById('detLokasi');
+
+                if (detKategori) detKategori.innerText = (jadwal.kategori || 'KEGIATAN').toUpperCase();
+                if (detNamaKegiatan) detNamaKegiatan.innerText = jadwal.judul;
+
+                var txtWaktu = jadwal.tanggal + ' (' + jadwal.jam_mulai + ' - ' + jadwal.jam_selesai + ' WIB)';
+                if (detWaktu) detWaktu.innerText = txtWaktu;
+
+                var txtLokasi = 'Koordinat: ' + jadwal.koordinat + (jadwal.radius_meter ? ' (Radius ' + jadwal.radius_meter + 'm)' : '');
+                if (detLokasi) detLokasi.innerText = txtLokasi;
+
+                // Tampilkan Card Detail
+                var cardDetail = document.getElementById('cardDetailKegiatan');
+                if (cardDetail) {
+                    cardDetail.classList.remove('hidden-view');
+                    cardDetail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            } catch (errFinal) {
+                showLoading(false);
+                var errMsg = errFinal.message;
+                if (errFinal instanceof SyntaxError) {
+                    errMsg = 'Jadwal kegiatan tidak ditemukan atau format respon server tidak valid.';
+                }
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Jadwal Tidak Ditemukan',
+                    text: errMsg,
+                    confirmButtonText: 'Coba Lagi'
                 });
+            }
         }
 
         // =========================================================================
