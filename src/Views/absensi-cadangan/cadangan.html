@@ -503,6 +503,30 @@
             } catch (eGasUrl) { }
         }
 
+        function formatTanggalIndo(tanggalStr) {
+            if (!tanggalStr) return '';
+            try {
+                var parts = tanggalStr.split('-');
+                if (parts.length === 3) {
+                    var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                    return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                }
+                var dt = new Date(tanggalStr);
+                return isNaN(dt.getTime()) ? tanggalStr : dt.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            } catch (e) {
+                return tanggalStr;
+            }
+        }
+
+        function formatJamIndo(jamStr) {
+            if (!jamStr) return '';
+            var parts = jamStr.split(':');
+            if (parts.length >= 2) {
+                return parts[0].padStart(2, '0') + ':' + parts[1].padStart(2, '0');
+            }
+            return jamStr;
+        }
+
         // =========================================================================
         // VERIFIKASI KODE AKSES KEGIATAN (STEP 1)
         // =========================================================================
@@ -574,7 +598,10 @@
                 if (detKategori) detKategori.innerText = (jadwal.kategori || 'KEGIATAN').toUpperCase();
                 if (detNamaKegiatan) detNamaKegiatan.innerText = jadwal.judul;
 
-                var txtWaktu = jadwal.tanggal + ' (' + jadwal.jam_mulai + ' - ' + jadwal.jam_selesai + ' WIB)';
+                var tglFormatted = formatTanggalIndo(jadwal.tanggal);
+                var jMulai = formatJamIndo(jadwal.jam_mulai);
+                var jSelesai = formatJamIndo(jadwal.jam_selesai);
+                var txtWaktu = tglFormatted + ' (' + jMulai + ' - ' + jSelesai + ' WIB)';
                 if (detWaktu) detWaktu.innerText = txtWaktu;
 
                 var txtLokasi = 'Koordinat: ' + jadwal.koordinat + (jadwal.radius_meter ? ' (Radius ' + jadwal.radius_meter + 'm)' : '');
