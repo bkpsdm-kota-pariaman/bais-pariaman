@@ -106,7 +106,8 @@
                     <div id="stepKodeAkses" class="space-y-4">
                         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
                             <div class="flex items-center gap-2 border-b border-gray-100 pb-3">
-                                <span class="w-6 h-6 rounded-full bg-red-700 text-white text-xs font-bold flex items-center justify-center">1</span>
+                                <span
+                                    class="w-6 h-6 rounded-full bg-red-700 text-white text-xs font-bold flex items-center justify-center">1</span>
                                 <h3 class="font-bold text-sm text-gray-800">Cek Kode Akses Kegiatan</h3>
                             </div>
 
@@ -125,19 +126,23 @@
                                     </button>
                                 </div>
                                 <span class="text-[10px] text-gray-400 mt-1.5 block">
-                                    Masukkan kode akses kegiatan yang diberikan panitia/pengawas untuk memverifikasi detail kegiatan.
+                                    Masukkan kode akses kegiatan yang diberikan panitia/pengawas untuk memverifikasi
+                                    detail kegiatan.
                                 </span>
                             </div>
                         </div>
 
                         <!-- CARD DETAIL KEGIATAN TERHUBUNG -->
-                        <div id="cardDetailKegiatan" class="hidden-view bg-gradient-to-br from-red-50 to-orange-50 border border-red-200 rounded-2xl p-5 shadow-sm space-y-3 fade-in">
+                        <div id="cardDetailKegiatan"
+                            class="hidden-view bg-gradient-to-br from-red-50 to-orange-50 border border-red-200 rounded-2xl p-5 shadow-sm space-y-3 fade-in">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <span id="detKategori" class="bg-red-700 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                    <span id="detKategori"
+                                        class="bg-red-700 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                                         KEGIATAN
                                     </span>
-                                    <h4 id="detNamaKegiatan" class="font-extrabold text-base text-gray-900 mt-1.5 leading-snug">
+                                    <h4 id="detNamaKegiatan"
+                                        class="font-extrabold text-base text-gray-900 mt-1.5 leading-snug">
                                         -
                                     </h4>
                                 </div>
@@ -171,18 +176,22 @@
                         <!-- RINGKASAN KEGIATAN TERPILIH -->
                         <div class="bg-red-700 text-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
                             <div>
-                                <span class="text-[10px] text-red-200 font-bold uppercase tracking-wider block">Kegiatan Terpilih</span>
-                                <h5 id="summaryNamaKegiatan" class="font-bold text-sm leading-tight text-yellow-300 line-clamp-1">-</h5>
+                                <span class="text-[10px] text-red-200 font-bold uppercase tracking-wider block">Kegiatan
+                                    Terpilih</span>
+                                <h5 id="summaryNamaKegiatan"
+                                    class="font-bold text-sm leading-tight text-yellow-300 line-clamp-1">-</h5>
                                 <span id="summaryKode" class="text-[11px] font-mono text-red-100">Kode: -</span>
                             </div>
-                            <button type="button" onclick="kembaliKeStep1()" class="text-xs bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1">
+                            <button type="button" onclick="kembaliKeStep1()"
+                                class="text-xs bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1">
                                 <i class="bi bi-pencil-square"></i> Ubah
                             </button>
                         </div>
 
                         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
                             <div class="flex items-center gap-2 border-b border-gray-100 pb-3">
-                                <span class="w-6 h-6 rounded-full bg-red-700 text-white text-xs font-bold flex items-center justify-center">2</span>
+                                <span
+                                    class="w-6 h-6 rounded-full bg-red-700 text-white text-xs font-bold flex items-center justify-center">2</span>
                                 <h3 class="font-bold text-sm text-gray-800">Identitas Pegawai</h3>
                             </div>
 
@@ -195,7 +204,8 @@
                                     placeholder="Masukkan 18 digit NIP tanpa spasi"
                                     oninput="this.value = this.value.replace(/\D/g, '').substring(0, 18)" maxlength="18"
                                     required>
-                                <span class="text-[10px] text-gray-400 mt-1 block">NIP ditulis lengkap 18 digit angka tanpa spasi.</span>
+                                <span class="text-[10px] text-gray-400 mt-1 block">NIP ditulis lengkap 18 digit angka
+                                    tanpa spasi.</span>
                             </div>
 
                             <!-- 4. Nama (Tanpa Gelar) -->
@@ -204,8 +214,9 @@
                                     Nama Pegawai (Tanpa Gelar) <span class="text-red-500">*</span>
                                 </label>
                                 <input type="text" id="inpNama" class="inp-field uppercase"
-                                    placeholder="Contoh: EGO DAFMA DASA" required>
-                                <span class="text-[10px] text-gray-400 mt-1 block">Nama lengkap tanpa gelar akademik atau kehormatan.</span>
+                                    placeholder="Contoh: Ananda Fulan" required>
+                                <span class="text-[10px] text-gray-400 mt-1 block">Nama lengkap tanpa gelar akademik
+                                    atau kehormatan.</span>
                             </div>
 
                             <!-- 5. Jabatan -->
@@ -225,7 +236,8 @@
                                 <input type="text" id="inpOpd" list="listOpd" class="inp-field uppercase"
                                     placeholder="Pilih atau ketik nama Perangkat Daerah..." required>
                                 <datalist id="listOpd"></datalist>
-                                <span class="text-[10px] text-gray-400 mt-1 block">Pilih dari daftar rekomendasi atau ketik langsung nama OPD jika tidak ada.</span>
+                                <span class="text-[10px] text-gray-400 mt-1 block">Pilih dari daftar rekomendasi atau
+                                    ketik langsung nama OPD jika tidak ada.</span>
                             </div>
                         </div>
 
@@ -253,7 +265,8 @@
                                     <input type="radio" name="inpKeterangan"
                                         value="Aplikasi tidak bisa terinstall karena tampilan layar warna putih"
                                         class="mt-0.5 w-4 h-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 flex-shrink-0">
-                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">2. Aplikasi tidak
+                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">2. Aplikasi
+                                        tidak
                                         bisa terinstall karena tampilan layar warna putih</span>
                                 </label>
                                 <label
@@ -261,7 +274,8 @@
                                     <input type="radio" name="inpKeterangan"
                                         value="Aplikasi tidak bisa terinstall karena akses ditolak"
                                         class="mt-0.5 w-4 h-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 flex-shrink-0">
-                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">3. Aplikasi tidak
+                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">3. Aplikasi
+                                        tidak
                                         bisa terinstall karena akses ditolak</span>
                                 </label>
                                 <label
@@ -269,7 +283,8 @@
                                     <input type="radio" name="inpKeterangan"
                                         value="Aplikasi tidak bisa terbuka (force close)"
                                         class="mt-0.5 w-4 h-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 flex-shrink-0">
-                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">4. Aplikasi tidak
+                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">4. Aplikasi
+                                        tidak
                                         bisa terbuka (force close)</span>
                                 </label>
                                 <label
@@ -292,7 +307,8 @@
                                     class="flex items-start p-2.5 bg-white border border-yellow-200 rounded-xl cursor-pointer hover:bg-yellow-100/50 transition shadow-sm">
                                     <input type="radio" name="inpKeterangan" value="Akses kamera ditolak"
                                         class="mt-0.5 w-4 h-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 flex-shrink-0">
-                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">7. Akses kamera
+                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">7. Akses
+                                        kamera
                                         ditolak</span>
                                 </label>
                                 <label
@@ -306,7 +322,8 @@
                                     class="flex items-start p-2.5 bg-white border border-yellow-200 rounded-xl cursor-pointer hover:bg-yellow-100/50 transition shadow-sm">
                                     <input type="radio" name="inpKeterangan" value="Lokasi tidak terdeteksi"
                                         class="mt-0.5 w-4 h-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 flex-shrink-0">
-                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">9. Lokasi tidak
+                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">9. Lokasi
+                                        tidak
                                         terdeteksi</span>
                                 </label>
                                 <label
@@ -320,7 +337,8 @@
                                     class="flex items-start p-2.5 bg-white border border-yellow-200 rounded-xl cursor-pointer hover:bg-yellow-100/50 transition shadow-sm">
                                     <input type="radio" name="inpKeterangan" value="Data absensi tidak tersimpan/error"
                                         class="mt-0.5 w-4 h-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 flex-shrink-0">
-                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">11. Data absensi
+                                    <span class="ml-2.5 text-xs font-semibold text-gray-700 leading-tight">11. Data
+                                        absensi
                                         tidak tersimpan/error</span>
                                 </label>
                                 <label
@@ -361,7 +379,8 @@
                                     class="bg-red-700 hover:bg-red-800 active:scale-95 text-white text-xs font-bold py-2.5 px-5 rounded-xl shadow-md transition">
                                     <i class="bi bi-camera-fill me-1.5"></i> PILIH / AMBIL FOTO
                                 </button>
-                                <span class="text-[10px] text-gray-400 block mt-2">Format yang didukung: JPG, JPEG, PNG, WEBP</span>
+                                <span class="text-[10px] text-gray-400 block mt-2">Format yang didukung: JPG, JPEG, PNG,
+                                    WEBP</span>
                             </div>
 
                             <!-- Preview Foto (Tampilan seperti Selfie Box) -->
@@ -491,8 +510,8 @@
         // =========================================================================
         var GAS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNNznBszjXlNI0UW2NHxWcTWSRpwUiZwbflqoIVgVJTvVW1_9_9BocCgsoU8kW-4wo/exec";
         var SCRIPT_URL = GAS_SCRIPT_URL;
-        var WORKER_JADWAL_API = "https://absensi-kegiatan-asn-worker.bidpp-bkpsdm.workers.dev/api/jadwal/";
-        var PHP_JADWAL_API = "https://api-esdm.pariamankota.go.id/bais-pariaman/api/jadwal/";
+        var BASE_URL_WORKER = "https://absensi-kegiatan-asn-worker.bidpp-bkpsdm.workers.dev/api";
+        var BASE_URL_PHP = "https://api-esdm.pariamankota.go.id/bais-pariaman/api";
 
         var selectedJadwal = null;
 
@@ -555,7 +574,7 @@
                 var jadwal = null;
                 try {
                     // 1. Coba ambil dari Worker KV
-                    var resWorker = await fetch(WORKER_JADWAL_API + encodeURIComponent(kode) + cacheBuster);
+                    var resWorker = await fetch(BASE_URL_WORKER + '/jadwal/' + encodeURIComponent(kode) + cacheBuster);
                     if (!resWorker.ok && resWorker.status >= 500) {
                         throw new Error('Worker web server error HTTP ' + resWorker.status);
                     }
@@ -572,7 +591,7 @@
                         throw workerErr;
                     }
                     // 2. Fallback ke server utama (PHP Origin Controller)
-                    var resPhp = await fetch(PHP_JADWAL_API + encodeURIComponent(kode) + cacheBuster);
+                    var resPhp = await fetch(BASE_URL_PHP + '/jadwal/' + encodeURIComponent(kode) + cacheBuster);
                     if (!resPhp.ok) {
                         throw new Error('Server utama merespon dengan status ' + resPhp.status);
                     }
@@ -681,32 +700,36 @@
             });
         }
 
-        function fetchOpdFromGas() {
-            // Priority 1: Panggilan langsung dari dalam Google Apps Script HtmlService
-            if (typeof google !== 'undefined' && google.script && google.script.run) {
-                google.script.run
-                    .withSuccessHandler(function (data) {
-                        initOpdSelect(data);
-                    })
-                    .withFailureHandler(function (err) {
-                        console.warn('Gagal fetch OPD via google.script.run:', err);
-                    })
-                    .getOpdList();
-                return;
-            }
-
-            // Priority 2: Request HTTP GET ke Web App GAS Web Script URL
-            fetch(SCRIPT_URL + '?action=getOpd&_t=' + Date.now())
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    if (data && (Array.isArray(data.data) || Array.isArray(data))) {
-                        var opdItems = Array.isArray(data.data) ? data.data : data;
-                        initOpdSelect(opdItems);
+        async function fetchOpd() {
+            var cacheBuster = '?_t=' + Date.now();
+            try {
+                // 1. Coba ambil dari Worker KV
+                var resWorker = await fetch(BASE_URL_WORKER + '/opd/list' + cacheBuster);
+                if (!resWorker.ok && resWorker.status >= 500) {
+                    throw new Error('Worker error HTTP ' + resWorker.status);
+                }
+                var jsonWorker = await resWorker.json();
+                if (jsonWorker.status && Array.isArray(jsonWorker.data)) {
+                    initOpdSelect(jsonWorker.data);
+                    return;
+                }
+                throw new Error('Worker cache miss atau data tidak valid');
+            } catch (errWorker) {
+                console.warn('Gagal ambil OPD dari Worker, fallback ke server PHP:', errWorker.message);
+                try {
+                    // 2. Fallback ke server utama (PHP Origin Controller)
+                    var resPhp = await fetch(BASE_URL_PHP + '/opd/list' + cacheBuster);
+                    if (!resPhp.ok) {
+                        throw new Error('Server PHP merespon dengan status ' + resPhp.status);
                     }
-                })
-                .catch(function (errFetch) {
-                    console.warn('Gagal fetch API OPD dari Google Sheet:', errFetch);
-                });
+                    var jsonPhp = await resPhp.json();
+                    if (jsonPhp.status && Array.isArray(jsonPhp.data)) {
+                        initOpdSelect(jsonPhp.data);
+                    }
+                } catch (errPhp) {
+                    console.warn('Gagal ambil OPD dari server PHP:', errPhp.message);
+                }
+            }
         }
 
         function initKeteranganListener() {
@@ -1008,7 +1031,7 @@
         // =========================================================================
         initOpdSelect(); // Langsung render default list seketika
         window.addEventListener('DOMContentLoaded', function () {
-            fetchOpdFromGas();
+            fetchOpd();
             initKeteranganListener();
             deteksiGpsOtomatisDibelakangLayar();
         });
