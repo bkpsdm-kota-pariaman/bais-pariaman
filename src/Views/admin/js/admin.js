@@ -70,20 +70,18 @@ function renderPaginationControls(containerId, paginationData, onPageChangeName)
     containerBottom.classList.remove('d-none');
 
 
-    let exportBtnHtml = '';
-    if (onPageChangeName === 'jadwal') {
-        exportBtnHtml = '<button class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="exportJadwalToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>';
-    } else if (onPageChangeName === 'pegawai') {
-        exportBtnHtml = '<button class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="exportPegawaiToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>';
-    } else if (onPageChangeName === 'rekap') {
-        exportBtnHtml = '<button id="btnExportRekapToExcel" class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="exportRekapToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>';
-    } else if (onPageChangeName === 'rekapKeseluruhan') {
-        exportBtnHtml = '<button class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="exportRekapKeseluruhanToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>';
-    } else if (onPageChangeName === 'statistik') {
-        exportBtnHtml = '<button class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="exportStatistikToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>';
-    } else if (onPageChangeName === 'logAbsensi') {
-        exportBtnHtml = '<button class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="exportLogAbsensiToExcel()"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>';
-    }
+    const exportMap = {
+        jadwal: { fn: 'exportJadwalToExcel()' },
+        pegawai: { fn: 'exportPegawaiToExcel()' },
+        rekap: { id: 'btnExportRekapToExcel', fn: 'exportRekapToExcel()' },
+        rekapKeseluruhan: { fn: 'exportRekapKeseluruhanToExcel()' },
+        statistik: { fn: 'exportStatistikToExcel()' },
+        logAbsensi: { fn: 'exportLogAbsensiToExcel()' }
+    };
+    const exportConfig = exportMap[onPageChangeName];
+    const exportBtnHtml = exportConfig
+        ? `<button ${exportConfig.id ? `id="${exportConfig.id}" ` : ''}class="btn btn-outline-success btn-sm fw-bold ms-3" onclick="${exportConfig.fn}"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>`
+        : '';
 
     let htmlTop = `
         <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center bg-white py-2 px-3 border rounded shadow-sm mb-3">
@@ -195,7 +193,6 @@ let tambahPesertaState = { available: [], selected: [] }; // State untuk modal t
 async function prosesLogin() {
     const usernameInput = document.getElementById('adminUser');
     const passwordInput = document.getElementById('adminPass');
-    const loginButton = document.getElementById('btnLogin');
 
     const username = usernameInput.value.trim();
     const password = passwordInput.value.trim();
@@ -205,45 +202,32 @@ async function prosesLogin() {
         return;
     }
 
-    // Nonaktifkan tombol untuk mencegah klik ganda
-    loginButton.disabled = true;
-    loginButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Memproses...';
+    await withButtonLoading('btnLogin', '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Memproses...', async () => {
+        try {
+            const result = await fetchAdmin(`${API_BASE_URL}/admin/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
 
-    try {
-        const result = await fetchAdmin(`${API_BASE_URL}/admin/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
+            const adminToken = result?.data?.access_token;
+            if (result.status && adminToken) {
+                localStorage.setItem('admin_jwt_token', adminToken);
+                checkSuperAdminUI();
 
-        const adminToken = result?.data?.access_token;
-        if (result.status && adminToken) {
-            // Jika login berhasil, simpan token ke localStorage
-            localStorage.setItem('admin_jwt_token', adminToken);
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('dashboardContainer').classList.remove('d-none');
+                if (document.getElementById('adminNavbar')) document.getElementById('adminNavbar').classList.remove('d-none');
 
-            // Periksa role untuk menu navigasi super admin
-            checkSuperAdminUI();
-
-            // Sembunyikan overlay login dan tampilkan konten admin
-            document.getElementById('loginOverlay').style.display = 'none';
-            document.getElementById('dashboardContainer').classList.remove('d-none');
-            if (document.getElementById('adminNavbar')) document.getElementById('adminNavbar').classList.remove('d-none');
-
-            // Di sini Anda bisa memanggil fungsi untuk memuat data awal dashboard, contoh:
-            loadJadwalKegiatan();
-        } else {
-            // Jika login gagal, tampilkan pesan error
-            Swal.fire('Gagal', `Login Gagal: ${result.message}`, 'error');
+                loadJadwalKegiatan();
+            } else {
+                Swal.fire('Gagal', `Login Gagal: ${result.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error proses login:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat login.', 'error');
         }
-
-    } catch (error) {
-        console.error('Error proses login:', error);
-        Swal.fire('Gagal', 'Terjadi kesalahan saat login.', 'error');
-    } finally {
-        // Aktifkan kembali tombol login
-        loginButton.disabled = false;
-        loginButton.textContent = 'Masuk';
-    }
+    });
 }
 
 /**
@@ -522,7 +506,7 @@ function renderJadwalTable(jadwalList) {
     const tbody = document.getElementById('listKegiatanBody');
     tbody.innerHTML = '';
     if (jadwalList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Belum ada jadwal kegiatan.</td></tr>';
+        setTableEmpty(tbody, 5, 'Belum ada jadwal kegiatan.');
         return;
     }
 
@@ -646,8 +630,6 @@ async function tampilkanPengaturanLanjutan(mode) {
 async function submitKegiatanBaru(event) {
     event.preventDefault();
     const btn = document.getElementById('btnSimpanKegiatan');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Menyimpan...';
 
     const payload = {
         judul: document.getElementById('newJudul').value,
@@ -665,52 +647,53 @@ async function submitKegiatanBaru(event) {
         aktifkan_antrian: (document.getElementById('newAktifkanAntrian') && document.getElementById('newAktifkanAntrian').value !== '') ? document.getElementById('newAktifkanAntrian').value : 0
     };
 
+    await withButtonLoading(btn, '<span class="spinner-border spinner-border-sm"></span> Menyimpan...', async () => {
+        try {
+            const result = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
 
-    try {
-        const result = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal`, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
-
-        if (result.status) {
-            modalBuatKegiatan.hide();
-            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: result.message });
-            loadJadwalKegiatan();
-        } else {
-            Swal.fire('Gagal', result.message, 'error');
+            if (result.status) {
+                modalBuatKegiatan.hide();
+                showAdminToast(result.message);
+                loadJadwalKegiatan();
+            } else {
+                Swal.fire('Gagal', result.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error creating schedule:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan jadwal.', 'error');
         }
-    } catch (error) {
-        console.error('Error creating schedule:', error);
-        Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan jadwal.', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Simpan Jadwal';
-    }
+    });
 }
 
 /**
  * Menghapus jadwal kegiatan.
  */
 async function hapusKegiatan(kodeAkses) {
-    if (!confirm(`Apakah Anda yakin ingin menghapus jadwal dengan kode ${kodeAkses}? Aksi ini tidak dapat dibatalkan.`)) {
-        return;
-    }
-
-    try {
-        const result = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal/${kodeAkses}`, {
-            method: 'DELETE'
-        });
-
-        if (result.status) {
-            Swal.fire('Sukses', result.message, 'success');
-            loadJadwalKegiatan();
-        } else {
-            Swal.fire('Gagal', 'Gagal menghapus: ' + result.message, 'error');
+    await confirmAndExecute({
+        title: 'Anda Yakin?',
+        html: `Apakah Anda yakin ingin menghapus jadwal dengan kode <b>${escapeHtml(kodeAkses)}</b>?<br>Aksi ini tidak dapat dibatalkan.`,
+        icon: 'warning',
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Ya, Hapus!',
+        cancelButtonText: 'Batal',
+        action: () => fetchWithAuth(`${API_BASE_URL}/admin/jadwal/${kodeAkses}`, { method: 'DELETE' }),
+        onSuccess: (result) => {
+            if (result.status) {
+                Swal.fire('Sukses', result.message, 'success');
+                loadJadwalKegiatan();
+            } else {
+                Swal.fire('Gagal', 'Gagal menghapus: ' + result.message, 'error');
+            }
+        },
+        onError: (error) => {
+            console.error('Error deleting schedule:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus jadwal.', 'error');
         }
-    } catch (error) {
-        console.error('Error deleting schedule:', error);
-        Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus jadwal.', 'error');
-    }
+    });
 }
 
 /**
@@ -960,8 +943,6 @@ async function bukaModalEdit(kodeAkses) {
 async function submitEditKegiatan(event) {
     event.preventDefault();
     const btn = document.getElementById('btnSimpanEditKegiatan');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Memperbarui...';
 
     const kodeAkses = document.getElementById('editKodeAkses').value;
     const payload = {
@@ -980,27 +961,25 @@ async function submitEditKegiatan(event) {
         aktifkan_antrian: document.getElementById('editAktifkanAntrian') ? document.getElementById('editAktifkanAntrian').value : 0
     };
 
+    await withButtonLoading(btn, '<span class="spinner-border spinner-border-sm"></span> Memperbarui...', async () => {
+        try {
+            const result = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal/${kodeAkses}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
 
-    try {
-        const result = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal/${kodeAkses}`, {
-            method: 'PUT',
-            body: JSON.stringify(payload)
-        });
-
-        if (result.status) {
-            modalEditKegiatan.hide();
-            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: result.message });
-            loadJadwalKegiatan();
-        } else {
-            Swal.fire('Gagal', result.message, 'error');
+            if (result.status) {
+                modalEditKegiatan.hide();
+                showAdminToast(result.message);
+                loadJadwalKegiatan();
+            } else {
+                Swal.fire('Gagal', result.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error updating schedule:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat memperbarui jadwal.', 'error');
         }
-    } catch (error) {
-        console.error('Error updating schedule:', error);
-        Swal.fire('Gagal', 'Terjadi kesalahan saat memperbarui jadwal.', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Perbarui Jadwal';
-    }
+    });
 }
 
 function hapusEditGeofence() {
@@ -1493,7 +1472,7 @@ let currentOpdMode = 'add';
 
 async function loadOpdData() {
     const tbody = document.getElementById('opdTableBody');
-    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div> Memuat data OPD...</td></tr>';
+    setTableLoading(tbody, 3, 'Memuat data OPD...');
 
     try {
         // Tambahkan timestamp untuk bypass cache
@@ -1572,8 +1551,6 @@ function bukaModalEditOpd(opd) {
 async function submitOpd(event) {
     event.preventDefault();
     const btn = document.getElementById('btnSimpanOpd');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Menyimpan...';
 
     const payload = {
         nama_opd: document.getElementById('opdNama').value,
@@ -1588,80 +1565,70 @@ async function submitOpd(event) {
         method = 'PUT';
     }
 
-    try {
-        const result = await fetchWithAuth(url, { method: method, body: JSON.stringify(payload) });
-        if (result.status) {
-            modalOpd.hide();
-            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: result.message });
-            loadOpdData();
-        } else {
-            Swal.fire('Gagal', result.message, 'error');
+    await withButtonLoading(btn, '<span class="spinner-border spinner-border-sm"></span> Menyimpan...', async () => {
+        try {
+            const result = await fetchWithAuth(url, { method: method, body: JSON.stringify(payload) });
+            if (result.status) {
+                modalOpd.hide();
+                showAdminToast(result.message);
+                loadOpdData();
+            } else {
+                Swal.fire('Gagal', result.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error submitting OPD:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan data OPD.', 'error');
         }
-    } catch (error) {
-        console.error('Error submitting OPD:', error);
-        Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan data OPD.', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = (currentOpdMode === 'add') ? '<i class="bi bi-plus-circle"></i> Tambah OPD' : '<i class="bi bi-floppy"></i> Simpan Perubahan';
-    }
+    });
 }
 
 async function hapusOpd(id, nama) {
-    const confirmation = await Swal.fire({
+    await confirmAndExecute({
         title: 'Anda Yakin?',
         html: `Anda akan menghapus OPD:<br><b>${nama}</b>.<br>Aksi ini tidak dapat dibatalkan!`,
-        icon: 'warning',
-        showCancelButton: true,
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6',
         confirmButtonText: 'Ya, Hapus!',
-        cancelButtonText: 'Batal'
-    });
-
-    if (confirmation.isConfirmed) {
-        try {
-            const result = await fetchWithAuth(`${API_BASE_URL}/admin/opd/${id}`, { method: 'DELETE' });
+        cancelButtonText: 'Batal',
+        action: () => fetchWithAuth(`${API_BASE_URL}/admin/opd/${id}`, { method: 'DELETE' }),
+        onSuccess: (result) => {
             if (result.status) {
                 Swal.fire('Terhapus!', result.message, 'success');
                 loadOpdData();
             } else {
                 Swal.fire('Gagal', result.message, 'error');
             }
-        } catch (error) {
+        },
+        onError: (error) => {
             console.error('Error deleting OPD:', error);
             Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus OPD.', 'error');
         }
-    }
+    });
 }
 
 async function syncOpdList() {
-    const confirmation = await Swal.fire({
+    await confirmAndExecute({
         title: 'Sinkronkan Cache OPD?',
-        html: `Anda akan memperbarui daftar OPD yang disimpan di cache Cloudflare. Ini akan memastikan PWA menggunakan daftar OPD terbaru.`,
+        html: 'Anda akan memperbarui daftar OPD yang disimpan di cache Cloudflare. Ini akan memastikan PWA menggunakan daftar OPD terbaru.',
         icon: 'info',
-        showCancelButton: true,
         confirmButtonColor: '#198754',
         cancelButtonColor: '#6c757d',
         confirmButtonText: 'Ya, Sinkronkan!',
-        cancelButtonText: 'Batal'
-    });
-
-    if (confirmation.isConfirmed) {
-        showAdminLoading(true, 'Memulai sinkronisasi...');
-        try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/admin/opd/sync-kv`, { method: 'POST' });
-            showAdminLoading(false);
+        cancelButtonText: 'Batal',
+        loadingTitle: 'Memulai sinkronisasi...',
+        action: () => fetchWithAuth(`${API_BASE_URL}/admin/opd/sync-kv`, { method: 'POST' }),
+        onSuccess: (res) => {
             if (res.status) {
-                Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: res.message });
+                showAdminToast(res.message);
             } else {
                 Swal.fire('Gagal', res.message, 'error');
             }
-        } catch (error) {
-            showAdminLoading(false);
+        },
+        onError: (error) => {
             console.error('Error syncing OPD list:', error);
             Swal.fire('Gagal', 'Terjadi kesalahan saat sinkronisasi cache OPD.', 'error');
         }
-    }
+    });
 }
 
 function renderRekapTable(filteredPegawai, pagination = null) {
@@ -1907,27 +1874,18 @@ function renderFotoKehadiranGrid(filteredPegawai) {
 }
 
 async function hapusDataAbsensi(nip, nama, kodeAkses) {
-    const confirmation = await Swal.fire({
+    await confirmAndExecute({
         title: 'Anda Yakin?',
         html: `Anda akan menghapus <b>${nama}</b> (NIP: ${nip}) dari rekap kegiatan ini. <br><br><strong class="text-danger">Aksi ini tidak dapat dibatalkan dan akan menghilangkan data kehadiran/ketidakhadiran pegawai ini dari rekap.</strong>`,
         icon: 'warning',
-        showCancelButton: true,
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6',
         confirmButtonText: 'Ya, Hapus!',
-        cancelButtonText: 'Batal'
-    });
-
-    if (confirmation.isConfirmed) {
-        try {
-            const result = await fetchWithAuth(`${API_BASE_URL}/admin/rekap/entry/${kodeAkses}/${nip}`, {
-                method: 'DELETE'
-            });
-
+        cancelButtonText: 'Batal',
+        action: () => fetchWithAuth(`${API_BASE_URL}/admin/rekap/entry/${kodeAkses}/${nip}`, { method: 'DELETE' }),
+        onSuccess: (result) => {
             if (result.status) {
                 Swal.fire('Terhapus!', result.message, 'success');
-
-                // Hapus dari data cache dan render ulang
                 currentRekapData.filtered_pegawai = currentRekapData.filtered_pegawai.filter(p => p.nip !== nip);
                 const selectedView = document.getElementById('rekapFilterView').value;
                 if (selectedView === 'table') {
@@ -1939,11 +1897,12 @@ async function hapusDataAbsensi(nip, nama, kodeAkses) {
             } else {
                 Swal.fire('Gagal', result.message, 'error');
             }
-        } catch (error) {
+        },
+        onError: (error) => {
             console.error('Error deleting absensi data:', error);
             Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus data absensi.', 'error');
         }
-    }
+    });
 }
 
 async function bukaModalVerifikasi(pegawai) {
@@ -2026,91 +1985,82 @@ async function submitVerifikasi(event) {
     }
 
     const btn = document.getElementById('btnSimpanVerif');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Menyimpan...';
+    await withButtonLoading(btn, '<span class="spinner-border spinner-border-sm"></span> Menyimpan...', async () => {
+        try {
+            const result = await fetchWithAuth(`${API_BASE_URL}/admin/verifikasi`, {
+                method: 'POST',
+                body: formData
+            });
 
-    try {
-        const result = await fetchWithAuth(`${API_BASE_URL}/admin/verifikasi`, {
-            method: 'POST',
-            body: formData
-        });
+            if (result.status) {
+                modalVerifikasi.hide();
+                Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, icon: 'success', title: result.message });
 
-        if (result.status) {
-            modalVerifikasi.hide();
-            Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, icon: 'success', title: result.message });
+                // In-place update data lokal tanpa refetch ulang ke server (posisi scroll & paginasi terjaga)
+                const targetNip = document.getElementById('verifNip').value;
+                const targetKodeAkses = document.getElementById('verifKodeAkses').value;
+                const newVerifStatus = document.getElementById('verifStatus').value;
+                const newKehadiranStatus = document.getElementById('verifStatusKehadiran').value;
+                const newKeteranganVerif = document.getElementById('verifKeterangan').value;
+                const newOpd = document.getElementById('verifOpd').value;
+                const newJabatan = document.getElementById('verifJabatan').value;
+                const updatedData = result.data || {};
 
-            // In-place update data lokal tanpa refetch ulang ke server (posisi scroll & paginasi terjaga)
-            const targetNip = document.getElementById('verifNip').value;
-            const targetKodeAkses = document.getElementById('verifKodeAkses').value;
-            const newVerifStatus = document.getElementById('verifStatus').value;
-            const newKehadiranStatus = document.getElementById('verifStatusKehadiran').value;
-            const newKeteranganVerif = document.getElementById('verifKeterangan').value;
-            const newOpd = document.getElementById('verifOpd').value;
-            const newJabatan = document.getElementById('verifJabatan').value;
-            const updatedData = result.data || {};
+                if (!document.getElementById('rekapKeseluruhanContainer').classList.contains('d-none')) {
+                    // Menu Rekap Keseluruhan
+                    if (Array.isArray(currentRekapKeseluruhanData)) {
+                        currentRekapKeseluruhanData.forEach(p => {
+                            if (p.nip === targetNip && p.kode_akses === targetKodeAkses) {
+                                const oldVerif = p.status_verifikasi;
+                                p.status_verifikasi = newVerifStatus;
+                                p.status_kehadiran = newKehadiranStatus;
+                                if (updatedData.waktu_absen) p.waktu_absen = updatedData.waktu_absen;
+                                p.waktu = p.waktu_absen;
+                                p.keterangan = newKeteranganVerif;
+                                p.opd = newOpd;
+                                p.nama_jabatan = newJabatan;
+                                if (updatedData.status_perangkat) p.status_perangkat = updatedData.status_perangkat;
 
-            if (!document.getElementById('rekapKeseluruhanContainer').classList.contains('d-none')) {
-                // Menu Rekap Keseluruhan
-                if (Array.isArray(currentRekapKeseluruhanData)) {
-                    currentRekapKeseluruhanData.forEach(p => {
-                        if (p.nip === targetNip && p.kode_akses === targetKodeAkses) {
-                            const oldVerif = p.status_verifikasi;
-                            p.status_verifikasi = newVerifStatus;
-                            p.status_kehadiran = newKehadiranStatus;
-                            if (updatedData.waktu_absen) p.waktu_absen = updatedData.waktu_absen;
-                            p.waktu = p.waktu_absen;
-                            if (updatedData.nama_file_foto) p.nama_file_foto = updatedData.nama_file_foto;
-                            if (updatedData.lokasi) p.lokasi_absen = updatedData.lokasi;
-                            p.keterangan_verifikasi = newKeteranganVerif;
-                            p.perangkat_daerah = newOpd;
-                            p.jabatan = newJabatan;
-
-                            if (oldVerif === 'Menunggu Verifikasi Admin' && newVerifStatus !== 'Menunggu Verifikasi Admin' && lastKeseluruhanPagination) {
-                                lastKeseluruhanPagination.pending_verifikasi_count = Math.max(0, (lastKeseluruhanPagination.pending_verifikasi_count || 1) - 1);
+                                if (oldVerif === 'Menunggu' && newVerifStatus !== 'Menunggu') {
+                                    decrementBadgeMenunggu();
+                                }
                             }
-                        }
-                    });
-                }
-                renderRekapKeseluruhanTable(currentRekapKeseluruhanData, lastKeseluruhanPagination);
-            } else if (!document.getElementById('rekapContainer').classList.contains('d-none')) {
-                // Menu Rekap Per Kegiatan
-                if (currentRekapData && Array.isArray(currentRekapData.filtered_pegawai)) {
-                    currentRekapData.filtered_pegawai.forEach(p => {
-                        if (p.nip === targetNip) {
-                            const oldVerif = p.status_verifikasi;
-                            p.status_verifikasi = newVerifStatus;
-                            p.status_kehadiran = newKehadiranStatus;
-                            if (updatedData.waktu_absen) p.waktu_absen = updatedData.waktu_absen;
-                            p.waktu = p.waktu_absen;
-                            if (updatedData.nama_file_foto) p.nama_file_foto = updatedData.nama_file_foto;
-                            if (updatedData.lokasi) p.lokasi_absen = updatedData.lokasi;
-                            p.keterangan_verifikasi = newKeteranganVerif;
-                            p.perangkat_daerah = newOpd;
-                            p.jabatan = newJabatan;
-
-                            if (oldVerif === 'Menunggu Verifikasi Admin' && newVerifStatus !== 'Menunggu Verifikasi Admin' && lastRekapPagination) {
-                                lastRekapPagination.pending_verifikasi_count = Math.max(0, (lastRekapPagination.pending_verifikasi_count || 1) - 1);
-                            }
-                        }
-                    });
-                }
-                const selectedView = document.getElementById('rekapFilterView').value;
-                if (selectedView === 'table') {
-                    renderRekapTable(currentRekapData.filtered_pegawai, lastRekapPagination);
+                        });
+                        renderRekapKeseluruhanTable(currentRekapKeseluruhanData, lastKeseluruhanPagination);
+                    }
                 } else {
+                    // Menu Rekap Single Jadwal
+                    if (currentRekapData && Array.isArray(currentRekapData.filtered_pegawai)) {
+                        currentRekapData.filtered_pegawai.forEach(p => {
+                            if (p.nip === targetNip) {
+                                const oldVerif = p.status_verifikasi;
+                                p.status_verifikasi = newVerifStatus;
+                                p.status_kehadiran = newKehadiranStatus;
+                                if (updatedData.waktu_absen) p.waktu_absen = updatedData.waktu_absen;
+                                p.waktu = p.waktu_absen;
+                                p.keterangan = newKeteranganVerif;
+                                p.opd = newOpd;
+                                p.nama_jabatan = newJabatan;
+                                if (updatedData.status_perangkat) p.status_perangkat = updatedData.status_perangkat;
+
+                                if (oldVerif === 'Menunggu' && newVerifStatus !== 'Menunggu') {
+                                    decrementBadgeMenunggu();
+                                }
+                            }
+                        });
+                    }
+                    refreshRekapSummary();
+                    renderRekapTable(currentRekapData.filtered_pegawai, lastRekapPagination);
                     renderFotoKehadiranGrid(currentRekapData.filtered_pegawai);
                 }
+            } else {
+                Swal.fire('Gagal', 'Gagal memperbarui: ' + result.message, 'error');
             }
-        } else {
-            Swal.fire('Gagal', 'Gagal memperbarui: ' + result.message, 'error');
+        } catch (error) {
+            console.error('Error submitting verification:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan verifikasi absensi.', 'error');
         }
-    } catch (error) {
-        console.error('Error submitting verification:', error);
-        Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan verifikasi absensi.', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-floppy"></i> Simpan Status';
-    }
+    });
 }
 
 // --- FUNGSI SET ABSEN MASAL DIHAPUS (Digabung ke Tambah Peserta) ---
@@ -2740,8 +2690,7 @@ async function loadPegawai(isFromPagination = false) {
     const syncStatus = document.getElementById('pegawaiFilterSync').value;
     const search = document.getElementById('pegawaiSearchInput').value;
     const tbody = document.getElementById('pegawaiTableBody');
-
-    tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div> Memuat data pegawai...</td></tr>';
+    setTableLoading(tbody, 11, 'Memuat data pegawai...');
 
     try {
         const result = await fetchWithAuth(`${API_BASE_URL}/admin/pegawai?page=${paginasiState.page}&limit=${paginasiState.limit}&opd=${encodeURIComponent(opd === 'semua' ? '' : opd)}&install=${installStatus}&sync=${syncStatus}&search=${encodeURIComponent(search)}`);
@@ -2830,65 +2779,55 @@ function renderPegawaiTable(pegawaiList) {
 }
 
 async function syncPegawaiKv(nip, nama) {
-    const confirmation = await Swal.fire({
+    await confirmAndExecute({
         title: 'Sinkronkan Ulang Cache?',
         html: `Anda akan memicu sinkronisasi ulang cache untuk pegawai:<br><b>${nama}</b> (NIP: ${nip}).<br><br>Ini akan memperbarui data di cache.`,
         icon: 'info',
-        showCancelButton: true,
         confirmButtonColor: '#198754',
         cancelButtonColor: '#6c757d',
         confirmButtonText: 'Ya, Sinkronkan!',
-        cancelButtonText: 'Batal'
-    });
-
-    if (confirmation.isConfirmed) {
-        showAdminLoading(true, 'Memulai sinkronisasi...');
-        try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/admin/pegawai/sync-kv/${nip}`, { method: 'POST' });
-            showAdminLoading(false);
+        cancelButtonText: 'Batal',
+        loadingTitle: 'Memulai sinkronisasi...',
+        action: () => fetchWithAuth(`${API_BASE_URL}/admin/pegawai/sync-kv/${nip}`, { method: 'POST' }),
+        onSuccess: (res) => {
             if (res.status) {
-                Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: res.message });
-                loadPegawai(); // Muat ulang data tabel untuk melihat status baru
+                showAdminToast(res.message);
+                loadPegawai();
             } else {
                 Swal.fire('Gagal', res.message, 'error');
             }
-        } catch (error) {
-            showAdminLoading(false);
+        },
+        onError: (error) => {
             console.error('Error syncing pegawai KV:', error);
             Swal.fire('Gagal', 'Terjadi kesalahan saat sinkronisasi pegawai ke KV.', 'error');
         }
-    }
+    });
 }
 
 async function syncJadwalKv(kodeAkses, judul) {
-    const confirmation = await Swal.fire({
+    await confirmAndExecute({
         title: 'Sinkronkan Ulang Cache?',
         html: `Anda akan memicu sinkronisasi ulang cache untuk jadwal:<br><b>${judul}</b> (Kode: ${kodeAkses}).<br><br>Ini akan memperbarui data di cache.`,
         icon: 'info',
-        showCancelButton: true,
         confirmButtonColor: '#198754',
         cancelButtonColor: '#6c757d',
         confirmButtonText: 'Ya, Sinkronkan!',
-        cancelButtonText: 'Batal'
-    });
-
-    if (confirmation.isConfirmed) {
-        showAdminLoading(true, 'Memulai sinkronisasi...');
-        try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal/sync-kv/${kodeAkses}`, { method: 'POST' });
-            showAdminLoading(false);
+        cancelButtonText: 'Batal',
+        loadingTitle: 'Memulai sinkronisasi...',
+        action: () => fetchWithAuth(`${API_BASE_URL}/admin/jadwal/sync-kv/${kodeAkses}`, { method: 'POST' }),
+        onSuccess: (res) => {
             if (res.status) {
-                Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, icon: 'success', title: res.message });
-                loadJadwalKegiatan(); // Muat ulang data tabel untuk melihat status baru
+                showAdminToast(res.message);
+                loadJadwalKegiatan();
             } else {
                 Swal.fire('Gagal', res.message, 'error');
             }
-        } catch (error) {
-            showAdminLoading(false);
-            console.error('Error syncing single pegawai KV:', error);
-            Swal.fire('Gagal', 'Terjadi kesalahan saat sinkronisasi pegawai ke KV.', 'error');
+        },
+        onError: (error) => {
+            console.error('Error syncing single jadwal KV:', error);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat sinkronisasi jadwal ke KV.', 'error');
         }
-    }
+    });
 }
 
 async function loadAllOpdList() {
@@ -3106,31 +3045,28 @@ async function submitPegawai(event) {
 }
 
 async function hapusPegawai(nip, nama) {
-    const confirmation = await Swal.fire({
+    await confirmAndExecute({
         title: 'Anda Yakin?',
         html: `Anda akan menghapus pegawai:<br><b>${nama}</b> (NIP: ${nip}).<br>Aksi ini tidak dapat dibatalkan!`,
         icon: 'warning',
-        showCancelButton: true,
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6',
         confirmButtonText: 'Ya, Hapus!',
-        cancelButtonText: 'Batal'
-    });
-
-    if (confirmation.isConfirmed) {
-        try {
-            const result = await fetchWithAuth(`${API_BASE_URL}/admin/pegawai/${nip}`, { method: 'DELETE' });
+        cancelButtonText: 'Batal',
+        action: () => fetchWithAuth(`${API_BASE_URL}/admin/pegawai/${nip}`, { method: 'DELETE' }),
+        onSuccess: (result) => {
             if (result.status) {
                 Swal.fire('Terhapus!', result.message, 'success');
-                loadPegawai(); // Muat ulang tabel setelah berhasil hapus
+                loadPegawai();
             } else {
                 Swal.fire('Gagal', result.message, 'error');
             }
-        } catch (error) {
+        },
+        onError: (error) => {
             console.error('Error deleting pegawai:', error);
             Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus data pegawai.', 'error');
         }
-    }
+    });
 }
 
 // =========================================================================
@@ -3479,35 +3415,28 @@ function renderRekapKeseluruhanTable(data, pagination = null) {
 }
 
 async function hapusDataAbsensiKeseluruhan(nip, nama, kodeAkses) {
-    const confirmation = await Swal.fire({
+    await confirmAndExecute({
         title: 'Anda Yakin?',
         html: `Anda akan menghapus <b>${nama}</b> (NIP: ${nip}) dari rekap kegiatan ini. <br><br><strong class="text-danger">Aksi ini tidak dapat dibatalkan dan akan menghilangkan data kehadiran/ketidakhadiran pegawai ini dari rekap.</strong>`,
         icon: 'warning',
-        showCancelButton: true,
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6',
         confirmButtonText: 'Ya, Hapus!',
-        cancelButtonText: 'Batal'
-    });
-
-    if (confirmation.isConfirmed) {
-        try {
-            const result = await fetchWithAuth(`${API_BASE_URL}/admin/rekap/entry/${kodeAkses}/${nip}`, {
-                method: 'DELETE'
-            });
-
+        cancelButtonText: 'Batal',
+        action: () => fetchWithAuth(`${API_BASE_URL}/admin/rekap/entry/${kodeAkses}/${nip}`, { method: 'DELETE' }),
+        onSuccess: (result) => {
             if (result.status) {
                 Swal.fire('Terhapus!', result.message, 'success');
-                // Refresh data dengan filter yang sama
                 terapkanFilterRekapKeseluruhan();
             } else {
                 Swal.fire('Gagal', result.message, 'error');
             }
-        } catch (error) {
+        },
+        onError: (error) => {
             console.error('Error deleting absensi data keseluruhan:', error);
             Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus data absensi.', 'error');
         }
-    }
+    });
 }
 
 async function bukaModalVerifikasiKeseluruhan(pegawai) {
@@ -4446,38 +4375,19 @@ async function syncPengaturanKv() {
         return;
     }
 
-    const btn = document.getElementById('btnSyncPengaturanKv');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyinkronkan...';
-    }
-
-    try {
-        const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan/sync-kv`, {
-            method: 'POST'
-        });
-
-        if (res.status) {
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                icon: 'success',
-                title: 'Sinkronisasi KV berhasil!',
-                showConfirmButton: false,
-                timer: 2000
-            });
-        } else {
-            Swal.fire('Gagal Sinkronisasi', res.message || 'Gagal menyinkronkan data ke Worker KV.', 'error');
+    await withButtonLoading('btnSyncPengaturanKv', '<span class="spinner-border spinner-border-sm me-1"></span> Menyinkronkan...', async () => {
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan/sync-kv`, { method: 'POST' });
+            if (res.status) {
+                showAdminToast('Sinkronisasi KV berhasil!');
+            } else {
+                Swal.fire('Gagal Sinkronisasi', res.message || 'Gagal menyinkronkan data ke Worker KV.', 'error');
+            }
+        } catch (e) {
+            console.error('Error sinkronisasi KV pengaturan:', e);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat sinkronisasi pengaturan ke Worker KV.', 'error');
         }
-    } catch (e) {
-        console.error('Error sinkronisasi KV pengaturan:', e);
-        Swal.fire('Gagal', 'Terjadi kesalahan saat sinkronisasi pengaturan ke Worker KV.', 'error');
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-cloud-upload me-1"></i> Sinkronkan ke Worker KV';
-        }
-    }
+    });
 }
 
 
@@ -4492,50 +4402,33 @@ async function hapusPengaturan(kodeEnc, namaEnc) {
     const kode = decodeURIComponent(kodeEnc || '');
     const nama = decodeURIComponent(namaEnc || '');
 
-    const confirmResult = await Swal.fire({
+    await confirmAndExecute({
         title: 'Hapus Pengaturan?',
         html: `Apakah Anda yakin ingin menghapus pengaturan <b>${escapeHtml(nama)}</b> (<code>${escapeHtml(kode)}</code>)?<br><br><strong class="text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i> Kesalahan dalam penghapusan dapat menyebabkan aplikasi error.</strong>`,
         icon: 'warning',
-        showCancelButton: true,
         confirmButtonColor: '#d33',
         cancelButtonColor: '#6c757d',
         confirmButtonText: 'Ya, Hapus!',
-        cancelButtonText: 'Batal'
-    });
-
-    if (!confirmResult.isConfirmed) return;
-
-    showAdminLoading(true, 'Menghapus pengaturan...');
-    try {
-        const res = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan/${encodeURIComponent(kode)}`, {
-            method: 'DELETE'
-        });
-        showAdminLoading(false);
-
-        if (res && res.status) {
-            // Refresh list pengaturan
-            const refreshRes = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
-            if (refreshRes && refreshRes.status && refreshRes.data) {
-                listPengaturanCache = Array.isArray(refreshRes.data) ? refreshRes.data : [];
-                renderTabelPengaturanAplikasi(listPengaturanCache);
+        cancelButtonText: 'Batal',
+        loadingTitle: 'Menghapus pengaturan...',
+        action: () => fetchWithAuth(`${API_BASE_URL}/admin/pengaturan/${encodeURIComponent(kode)}`, { method: 'DELETE' }),
+        onSuccess: async (res) => {
+            if (res && res.status) {
+                const refreshRes = await fetchWithAuth(`${API_BASE_URL}/admin/pengaturan`);
+                if (refreshRes && refreshRes.status && refreshRes.data) {
+                    listPengaturanCache = Array.isArray(refreshRes.data) ? refreshRes.data : [];
+                    renderTabelPengaturanAplikasi(listPengaturanCache);
+                }
+                showAdminToast(res.message);
+            } else {
+                Swal.fire('Gagal', (res && res.message) ? res.message : 'Gagal menghapus pengaturan.', 'error');
             }
-
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                icon: 'success',
-                title: res.message,
-                showConfirmButton: false,
-                timer: 2500
-            });
-        } else {
-            Swal.fire('Gagal', (res && res.message) ? res.message : 'Gagal menghapus pengaturan.', 'error');
+        },
+        onError: (e) => {
+            console.error('Error menghapus pengaturan:', e);
+            Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus pengaturan aplikasi.', 'error');
         }
-    } catch (e) {
-        showAdminLoading(false);
-        console.error('Error menghapus pengaturan:', e);
-        Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus pengaturan aplikasi.', 'error');
-    }
+    });
 }
 
 async function bukaHalamanLogAbsensi() {
