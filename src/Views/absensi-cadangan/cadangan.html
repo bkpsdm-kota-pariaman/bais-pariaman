@@ -217,14 +217,15 @@
                                     placeholder="Contoh: Analis Kebijakan Ahli Muda / Guru" required>
                             </div>
 
-                            <!-- 6. Perangkat Daerah (Dropdown Opsi) -->
+                            <!-- 6. Perangkat Daerah (Datalist Opsi / Ketik Manual) -->
                             <div>
                                 <label for="inpOpd" class="block text-xs font-bold text-gray-600 mb-1">
                                     Perangkat Daerah (OPD) <span class="text-red-500">*</span>
                                 </label>
-                                <select id="inpOpd" class="inp-field text-xs py-3" required>
-                                    <option value="" disabled selected>-- Pilih Perangkat Daerah --</option>
-                                </select>
+                                <input type="text" id="inpOpd" list="listOpd" class="inp-field uppercase"
+                                    placeholder="Pilih atau ketik nama Perangkat Daerah..." required>
+                                <datalist id="listOpd"></datalist>
+                                <span class="text-[10px] text-gray-400 mt-1 block">Pilih dari daftar rekomendasi atau ketik langsung nama OPD jika tidak ada.</span>
                             </div>
                         </div>
 
@@ -662,32 +663,25 @@
         // INISIALISASI OPD SELECT (DITARIK DINAMIS DARI GOOGLE SHEET list_opd)
         // =========================================================================
         function initOpdSelect(opdArray) {
-            var selectEl = document.getElementById('inpOpd');
-            if (!selectEl) return;
+            var datalistEl = document.getElementById('listOpd');
+            if (!datalistEl) return;
 
+            datalistEl.innerHTML = '';
             if (!Array.isArray(opdArray) || opdArray.length === 0) {
-                selectEl.innerHTML = '<option value="" disabled selected>-- Gagal Memuat Perangkat Daerah dari Google Sheet --</option>';
                 return;
             }
 
-            selectEl.innerHTML = '<option value="" disabled selected>-- Pilih Perangkat Daerah --</option>';
             var sorted = Array.from(new Set(opdArray)).sort(function (a, b) {
                 return a.localeCompare(b);
             });
             sorted.forEach(function (opd) {
                 var opt = document.createElement('option');
                 opt.value = opd;
-                opt.textContent = opd;
-                selectEl.appendChild(opt);
+                datalistEl.appendChild(opt);
             });
         }
 
         function fetchOpdFromGas() {
-            var selectEl = document.getElementById('inpOpd');
-            if (selectEl) {
-                selectEl.innerHTML = '<option value="" disabled selected>-- Memuat Perangkat Daerah dari Google Sheet... --</option>';
-            }
-
             // Priority 1: Panggilan langsung dari dalam Google Apps Script HtmlService
             if (typeof google !== 'undefined' && google.script && google.script.run) {
                 google.script.run
@@ -696,7 +690,6 @@
                     })
                     .withFailureHandler(function (err) {
                         console.warn('Gagal fetch OPD via google.script.run:', err);
-                        initOpdSelect([]);
                     })
                     .getOpdList();
                 return;
@@ -709,13 +702,10 @@
                     if (data && (Array.isArray(data.data) || Array.isArray(data))) {
                         var opdItems = Array.isArray(data.data) ? data.data : data;
                         initOpdSelect(opdItems);
-                    } else {
-                        initOpdSelect([]);
                     }
                 })
                 .catch(function (errFetch) {
                     console.warn('Gagal fetch API OPD dari Google Sheet:', errFetch);
-                    initOpdSelect([]);
                 });
         }
 
