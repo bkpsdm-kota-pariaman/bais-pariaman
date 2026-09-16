@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.61'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.62'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -974,7 +974,7 @@ async function prosesLogin(e) {
         }
     } catch (error) {
         console.error("Login gagal:", error);
-        Swal.fire("Login Gagal", `Ada kesalahan di aplikasi, ${error.message || error}`, "error");
+        Swal.fire("Login Gagal", `${error.message || error}`, "error");
     } finally {
         showLoading(false);
     }
@@ -1247,7 +1247,7 @@ async function generateUserQrToken() {
         }
     } catch (finalError) {
         console.error("Gagal membuat QR Code.", finalError);
-        Swal.fire("Gagal Membuat QR", `Ada kesalahan di aplikasi, ${finalError.message || finalError}`, "error");
+        Swal.fire("Gagal Membuat QR", `${finalError.message || finalError}`, "error");
     } finally {
         showLoading(false);
     }
@@ -1392,7 +1392,7 @@ async function adminCepatCekJadwal(event) {
 
     } catch (error) {
         console.error("Error saat memeriksa jadwal admin cepat:", error);
-        Swal.fire("Gagal", `Ada kesalahan di aplikasi, ${error.message || error}`, "error");
+        Swal.fire("Gagal", `${error.message || error}`, "error");
     } finally {
         // Pastikan overlay loading selalu disembunyikan setelah proses selesai.
         showLoading(false);
@@ -1591,7 +1591,7 @@ async function refreshProfil() {
         }
     } catch (finalError) {
         console.error("Error saat sinkronisasi profil (termasuk fallback):", finalError);
-        Swal.fire("Gagal Sinkronisasi", `Ada kesalahan di aplikasi, ${finalError.message || finalError}`, "error");
+        Swal.fire("Gagal Sinkronisasi", `${finalError.message || finalError}`, "error");
     } finally {
         showLoading(false);
     }
@@ -1900,7 +1900,7 @@ async function prosesQrCode(kodeOrJwt) {
     } catch (error) {
         showLoading(false);
         console.error("Error processing QR/Code:", error);
-        Swal.fire("Gagal", `Ada kesalahan di aplikasi, ${error.message || error}`, "error").then(() => {
+        Swal.fire("Gagal", `${error.message || error}`, "error").then(() => {
             batalAbsen();
         });
     } finally {
@@ -2421,7 +2421,7 @@ async function kirimAbsensi() {
             },
             (message, res, error) => {
                 if (error) console.error('Error saat kirim absensi:', error);
-                const pesanError = error ? `Ada kesalahan di aplikasi, ${error.message}` : (message ? message : (res?.message ? res.message : 'Data absensi ditolak.'));
+                const pesanError = error ? `${error.message}` : (message ? message : (res?.message ? res.message : 'Data absensi ditolak.'));
                 Swal.fire('Gagal Mengirim', pesanError, 'error');
             },
             fallbackUrl
@@ -2531,7 +2531,7 @@ async function adminCepatKirimAbsensi(userToken, fotoBase64 = null) {
         }
     } catch (e) {
         console.error("Error saat kirim absensi cepat:", e);
-        Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `Ada kesalahan di aplikasi, ${e.message || e}`, showConfirmButton: false, timer: 3500 });
+        Swal.fire({ toast: true, position: 'bottom', icon: 'error', title: `${e.message || e}`, showConfirmButton: false, timer: 3500 });
         // Lemparkan kembali error agar bisa ditangkap oleh pemanggil jika perlu.
         throw e;
     } finally {
@@ -3449,7 +3449,7 @@ async function handleScanSuccess(decodedText) {
                 }
             } catch (e) {
                 console.error("Terjadi kesalahan saat mengirim absensi cepat:", e);
-                Swal.fire("Kesalahan", `Ada kesalahan di aplikasi, ${e.message || e}`, "error");
+                Swal.fire("Kesalahan", `${e.message || e}`, "error");
             } finally {
                 showLoading(false);
                 setTimeout(() => {
