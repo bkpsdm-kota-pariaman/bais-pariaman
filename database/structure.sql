@@ -104,7 +104,7 @@ CREATE TABLE `app_absensi_jadwal_kegiatan` (
 --
 
 CREATE TABLE `app_absensi_kegiatan_target_opd` (
-  `kode_akses` varchar(10) NOT NULL,
+  `kode_akses` varchar(50) NOT NULL,
   `nama_opd` varchar(255) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

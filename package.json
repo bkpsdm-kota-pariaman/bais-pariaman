@@ -18,20 +18,20 @@
     "build:static:copy-sitemap": "npx cpx \"src/Views/sitemap.xml\" docs/ || true",
     "build:static": "npm run build:static:dirs && npm run build:static:copy-cname && npm run build:static:copy-ico && npm run build:static:copy-root-htaccess && npm run build:static:copy-robots && npm run build:static:copy-sitemap",
     "build:admin:dirs": "npx mkdirp docs/admin docs/admin/js",
-    "build:admin:js": "npx esbuild \"src/Views/admin/js/*.js\" --minify --outdir=docs/admin/js --out-extension:.js=.min.js --platform=browser --target=es2018",
+    "build:admin:js": "npx esbuild \"src/Views/admin/js/*.js\" --minify --outdir=docs/admin/js --out-extension:.js=.min.js --platform=browser --target=chrome60",
     "build:admin:copy-other": "npx cpx \"src/Views/admin/**/*.{png,jpg,jpeg,svg,ico,css,html}\" docs/admin || true",
     "build:admin:html": "npx html-minifier-terser --collapse-whitespace --remove-comments --minify-css true --minify-js true src/Views/admin/index.html -o docs/admin/index.html",
     "build:admin": "npm run build:admin:dirs && npm run build:admin:js && npm run build:admin:copy-other && npm run build:admin:html",
     "build:absensi:dirs": "npx mkdirp docs/absensi-cadangan",
-    "build:absensi:html": "npx html-minifier-terser --collapse-whitespace --remove-comments --minify-css true --minify-js true src/Views/absensi-cadangan/index.html -o docs/absensi-cadangan/index.html && npx html-minifier-terser --collapse-whitespace --remove-comments --minify-css true --minify-js true src/Views/absensi-cadangan/cadangan.html -o docs/absensi-cadangan/cadangan.html",
-
-    "build:absensi": "npm run build:absensi:dirs && npm run build:absensi:html",
+    "build:absensi:html": "npx html-minifier-terser --collapse-whitespace --remove-comments --minify-css true --minify-js true src/Views/absensi-cadangan/index.html -o docs/absensi-cadangan/index.html",
+    "build:absensi:cadangan-html": "npx html-minifier-terser --collapse-whitespace --remove-comments --minify-css true --minify-js true src/Views/absensi-cadangan/cadangan.html -o docs/absensi-cadangan/cadangan.html",
+    "build:absensi": "npm run build:absensi:dirs && npm run build:absensi:html && npm run build:absensi:cadangan-html",
     "build:pwa:dirs": "npx mkdirp docs/pwa docs/pwa/css docs/pwa/css/fonts docs/pwa/js docs/pwa/icons docs/pwa/uploads docs/pwa/uploads/foto_absensi",
-    "build:pwa:js-app": "npx esbuild \"src/Views/pwa/js/*.js\" --minify --outdir=docs/pwa/js --out-extension:.js=.min.js --platform=browser --target=es2018",
+    "build:pwa:js-app": "npx esbuild \"src/Views/pwa/js/*.js\" --minify --outdir=docs/pwa/js --out-extension:.js=.min.js --platform=browser --target=chrome60",
     "build:pwa:css": "npx esbuild \"src/Views/pwa/css/*.css\" --minify --outdir=docs/pwa/css",
     "build:pwa:tailwind": "npx @tailwindcss/cli -i src/Views/pwa/css/input.css -o docs/pwa/css/tailwinds.min.css --minify",
     "build:pwa:copy-fonts": "npx cpx \"src/Views/pwa/css/fonts/**\" docs/pwa/css/fonts || true",
-    "build:pwa:sw": "npx esbuild \"src/Views/pwa/sw.js\" --minify --outdir=docs/pwa --out-extension:.js=.min.js --target=es2018",
+    "build:pwa:sw": "npx esbuild \"src/Views/pwa/sw.js\" --minify --outdir=docs/pwa --out-extension:.js=.min.js --target=chrome60",
     "build:pwa:copy-manifest": "npx cpx \"src/Views/pwa/manifest.json\" docs/pwa/ || true",
     "build:pwa:copy-icons": "npx cpx \"src/Views/pwa/icons/*\" docs/pwa/icons || true",
     "build:pwa:copy-htaccess": "npx cpx \"src/Views/pwa/**/.htaccess\" docs/pwa || exit 0",
@@ -60,8 +60,5 @@
     "mkdirp": "^3.0.1",
     "rimraf": "^5.0.0",
     "tailwindcss": "^4.3.3"
-  },
-  "dependencies": {
-    "gitnexus": "^1.6.9"
   }
 }

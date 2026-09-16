@@ -7,8 +7,8 @@ use App\Helpers\Response;
 use App\Helpers\Database;
 use App\Helpers\AuthHelper;
 use App\Helpers\AdminAuthHelper;
-use App\Helpers\LogAbsensi; // Patch log absensi
-use App\Helpers\LogHelper; // Tambahkan LogHelper
+use App\Helpers\LogAbsensi; 
+use App\Helpers\LogHelper;
 use PDO;
 use DateTime;
 use DateTimeZone;
@@ -123,10 +123,15 @@ class AbsenController {
 
         // Validasi Strict OPD khusus Mandiri (Absen Cepat Admin Dikecualikan)
         if (!$isAdminOrSuperAdmin && !empty($jadwal['is_strict_opd']) && $jadwal['is_strict_opd'] == 1) {
-            $stmtOpdCheck = $db->prepare("SELECT 1 FROM app_absensi_data_absensi WHERE kode_akses = :kode_akses AND (opd = :opd OR nip = :nip) LIMIT 1");
-            $stmtOpdCheck->execute([':kode_akses' => $kodeAkses, ':opd' => $opd, ':nip' => $nip]);
+            $stmtOpdCheck = $db->prepare("SELECT 1 FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :kode_akses AND nama_opd = :opd LIMIT 1");
+            $stmtOpdCheck->execute([':kode_akses' => $kodeAkses, ':opd' => $opd]);
             if (!$stmtOpdCheck->fetchColumn()) {
-                throw new \Exception("Gagal: Perangkat Daerah Dibatasi. Perangkat Daerah Anda tidak terdaftar dalam target OPD kegiatan ini.", 403);
+                // Periksa apakah peserta didaftarkan manual secara perorangan
+                $stmtManualCheck = $db->prepare("SELECT 1 FROM app_absensi_data_absensi WHERE kode_akses = :kode_akses AND nip = :nip LIMIT 1");
+                $stmtManualCheck->execute([':kode_akses' => $kodeAkses, ':nip' => $nip]);
+                if (!$stmtManualCheck->fetchColumn()) {
+                    throw new \Exception("Gagal: Perangkat Daerah Dibatasi. Perangkat Daerah Anda tidak terdaftar dalam target OPD kegiatan ini.", 403);
+                }
             }
         }
 
@@ -192,7 +197,7 @@ class AbsenController {
         if ($isAdminOrSuperAdmin) {
             $statusKehadiran = $statusKehadiranInput;
             $statusVerifikasi = $statusVerifikasiInput;
-            $keteranganVerifikasiAdmin = $payload['keterangan_verifikasi'] ?? $payload['keterangan_admin'] ?? 'Absensi Cepat oleh Admin';
+            $keteranganVerifikasiAdmin = $payload['keterangan_verifikasi'] ?? $payload['keterangan_admin'] ?? '-';
             $keteranganPegawai = $payload['keterangan'] ?? $keteranganVerifikasiAdmin;
 
             if ($has_base64_foto) {
@@ -1407,7 +1412,7 @@ class AbsenController {
 
         $allowedOpds = null;
         if ($jadwal && !empty($jadwal['is_strict_opd']) && $jadwal['is_strict_opd'] == 1) {
-            $stmtOpd = $db->prepare("SELECT opd FROM app_absensi_data_absensi WHERE kode_akses = ? AND opd IS NOT NULL AND opd != '' GROUP BY opd");
+            $stmtOpd = $db->prepare("SELECT nama_opd FROM app_absensi_kegiatan_target_opd WHERE kode_akses = ? ORDER BY nama_opd ASC");
             $stmtOpd->execute([$kodeAkses]);
             $allowedOpds = $stmtOpd->fetchAll(PDO::FETCH_COLUMN, 0);
 

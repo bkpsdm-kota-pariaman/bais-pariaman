@@ -71,8 +71,8 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
         logAction.input('Jabatan', '#inpJabatan', testData.jabatan);
         await page.locator('#inpJabatan').pressSequentially(testData.jabatan, { delay: 100 });
 
-        logAction.select('Perangkat Daerah (OPD)', '#inpOpd', testData.opd);
-        await page.selectOption('#inpOpd', testData.opd);
+        logAction.input('Perangkat Daerah (OPD)', '#inpOpd', testData.opd);
+        await page.locator('#inpOpd').pressSequentially(testData.opd, { delay: 100 });
 
         logAction.check('Alasan Memakai Absensi Cadangan', `input[value="${testData.alasanValue}"]`);
         await page.check(`input[value="${testData.alasanValue}"]`);
@@ -104,7 +104,7 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
         logAction.step('4. Mengosongkan & Reset Seluruh Data Form & Foto');
 
         logAction.info('Mengosongkan input teks menggunakan Control+A + Backspace');
-        const textInputIds = ['#inpKode', '#inpNamaKegiatan', '#inpNip', '#inpNama', '#inpJabatan'];
+        const textInputIds = ['#inpKode', '#inpNamaKegiatan', '#inpNip', '#inpNama', '#inpJabatan', '#inpOpd'];
         for (const id of textInputIds) {
             const loc = page.locator(id);
             await loc.click();
@@ -130,8 +130,8 @@ test.describe('E2E Suite 6: PWA Absensi Cadangan Internal Mandiri', () => {
         logAction.input('Jabatan', '#inpJabatan', testData.jabatan);
         await page.locator('#inpJabatan').pressSequentially(testData.jabatan, { delay: 100 });
 
-        logAction.select('Perangkat Daerah (OPD)', '#inpOpd', testData.opd);
-        await page.selectOption('#inpOpd', testData.opd);
+        logAction.input('Perangkat Daerah (OPD)', '#inpOpd', testData.opd);
+        await page.locator('#inpOpd').pressSequentially(testData.opd, { delay: 100 });
 
         logAction.check('Alasan Memakai Absensi Cadangan', `input[value="${testData.alasanValue}"]`);
         await page.check(`input[value="${testData.alasanValue}"]`);

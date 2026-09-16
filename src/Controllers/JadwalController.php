@@ -59,7 +59,7 @@ class JadwalController {
             return;
         }
 
-        $sqlTargetOpd = "SELECT opd FROM app_absensi_data_absensi WHERE kode_akses = :kode_akses AND opd IS NOT NULL AND opd != '' GROUP BY opd ORDER BY opd ASC";
+        $sqlTargetOpd = "SELECT nama_opd FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :kode_akses ORDER BY nama_opd ASC";
         $stmtTargetOpd = $db->prepare($sqlTargetOpd);
         $stmtTargetOpd->bindParam(':kode_akses', $kodeAkses);
         $stmtTargetOpd->execute();
@@ -155,7 +155,7 @@ class JadwalController {
             Response::json(false, 404, "Jadwal tidak ditemukan.");
         }
 
-        $stmtOpd = $db->prepare("SELECT opd FROM app_absensi_data_absensi WHERE kode_akses = :kode_akses AND opd IS NOT NULL AND opd != '' GROUP BY opd ORDER BY opd ASC");
+        $stmtOpd = $db->prepare("SELECT nama_opd FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :kode_akses ORDER BY nama_opd ASC");
         $stmtOpd->execute([':kode_akses' => $kodeAkses]);
         $jadwal['target_opd'] = $stmtOpd->fetchAll(PDO::FETCH_COLUMN, 0);
 
@@ -228,8 +228,13 @@ class JadwalController {
                 ':iso' => $input['is_strict_opd'] ?? 0
             ]);
 
-            // --- Pre-seed data absensi dengan status ALPA menggunakan INSERT INTO ... SELECT ---
+            // --- Simpan Target OPD dan Pre-seed data absensi dengan status ALPA ---
             if (!empty($targetOpd) && is_array($targetOpd)) {
+                $stmtTarget = $db->prepare("INSERT INTO app_absensi_kegiatan_target_opd (kode_akses, nama_opd) VALUES (:ka, :opd)");
+                foreach ($targetOpd as $opd) {
+                    $stmtTarget->execute([':ka' => $kodeAkses, ':opd' => $opd]);
+                }
+
                 $placeholders = implode(',', array_fill(0, count($targetOpd), '?'));
                 $sqlSeed = "INSERT INTO app_absensi_data_absensi (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran)
                             SELECT ?, nip, nama_pegawai, perangkat_daerah, jabatan, ?, 'ALPA', 'Alpa'
@@ -303,28 +308,42 @@ class JadwalController {
                 ':ka' => $kodeAkses
             ]);
 
-            // 2. Hapus pre-seed data (waktu IS NULL) untuk OPD yang dihapus dari daftar target
-            $selectedOpds = $targetOpd;
-            if (empty($selectedOpds)) {
-                $stmtDel = $db->prepare("DELETE FROM app_absensi_data_absensi WHERE kode_akses = :ka AND waktu IS NULL");
-                $stmtDel->execute([':ka' => $kodeAkses]);
-            } else {
-                $placeholders = implode(',', array_fill(0, count($selectedOpds), '?'));
-                $sqlDel = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = ? AND waktu IS NULL AND opd NOT IN ($placeholders)";
-                $params = array_merge([$kodeAkses], $selectedOpds);
-                $stmtDel = $db->prepare($sqlDel);
-                $stmtDel->execute($params);
+            // 2. Sinkronkan target OPD & kelola peserta ter-seed
+            $stmtExisting = $db->prepare("SELECT nama_opd FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :ka");
+            $stmtExisting->execute([':ka' => $kodeAkses]);
+            $existingTargetOpds = $stmtExisting->fetchAll(PDO::FETCH_COLUMN, 0);
+
+            $removedOpds = array_values(array_diff($existingTargetOpds, $targetOpd));
+            $newOpds = array_values(array_diff($targetOpd, $existingTargetOpds));
+
+            // Update tabel relasi target OPD
+            $stmtDelTarget = $db->prepare("DELETE FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :ka");
+            $stmtDelTarget->execute([':ka' => $kodeAkses]);
+
+            if (!empty($targetOpd) && is_array($targetOpd)) {
+                $stmtInsTarget = $db->prepare("INSERT INTO app_absensi_kegiatan_target_opd (kode_akses, nama_opd) VALUES (:ka, :opd)");
+                foreach ($targetOpd as $opd) {
+                    $stmtInsTarget->execute([':ka' => $kodeAkses, ':opd' => $opd]);
+                }
             }
 
-            // 3. Pre-seed pegawai baru dari target OPD yang belum ada di rekap
-            if (!empty($targetOpd) && is_array($targetOpd)) {
-                $placeholders = implode(',', array_fill(0, count($targetOpd), '?'));
+            // Hapus pre-seed unclocked yang OPD-nya dihapus dari target OPD (jangan hapus input manual/hadir)
+            if (!empty($removedOpds)) {
+                $placeholdersRem = implode(',', array_fill(0, count($removedOpds), '?'));
+                $sqlDel = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = ? AND waktu IS NULL AND (lokasi IS NULL OR lokasi = '' OR lokasi = '-') AND opd IN ($placeholdersRem)";
+                $stmtDel = $db->prepare($sqlDel);
+                $stmtDel->execute(array_merge([$kodeAkses], $removedOpds));
+            }
+
+            // Pre-seed pegawai untuk target OPD yang baru ditambahkan saja
+            if (!empty($newOpds)) {
+                $placeholdersNew = implode(',', array_fill(0, count($newOpds), '?'));
                 $sqlSeed = "INSERT INTO app_absensi_data_absensi (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran)
                             SELECT ?, p.nip, p.nama_pegawai, p.perangkat_daerah, p.jabatan, ?, 'ALPA', 'Alpa'
                             FROM app_absensi_data_pegawai p
                             LEFT JOIN app_absensi_data_absensi a ON p.nip = a.nip AND a.kode_akses = ?
-                            WHERE p.perangkat_daerah IN ($placeholders) AND a.nip IS NULL";
-                $paramsSeed = array_merge([$kodeAkses, $input['kategori'] ?? '', $kodeAkses], $targetOpd);
+                            WHERE p.perangkat_daerah IN ($placeholdersNew) AND a.nip IS NULL";
+                $paramsSeed = array_merge([$kodeAkses, $input['kategori'] ?? '', $kodeAkses], $newOpds);
                 $stmtSeed = $db->prepare($sqlSeed);
                 $stmtSeed->execute($paramsSeed);
             }
@@ -370,6 +389,10 @@ class JadwalController {
         $db = Database::getConnection();
         try {
             $db->beginTransaction();
+
+            // Hapus daftar target OPD
+            $stmtTarget = $db->prepare("DELETE FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :ka");
+            $stmtTarget->execute([':ka' => $kodeAkses]);
 
             // Ambil semua foto absensi terkait jadwal untuk dibersihkan dari server
             $stmtPhotos = $db->prepare("SELECT nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nama_file_foto IS NOT NULL AND nama_file_foto != '' AND nama_file_foto != '-' AND nama_file_foto != 'MANUAL_INPUT.jpg'");
@@ -431,7 +454,7 @@ class JadwalController {
         }
 
         // Ambil target OPD
-        $stmtOpd = $db->prepare("SELECT opd FROM app_absensi_data_absensi WHERE kode_akses = :kode_akses AND opd IS NOT NULL AND opd != '' GROUP BY opd ORDER BY opd ASC");
+        $stmtOpd = $db->prepare("SELECT nama_opd FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :kode_akses ORDER BY nama_opd ASC");
         $stmtOpd->execute([':kode_akses' => $kodeAkses]);
         $jadwal['target_opd'] = $stmtOpd->fetchAll(PDO::FETCH_COLUMN, 0);
 
