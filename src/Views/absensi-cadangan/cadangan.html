@@ -74,7 +74,14 @@
 
         <!-- Header -->
         <div class="p-5 bg-red-700 text-white flex flex-col items-center shadow-lg rounded-b-[24px]">
-            <h6 class="text-yellow-300 font-bold text-[10px] tracking-wider mb-1 mt-1 uppercase">Pemerintah Kota
+            <div class="w-full flex justify-start mb-2">
+                <a href="../pwa/"
+                    class="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full transition active:scale-95 border border-white/20 shadow-sm">
+                    <i class="bi bi-arrow-left text-sm"></i>
+                    <span>Kembali ke Aplikasi Utama</span>
+                </a>
+            </div>
+            <h6 class="text-yellow-300 font-bold text-[10px] tracking-wider mb-1 uppercase">Pemerintah Kota
                 Pariaman</h6>
             <h2 class="text-xl font-extrabold tracking-tight drop-shadow-md flex items-center gap-2">
                 <i class="bi bi-shield-exclamation text-red-300"></i> BAIS Pariaman
@@ -94,6 +101,22 @@
             <!-- VIEW 1: FORMULIR INPUT MANUAL LENGKAP (2-STEP FLOW)          -->
             <!-- ============================================================ -->
             <div id="viewForm" class="fade-in">
+                <!-- Banner Info Kembali jika Perangkat Sudah Normal -->
+                <div class="bg-red-50 border border-red-200 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-sm mb-4">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-red-100 text-red-700 flex items-center justify-center flex-shrink-0 text-base">
+                            <i class="bi bi-phone-vibrate"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold text-gray-800 leading-tight">Kamera/HP sudah normal?</p>
+                            <p class="text-[10px] text-gray-500">Anda dapat menggunakan absensi utama.</p>
+                        </div>
+                    </div>
+                    <a href="../pwa/" class="text-xs font-extrabold text-red-700 bg-white hover:bg-red-50 px-3 py-1.5 rounded-xl border border-red-200 shadow-sm active:scale-95 transition whitespace-nowrap">
+                        Kembali <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+
                 <form id="formAbsensiManual" onsubmit="submitFormAbsensi(event)" class="space-y-4">
 
                     <!-- Hidden Fields Lokasi GPS (Otomatis ditangkap di latar belakang) -->
@@ -490,6 +513,12 @@
                         class="w-full bg-gray-800 hover:bg-gray-900 active:scale-95 text-white font-bold py-3.5 rounded-2xl transition-all shadow-md text-xs flex items-center justify-center gap-2">
                         <i class="bi bi-arrow-repeat text-sm"></i> Selesai &amp; Isi Absensi Baru
                     </button>
+
+                    <!-- Tombol Kembali ke Aplikasi Utama -->
+                    <a href="../pwa/"
+                        class="w-full bg-white hover:bg-gray-50 border border-gray-300 active:scale-95 text-gray-700 font-bold py-3.5 rounded-2xl transition-all shadow-sm text-xs flex items-center justify-center gap-2 mt-2.5">
+                        <i class="bi bi-house-door-fill text-sm text-red-700"></i> Kembali ke Aplikasi Utama
+                    </a>
                 </div>
             </div>
 
