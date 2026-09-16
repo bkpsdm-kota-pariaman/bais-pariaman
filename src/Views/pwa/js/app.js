@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.57'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.59'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -336,16 +336,15 @@ function renderPermissionCheckView(perms) {
     updateStatus(cameraStatus, perms.camera);
     updateStatus(gpsStatus, perms.gps);
 
-    const allGranted = perms.gps && perms.camera;
-    const showFallback = permRetryCount >= 2 && !allGranted;
-    stateRequest.classList.toggle('hidden-view', showFallback);
-    stateFallback.classList.toggle('hidden-view', !showFallback);
+    stateRequest.classList.remove('hidden-view');
+    stateFallback.classList.add('hidden-view');
 }
 
 /**
- * Menangani klik tombol aktivasi kamera dan lokasi.
+ * Meminta izin aktivasi kamera dan lokasi ke pengguna.
+ * Jika pada percobaan pertama izin belum lengkap/gagal, langsung dialihkan ke halaman login.
  */
-async function cobaLagiHakAkses() {
+async function mintaHakAkses() {
     showLoading(true, "Klik IZINKAN/ALLOW untuk mengaktifkan lokasi & kamera...");
 
     if (!currentPermState.gps && 'geolocation' in navigator) {
@@ -401,8 +400,14 @@ async function cobaLagiHakAkses() {
             timer: 1500
         });
         setTimeout(() => checkAuthStatus(), 500);
+    } else {
+        // Percobaan pertama gagal mengaktifkan kamera atau lokasi, langsung arahkan ke halaman login
+        await checkAuthStatus();
     }
 }
+
+// Alias untuk kompatibilitas backward
+const cobaLagiHakAkses = mintaHakAkses;
 
 
 /**
@@ -666,6 +671,33 @@ function tampilkanAlertAbsensiCadangan(pesan = "Gagal mengakses kamera atau loka
         } else {
             if (typeof onOkCallback === 'function') {
                 onOkCallback();
+            }
+        }
+    });
+}
+
+/**
+ * Menampilkan alert peringatan bahwa kamera wajib aktif saat pengambilan absensi mandiri.
+ * Menyediakan tombol ABSENSI CADANGAN dan tombol COBA LAGI (meminta akses kamera ulang).
+ */
+function tampilkanAlertKameraWajibAktif(onRetryCallback = null) {
+    Swal.fire({
+        title: 'Kamera Wajib Aktif',
+        html: `<p class="text-sm text-gray-700 mb-2">Akses kamera wajib aktif untuk mengambil foto bukti kehadiran.</p><p class="text-xs text-gray-500">Silakan coba lagi untuk mengizinkan kamera atau beralih ke Absensi Cadangan.</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#b91c1c',
+        cancelButtonColor: '#1f2937',
+        confirmButtonText: 'ABSENSI CADANGAN',
+        cancelButtonText: 'COBA LAGI',
+        reverseButtons: true,
+        allowOutsideClick: false
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = '../absensi-cadangan/';
+        } else {
+            if (typeof onRetryCallback === 'function') {
+                onRetryCallback();
             }
         }
     });
@@ -2755,7 +2787,9 @@ async function mulaiKameraSelfie() {
             console.error("Gagal memulai kamera selfie:", e);
             isKameraError = true;
             updateConditionalFormElements();
-            tampilkanAlertAbsensiCadangan("Kamera selfie gagal dimuat atau akses ditolak. Anda dapat menggunakan Absensi Cadangan.");
+            tampilkanAlertKameraWajibAktif(() => {
+                mulaiKameraSelfie();
+            });
         }
     };
 
