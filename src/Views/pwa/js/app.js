@@ -2,7 +2,7 @@
 
 const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
-const APP_VERSION = 'v6.2.59'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
+const APP_VERSION = 'v6.2.61'; // <-- EDIT VERSI APLIKASI SECARA MANUAL DI SINI
 
 /**
  * =================================================================
@@ -345,7 +345,17 @@ function renderPermissionCheckView(perms) {
  * Jika pada percobaan pertama izin belum lengkap/gagal, langsung dialihkan ke halaman login.
  */
 async function mintaHakAkses() {
-    showLoading(true, "Klik IZINKAN/ALLOW untuk mengaktifkan lokasi & kamera...");
+    showLoading(true, "Klik IZINKAN/ALLOW untuk mengaktifkan kamera & lokasi...");
+
+    if (!currentPermState.camera && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            stream.getTracks().forEach(t => t.stop());
+            currentPermState.camera = true;
+        } catch (e) {
+            currentPermState.camera = false;
+        }
+    }
 
     if (!currentPermState.gps && 'geolocation' in navigator) {
         await new Promise((resolve) => {
@@ -371,20 +381,10 @@ async function mintaHakAkses() {
         });
     }
 
-    if (!currentPermState.camera && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            stream.getTracks().forEach(t => t.stop());
-            currentPermState.camera = true;
-        } catch (e) {
-            currentPermState.camera = false;
-        }
-    }
-
     // Re-check hardware permissions dari browser API secara keseluruhan
     const checkedPerms = await checkHardwarePermissions();
-    if (checkedPerms.gps) currentPermState.gps = true;
     if (checkedPerms.camera) currentPermState.camera = true;
+    if (checkedPerms.gps) currentPermState.gps = true;
 
     permRetryCount++;
     showLoading(false);
@@ -3061,11 +3061,37 @@ async function setupAbsenForm(jadwalData) {
     switchView('view-form');
 }
 
-window.bukaPilihMetode = function () {
+window.bukaPilihMetode = async function () {
+    showLoading(true, "Memeriksa kesiapan kamera...");
+    let kameraAman = false;
+    try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            stream.getTracks().forEach(track => track.stop());
+            kameraAman = true;
+            currentPermState.camera = true;
+        } else {
+            kameraAman = false;
+        }
+    } catch (err) {
+        console.warn("Pengecekan kamera gagal:", err);
+        kameraAman = false;
+        currentPermState.camera = false;
+    } finally {
+        showLoading(false);
+    }
+
+    if (!kameraAman) {
+        tampilkanAlertKameraWajibAktif(() => {
+            bukaPilihMetode();
+        });
+        return;
+    }
+
     cleanupAbsenForm();
     switchView('view-pilih-metode');
     history.pushState({ view: 'pilih-metode' }, "Pilih Metode Absensi", '#metode');
-}
+};
 
 window.batalPilihMetode = function () {
     if (location.hash === '#metode') {
