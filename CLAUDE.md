@@ -159,11 +159,10 @@ harus membuat test FAIL.
 
 ## 5. TEST EXECUTION
 
-AI **jangan otomatis menjalankan test**.
+AI **boleh menjalankan test langsung** atas izin user.
 
-User yang menjalankan test.
-
-Setelah coding, berikan command:
+Jalankan test, lalu laporkan hasil sebenarnya.
+Setelah coding atau mengubah test, tetap berikan command agar user bisa menjalankannya sendiri.
 
 ```bash
 npm run test:e2e
@@ -175,7 +174,7 @@ atau test tertentu:
 npx playwright test tests/e2e/<file>.spec.js
 ```
 
-Jangan menyatakan PASS/FAIL sebelum user memberikan hasil.
+Jangan menyatakan PASS/FAIL tanpa benar-benar menjalankan test.
 
 ---
 

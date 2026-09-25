@@ -498,9 +498,17 @@ PASS
 
 ## 15. Test Execution Policy
 
-AI coding agent **TIDAK BOLEH menjalankan automated test secara otomatis** setelah membuat atau mengubah test.
+AI coding agent **boleh menjalankan automated test secara langsung**, atas izin user.
 
-Hanya user yang menjalankan test.
+Alur:
+
+```text
+AI menulis/mengubah test
+↓
+AI menjalankan test
+↓
+AI melaporkan hasil sebenarnya (PASS/FAIL + output)
+```
 
 AI boleh:
 
@@ -508,9 +516,10 @@ AI boleh:
 - mengubah test
 - menganalisis test
 - membaca konfigurasi
-- memberikan command
+- **menjalankan test langsung**
+- melaporkan hasil test apa adanya
 
-AI tidak boleh otomatis menjalankan:
+Command yang boleh dijalankan AI:
 
 ```bash
 npm run test
@@ -520,27 +529,13 @@ npx jest
 npx playwright test
 ```
 
-Setelah perubahan test, AI harus memberikan command yang bisa dijalankan user.
+Aturan:
 
-Contoh:
-
-```bash
-npm run test:e2e
-```
-
-Test tertentu:
-
-```bash
-npx playwright test tests/e2e/pwa-absensi-cadangan.spec.js
-```
-
-Mode headed:
-
-```bash
-npx playwright test tests/e2e/pwa-absensi-cadangan.spec.js --headed
-```
-
-AI tidak boleh menyatakan PASS/FAIL sebelum user menjalankan test dan memberikan hasilnya.
+- Jalankan test pada environment testing, bukan production.
+- Jangan mengubah production code, melemahkan assertion, atau menyembunyikan error hanya agar test PASS.
+- Jika test tidak bisa dijalankan (environment/credential/network blocker), laporkan blocker-nya.
+- Jangan mengarang hasil test. Laporkan output sebenarnya.
+- Tetap sediakan command yang dapat dijalankan user sendiri bila diminta.
 
 ---
 
@@ -696,8 +691,9 @@ Pastikan:
 [ ] Security tidak dilemahkan
 [ ] Generated files tidak diedit manual
 [ ] Test relevan sudah dibuat/diperbaiki jika diperlukan
+[ ] Test sudah dijalankan (oleh AI bila diizinkan) dan hasilnya dilaporkan
 [ ] Test command diberikan kepada user
-[ ] AI tidak mengklaim PASS sebelum user menjalankan test
+[ ] AI tidak mengklaim PASS tanpa benar-benar menjalankan test
 ```
 
 ---
@@ -739,8 +735,9 @@ E2E MUST USE THE REAL REMOTE TESTING BACKEND.
 E2E MUST SIMULATE REAL USER INTERACTION.
 TEXT INPUT MUST USE REAL KEYBOARD TYPING WITH 100MS DELAY PER CHARACTER.
 BROWSER CONSOLE ERRORS MUST BE DETECTED.
-AI MUST NOT AUTOMATICALLY RUN TESTS.
-USER RUNS THE TESTS.
+AI MAY RUN TESTS DIRECTLY WHEN THE USER ALLOWS IT.
+AI MUST REPORT THE REAL TEST OUTPUT.
+AI MUST NEVER FABRICATE TEST RESULTS.
 ALWAYS PROVIDE THE EXACT TEST COMMAND.
 ```
 
@@ -754,7 +751,7 @@ Sebelum coding untuk task yang mengubah source code:
 
 1. Analisis source code dan dokumentasi relevan.
 2. Buat penjelasan ringkas mengenai perubahan yang akan dilakukan.
-3. Buat Implementation Plan singkat (maksimal 30 baris).
+3. Buat Implementation Plan. Ringkas untuk perubahan kecil, boleh melebihi 30 baris jika perubahan memang kompleks.
 4. **Dilarang keras langsung membuat atau mengedit kode sebelum user secara eksplisit meminta/menyetujui.**
 5. Tampilkan penjelasan dan plan di chat, lalu minta persetujuan user.
 6. Tunggu user menyetujui atau memerintahkan implementasi.
@@ -762,7 +759,7 @@ Sebelum coding untuk task yang mengubah source code:
 
 ### Format Implementation Plan
 
-Maksimal 30 baris.
+Tidak ada batas 30 baris. Panjang plan mengikuti kompleksitas task: tetap singkat untuk perubahan kecil, tulis lebih detail bila perubahan menyentuh banyak file, flow, atau kontrak API.
 
 ```text
 GOAL:

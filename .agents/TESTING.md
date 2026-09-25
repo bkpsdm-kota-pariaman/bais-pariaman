@@ -913,17 +913,18 @@ Sesuaikan dengan struktur existing jika sudah tersedia.
 
 ## 18. Test Execution Policy
 
-Test **TIDAK BOLEH dijalankan otomatis oleh AI coding agent**.
+AI coding agent **boleh menjalankan automated test langsung** atas izin user.
 
 AI boleh:
 
 - membuat test
 - memperbaiki test
 - membaca konfigurasi testing
-- menganalisis hasil test yang diberikan user
+- menganalisis hasil test
+- **menjalankan test sendiri**
 - menampilkan command untuk menjalankan test
 
-AI **tidak boleh menjalankan**:
+Command yang boleh dijalankan AI:
 
 ```text
 npm run test
@@ -933,13 +934,16 @@ npx jest
 npx playwright test
 ```
 
-atau command testing lain secara otomatis setelah membuat atau mengubah test.
+Aturan:
 
-### User Menjalankan Test
+- Jalankan test pada environment testing, bukan production.
+- Jangan mengubah aplikasi, melemahkan assertion, atau menyembunyikan error hanya agar test PASS.
+- Jangan mengarang hasil test; laporkan output sebenarnya, termasuk saat FAIL.
+- Jika test tidak dapat dijalankan, laporkan blocker environment.
 
-Hanya user yang menjalankan automated test.
+### Command untuk User
 
-Setelah selesai membuat atau mengubah test, AI harus menampilkan command yang dapat dijalankan user.
+AI tetap menampilkan command yang bisa dijalankan user sendiri.
 
 Contoh:
 
@@ -959,9 +963,7 @@ Mode headed:
 npx playwright test tests/e2e/pwa-absensi-cadangan.spec.js --headed
 ```
 
-AI tidak boleh mengklaim test PASS/FAIL sebelum user menjalankan test dan memberikan hasilnya.
-
-Jika AI diminta menjalankan test, tetap jangan menjalankannya. Berikan command yang tepat kepada user.
+AI hanya boleh menyatakan PASS/FAIL berdasarkan hasil test yang benar-benar dijalankan.
 
 ---
 
@@ -1086,9 +1088,11 @@ ALWAYS test user-visible behavior.
 
 ALWAYS monitor `console.error` and `pageerror` during E2E.
 
-NEVER automatically execute automated tests after creating or modifying tests.
+AI BOLEH menjalankan automated test secara langsung bila user mengizinkan.
 
-NEVER run test commands unless the user explicitly runs them outside the AI agent workflow.
+AI WAJIB melaporkan output test apa adanya, termasuk saat FAIL.
+
+AI DILARANG mengarang atau menyimulasikan hasil test.
 
 ALWAYS provide the exact test command for the user to run.
 

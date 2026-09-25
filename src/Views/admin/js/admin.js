@@ -532,14 +532,14 @@ function renderJadwalTable(jadwalList) {
             syncStatusHtml = `
                 <div class="d-flex flex-column align-items-center gap-1">
                     <span class="badge bg-danger"><i class="bi bi-check-circle-fill"></i> Sinkron</span>
-                    <button class="btn btn-sm btn-outline-info mt-1" onclick="syncJadwalKv('${jadwal.kode_akses}', '${jadwal.judul.replace(/'/g, `\\'`)}')" title="Sinkron Ulang Cache"><i class="bi bi-arrow-repeat"></i> Sinkron Ulang</button>
+                    <button class="btn btn-sm btn-outline-info mt-1" onclick="syncJadwalKv(${jsArg(jadwal.kode_akses)}, ${jsArg(jadwal.judul)})" title="Sinkron Ulang Cache"><i class="bi bi-arrow-repeat"></i> Sinkron Ulang</button>
                 </div>
             `;
         } else {
             syncStatusHtml = `
                 <div class="d-flex flex-column align-items-center gap-1">
                     <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle-fill"></i> Belum Sinkron</span>
-                    <button class="btn btn-sm btn-outline-danger mt-1" onclick="syncJadwalKv('${jadwal.kode_akses}', '${jadwal.judul.replace(/'/g, `\\'`)}')" title="Sinkronkan Cache"><i class="bi bi-arrow-repeat"></i> Sinkronkan</button>
+                    <button class="btn btn-sm btn-outline-danger mt-1" onclick="syncJadwalKv(${jsArg(jadwal.kode_akses)}, ${jsArg(jadwal.judul)})" title="Sinkronkan Cache"><i class="bi bi-arrow-repeat"></i> Sinkronkan</button>
                 </div>
             `;
         }
@@ -558,11 +558,11 @@ function renderJadwalTable(jadwalList) {
                 <td class="text-center">${syncStatusHtml}</td>
                 <td class="text-center" style="min-width: 160px;">
                     <div class="d-flex flex-column gap-2">
-                        <button class="btn btn-danger btn-sm" onclick="lihatRekap('${jadwal.kode_akses}')"><i class="bi bi-pie-chart-fill"></i> Lihat Rekap</button>
+                        <button class="btn btn-danger btn-sm" onclick="lihatRekap(${jsArg(jadwal.kode_akses)})"><i class="bi bi-pie-chart-fill"></i> Lihat Rekap</button>
                         <div class="btn-group btn-group-sm w-100">
-                            <button class="btn btn-outline-danger" onclick="cetakQrCode('${jadwal.kode_akses}', '${jadwal.judul.replace(/'/g, "\\'")}', '${jadwal.tanggal}', '${jadwal.jam_mulai}', '${jadwal.jam_selesai}')" title="Cetak QR Code"><i class="bi bi-qr-code"></i> QR</button>
-                            <button class="btn btn-outline-warning" onclick="bukaModalEdit('${jadwal.kode_akses}')" title="Edit Jadwal"><i class="bi bi-pencil-fill"></i> Edit</button>
-                            <button class="btn btn-outline-danger" onclick="hapusKegiatan('${jadwal.kode_akses}')" title="Hapus Jadwal"><i class="bi bi-trash-fill"></i> Hapus</button>
+                            <button class="btn btn-outline-danger" onclick="cetakQrCode(${jsArg(jadwal.kode_akses)}, ${jsArg(jadwal.judul)}, ${jsArg(jadwal.tanggal)}, ${jsArg(jadwal.jam_mulai)}, ${jsArg(jadwal.jam_selesai)})" title="Cetak QR Code"><i class="bi bi-qr-code"></i> QR</button>
+                            <button class="btn btn-outline-warning" onclick="bukaModalEdit(${jsArg(jadwal.kode_akses)})" title="Edit Jadwal"><i class="bi bi-pencil-fill"></i> Edit</button>
+                            <button class="btn btn-outline-danger" onclick="hapusKegiatan(${jsArg(jadwal.kode_akses)})" title="Hapus Jadwal"><i class="bi bi-trash-fill"></i> Hapus</button>
                         </div>
                     </div>
                 </td>
@@ -1157,12 +1157,12 @@ function renderOpdSelector(mode) {
 
     availableContainer.innerHTML = opdState[mode].available
         .filter(opd => opd.toLowerCase().includes(availableFilter))
-        .map(opd => `<button type="button" class="list-group-item list-group-item-action py-1 px-2" onclick="moveOpd('${opd.replace(/'/g, "\\'")}', '${mode}', 'select')">${opd}</button>`)
+        .map(opd => `<button type="button" class="list-group-item list-group-item-action py-1 px-2" onclick="moveOpd(${jsArg(opd)}, ${jsArg(mode)}, 'select')">${opd}</button>`)
         .join('');
 
     selectedContainer.innerHTML = opdState[mode].selected
         .filter(opd => opd.toLowerCase().includes(selectedFilter))
-        .map(opd => `<button type="button" class="list-group-item list-group-item-action py-1 px-2 list-group-item-success" onclick="moveOpd('${opd.replace(/'/g, "\\'")}', '${mode}', 'deselect')">${opd}</button>`)
+        .map(opd => `<button type="button" class="list-group-item list-group-item-action py-1 px-2 list-group-item-success" onclick="moveOpd(${jsArg(opd)}, ${jsArg(mode)}, 'deselect')">${opd}</button>`)
         .join('');
 }
 
@@ -1497,15 +1497,14 @@ function renderOpdTable(opdList) {
     }
 
     tbody.innerHTML = opdList.map((opd, i) => {
-        const opdData = JSON.stringify(opd).replace(/"/g, '&quot;');
         return `
             <tr>
                 <td class="text-center">${i + 1}</td>
                 <td>${opd.nama_opd}</td>
                 <td class="text-center">
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-warning" onclick='bukaModalEditOpd(${opdData})' title="Edit OPD"><i class="bi bi-pencil-fill"></i></button>
-                        <button class="btn btn-outline-danger" onclick="hapusOpd('${opd.id}', '${opd.nama_opd.replace(/'/g, `\\'`)}')" title="Hapus OPD"><i class="bi bi-trash-fill"></i></button>
+                        <button class="btn btn-outline-warning" onclick='bukaModalEditOpd(${jsObj(opd)})' title="Edit OPD"><i class="bi bi-pencil-fill"></i></button>
+                        <button class="btn btn-outline-danger" onclick="hapusOpd(${jsArg(opd.id)}, ${jsArg(opd.nama_opd)})" title="Hapus OPD"><i class="bi bi-trash-fill"></i></button>
                     </div>
                 </td>
             </tr>
@@ -1756,7 +1755,6 @@ function renderRekapTable(filteredPegawai, pagination = null) {
 
             const statusKeteranganInfo = `${verifikasiBadge}${fotoLink}${keteranganHtml}`;
 
-            const pegawaiData = JSON.stringify(p).replace(/"/g, '&quot;');
 
             return `<tr>
                 <td class="text-center align-middle"><input class="form-check-input rekap-pilih-checkbox" type="checkbox" value="${p.nip}" onchange="updateTombolHapusMassal()"></td>
@@ -1767,10 +1765,10 @@ function renderRekapTable(filteredPegawai, pagination = null) {
                 <td>${statusKeteranganInfo}</td>
                 <td class="text-center">
                     <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-danger" onclick='bukaModalVerifikasi(${pegawaiData})' title="Edit Status">
+                        <button class="btn btn-outline-danger" onclick='bukaModalVerifikasi(${jsObj(p)})' title="Edit Status">
                             <i class="bi bi-pencil-square"></i>
                         </button>
-                        <button class="btn btn-outline-danger" onclick="hapusDataAbsensi('${p.nip}', '${p.nama_pegawai.replace(/'/g, `\\'`)}', '${currentRekapData.jadwal.kode_akses}')" title="Hapus dari Rekap">
+                        <button class="btn btn-outline-danger" onclick="hapusDataAbsensi(${jsArg(p.nip)}, ${jsArg(p.nama_pegawai)}, ${jsArg(currentRekapData.jadwal.kode_akses)})" title="Hapus dari Rekap">
                             <i class="bi bi-person-x-fill"></i>
                         </button>
                     </div>
@@ -1822,7 +1820,6 @@ function renderFotoKehadiranGrid(filteredPegawai) {
                 break;
         }
 
-        const pegawaiData = JSON.stringify(p).replace(/"/g, '&quot;');
 
         const isDrive = p.nama_file_foto.startsWith('http://') || p.nama_file_foto.startsWith('https://');
         const isPdf = p.nama_file_foto.toLowerCase().endsWith('.pdf');
@@ -1841,7 +1838,7 @@ function renderFotoKehadiranGrid(filteredPegawai) {
                             <a href="${ORIGIN_SERVER_URL}/uploads/foto_absensi/${p.nama_file_foto}" target="_blank" class="btn btn-sm btn-danger mt-2"><i class="bi bi-box-arrow-up-right"></i> Buka PDF</a>
                          </div>`;
         } else {
-            mediaHtml = `<img src="${ORIGIN_SERVER_URL}/uploads/foto_absensi/${p.nama_file_foto}" class="card-img-top" alt="Foto Absensi ${p.nama_pegawai}" style="height: 200px; object-fit: cover; cursor: pointer;" onclick="Swal.fire({ title: 'Foto Kehadiran: ${p.nama_pegawai.replace(/'/g, `\\'`)}', imageUrl: '${ORIGIN_SERVER_URL}/uploads/foto_absensi/${p.nama_file_foto}', imageWidth: '90vw', imageHeight: 'auto', showCloseButton: true, confirmButtonText: 'Tutup' })">`;
+            mediaHtml = `<img src="${ORIGIN_SERVER_URL}/uploads/foto_absensi/${p.nama_file_foto}" class="card-img-top" alt="Foto Absensi ${p.nama_pegawai}" style="height: 200px; object-fit: cover; cursor: pointer;" onclick="Swal.fire({ title: ${jsArg("Foto Kehadiran: " + p.nama_pegawai)}, imageUrl: '${ORIGIN_SERVER_URL}/uploads/foto_absensi/${p.nama_file_foto}', imageWidth: '90vw', imageHeight: 'auto', showCloseButton: true, confirmButtonText: 'Tutup' })">`;
         }
 
         const cardHtml = `
@@ -1861,7 +1858,7 @@ function renderFotoKehadiranGrid(filteredPegawai) {
                         ${p.keterangan_verifikasi && p.keterangan_verifikasi !== '-' ? `<p class="card-text small fst-italic text-warning mb-1" title="Keterangan Admin"><span class="badge bg-warning text-dark me-1" style="font-size:10px;">Admin</span> "${p.keterangan_verifikasi}"</p>` : ''}
                         
                         <div class="mt-auto pt-2 border-top">
-                            <button class="btn btn-sm btn-outline-danger w-100" onclick='bukaModalVerifikasi(${pegawaiData})'>
+                            <button class="btn btn-sm btn-outline-danger w-100" onclick='bukaModalVerifikasi(${jsObj(p)})'>
                                 <i class="bi bi-pencil-square"></i> Edit Status
                             </button>
                         </div>
@@ -2158,7 +2155,7 @@ function renderTambahPesertaView() {
             .map(p => {
                 const action = isSelectedList ? 'deselect' : 'select';
                 const btnClass = isSelectedList ? 'list-group-item-success' : '';
-                const onClickAction = `movePegawai('${p.nip}', '${action}')`;
+                const onClickAction = `movePegawai(${jsArg(p.nip)}, ${jsArg(action)})`;
 
                 return `
                     <button type="button" class="list-group-item list-group-item-action py-2 px-2 ${btnClass}" onclick="${onClickAction}">
@@ -2734,21 +2731,20 @@ function renderPegawaiTable(pegawaiList) {
     }
 
     tbody.innerHTML = pegawaiList.map((p, i) => {
-        const pegawaiData = JSON.stringify(p).replace(/"/g, '&quot;');
 
         let syncStatusHtml = '';
         if (p.kv_sync_status == 1) {
             syncStatusHtml = `
                 <div class="d-flex flex-column align-items-center gap-1">
                     <span class="badge bg-danger"><i class="bi bi-check-circle-fill"></i> Sinkron</span>
-                    <button class="btn btn-sm btn-outline-info mt-1" onclick="syncPegawaiKv('${p.nip}', '${p.nama_pegawai.replace(/'/g, `\\'`)}')" title="Sinkron Ulang Cache"><i class="bi bi-arrow-repeat"></i> Sinkron Ulang</button>
+                    <button class="btn btn-sm btn-outline-info mt-1" onclick="syncPegawaiKv(${jsArg(p.nip)}, ${jsArg(p.nama_pegawai)})" title="Sinkron Ulang Cache"><i class="bi bi-arrow-repeat"></i> Sinkron Ulang</button>
                 </div>
             `;
         } else {
             syncStatusHtml = `
                 <div class="d-flex flex-column align-items-center gap-1">
                     <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle-fill"></i> Belum Sinkron</span>
-                    <button class="btn btn-sm btn-outline-danger mt-1" onclick="syncPegawaiKv('${p.nip}', '${p.nama_pegawai.replace(/'/g, `\\'`)}')" title="Sinkronkan Cache"><i class="bi bi-arrow-repeat"></i> Sinkronkan</button>
+                    <button class="btn btn-sm btn-outline-danger mt-1" onclick="syncPegawaiKv(${jsArg(p.nip)}, ${jsArg(p.nama_pegawai)})" title="Sinkronkan Cache"><i class="bi bi-arrow-repeat"></i> Sinkronkan</button>
                 </div>
             `;
         }
@@ -2769,8 +2765,8 @@ function renderPegawaiTable(pegawaiList) {
                 <td class="text-center">${syncStatusHtml}</td>
                 <td class="text-center">
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-warning" onclick='bukaModalEditPegawai(${pegawaiData})' title="Edit Pegawai"><i class="bi bi-pencil-fill"></i></button>
-                        <button class="btn btn-outline-danger" onclick="hapusPegawai('${p.nip}', '${p.nama_pegawai.replace(/'/g, `\\'`)}')" title="Hapus Pegawai"><i class="bi bi-trash-fill"></i></button>
+                        <button class="btn btn-outline-warning" onclick='bukaModalEditPegawai(${jsObj(p)})' title="Edit Pegawai"><i class="bi bi-pencil-fill"></i></button>
+                        <button class="btn btn-outline-danger" onclick="hapusPegawai(${jsArg(p.nip)}, ${jsArg(p.nama_pegawai)})" title="Hapus Pegawai"><i class="bi bi-trash-fill"></i></button>
                     </div>
                 </td>
             </tr>
@@ -3403,10 +3399,10 @@ function renderRekapKeseluruhanTable(data, pagination = null) {
             <td class="align-middle">${statusKeteranganInfo}</td>
             <td class="text-center align-middle">
                 <!-- Gunakan sistem modal verifikasi yang sudah ada, tapi inject currentRekapData sementara -->
-                <button class="btn btn-sm btn-outline-danger" onclick='bukaModalVerifikasiKeseluruhan(${JSON.stringify(p).replace(/"/g, "&quot;")})' title="Edit Status">
+                <button class="btn btn-sm btn-outline-danger" onclick='bukaModalVerifikasiKeseluruhan(${jsObj(p)})' title="Edit Status">
                     <i class="bi bi-pencil-square"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger ms-1" onclick="hapusDataAbsensiKeseluruhan('${p.nip}', '${p.nama_pegawai}', '${p.kode_akses}')" title="Hapus Data">
+                <button class="btn btn-sm btn-outline-danger ms-1" onclick="hapusDataAbsensiKeseluruhan(${jsArg(p.nip)}, ${jsArg(p.nama_pegawai)}, ${jsArg(p.kode_akses)})" title="Hapus Data">
                     <i class="bi bi-trash"></i>
                 </button>
             </td>
@@ -3623,7 +3619,7 @@ function renderStatistikTable(data, statusKehadiranLabel) {
             <td class="text-center align-middle h5">
                 <div class="d-flex align-items-center justify-content-center gap-2">
                     <span class="badge bg-danger rounded-pill px-3 py-2">${p.jumlah}x ${humanStatus}</span>
-                    <button class="btn btn-sm btn-outline-info" onclick="lihatDetailStatistik('${p.nip}', '${p.nama_pegawai.replace(/'/g, `\\'`)}', '${statusKehadiranLabel}')"><i class="bi bi-eye"></i> Detail</button>
+                    <button class="btn btn-sm btn-outline-info" onclick="lihatDetailStatistik(${jsArg(p.nip)}, ${jsArg(p.nama_pegawai)}, ${jsArg(statusKehadiranLabel)})"><i class="bi bi-eye"></i> Detail</button>
                 </div>
             </td>
         </tr>`;
@@ -3716,8 +3712,14 @@ function exportStatistikToExcel() {
 // EXPORTS UNTUK TESTING (Diabaikan oleh browser)
 if (typeof module !== 'undefined') {
     if (module.exports) {
-        module.exports = { formatIndonesianDateTime, selectAllOpd, deselectAllOpd };
+        module.exports = { formatIndonesianDateTime, selectAllOpd, deselectAllOpd, jsArg, jsObj, escapeHtml };
     }
+}
+if (typeof globalThis !== 'undefined') {
+    globalThis.isSuperAdmin = isSuperAdmin;
+    globalThis.checkSuperAdminUI = checkSuperAdminUI;
+    globalThis.bukaHalamanPengaturanAplikasi = bukaHalamanPengaturanAplikasi;
+    globalThis.hapusPengaturan = hapusPengaturan;
 }
 
 
@@ -4097,24 +4099,6 @@ function isSuperAdmin() {
     }
 }
 
-function checkSuperAdminUI() {
-    const isSuper = isSuperAdmin();
-    const dividerLog = document.getElementById('menuDividerLogAbsensi');
-    const itemLog = document.getElementById('menuItemLogAbsensi');
-    const dividerPengaturan = document.getElementById('menuDividerPengaturanAplikasi');
-    const itemPengaturan = document.getElementById('menuItemPengaturanAplikasi');
-    if (isSuper) {
-        if (dividerLog) dividerLog.classList.remove('d-none');
-        if (itemLog) itemLog.classList.remove('d-none');
-        if (dividerPengaturan) dividerPengaturan.classList.remove('d-none');
-        if (itemPengaturan) itemPengaturan.classList.remove('d-none');
-    } else {
-        if (dividerLog) dividerLog.classList.add('d-none');
-        if (itemLog) itemLog.classList.add('d-none');
-        if (dividerPengaturan) dividerPengaturan.classList.add('d-none');
-        if (itemPengaturan) itemPengaturan.classList.add('d-none');
-    }
-}
 
 /**
  * Helper untuk sanitasi string HTML agar terhindar dari XSS dan syntax error
@@ -4127,6 +4111,30 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+/**
+ * Helper untuk menempelkan nilai string ke dalam handler inline (onclick/onchange).
+ * Nilai dikutip tunggal; karakter kutip, backslash, dan newline di-escape dulu
+ * agar tidak memutus atribut HTML maupun sintaks JavaScript.
+ * Contoh: onclick="hapus('${jsArg(nama)}')"
+ */
+function jsArg(value) {
+    if (value === null || value === undefined) return "&#39;&#39;";
+    // urutan penting: escape JS dulu (backslash, newline), baru entitas HTML.
+    const body = String(value)
+        .replace(/\\/g, "\\\\")
+        .replace(/\r\n|\r|\n/g, "\\n")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "\\&#39;");
+    return "&#39;" + body + "&#39;";
+}
+
+function jsObj(obj) {
+    return escapeHtml(JSON.stringify(obj));
 }
 
 let listPengaturanCache = [];
