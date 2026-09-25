@@ -1964,29 +1964,30 @@ class AbsenController {
             return;
         }
 
-        // 2. Filter wajib: kode_akses
+        // 2. Filter opsional
         $kodeAkses = trim($_GET['kode_akses'] ?? '');
-        if (empty($kodeAkses)) {
-            Response::json(false, 400, "Kode akses kegiatan wajib dipilih.");
-            return;
-        }
-
-        // 3. Filter opsional
         $searchPegawai = trim($_GET['search_pegawai'] ?? '');
         $jenisAksi = trim($_GET['jenis_aksi'] ?? '');
         $searchPelaku = trim($_GET['search_pelaku'] ?? '');
         $tanggal = trim($_GET['tanggal'] ?? '');
+        $tanggalMulai = trim($_GET['tanggal_mulai'] ?? '');
+        $tanggalSelesai = trim($_GET['tanggal_selesai'] ?? '');
 
-        // 4. Pagination parameter
+        // 3. Pagination parameter
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
         $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 10;
         $offset = ($page - 1) * $limit;
 
         $db = Database::getConnection();
 
-        // 5. Bangun Query SQL dinamis
-        $conditions = ["kode_akses = :kode_akses"];
-        $params = [':kode_akses' => $kodeAkses];
+        // 4. Bangun Query SQL dinamis
+        $conditions = [];
+        $params = [];
+
+        if (!empty($kodeAkses)) {
+            $conditions[] = "kode_akses = :kode_akses";
+            $params[':kode_akses'] = $kodeAkses;
+        }
 
         if (!empty($searchPegawai)) {
             $conditions[] = "(nip LIKE :search_pegawai_nip OR nama LIKE :search_pegawai_nama)";
@@ -2005,12 +2006,22 @@ class AbsenController {
             $params[':search_pelaku_nama'] = '%' . $searchPelaku . '%';
         }
 
-        if (!empty($tanggal)) {
+        if (!empty($tanggalMulai) && !empty($tanggalSelesai)) {
+            $conditions[] = "DATE(waktu_aksi) BETWEEN :tanggal_mulai AND :tanggal_selesai";
+            $params[':tanggal_mulai'] = $tanggalMulai;
+            $params[':tanggal_selesai'] = $tanggalSelesai;
+        } elseif (!empty($tanggalMulai)) {
+            $conditions[] = "DATE(waktu_aksi) >= :tanggal_mulai";
+            $params[':tanggal_mulai'] = $tanggalMulai;
+        } elseif (!empty($tanggalSelesai)) {
+            $conditions[] = "DATE(waktu_aksi) <= :tanggal_selesai";
+            $params[':tanggal_selesai'] = $tanggalSelesai;
+        } elseif (!empty($tanggal)) {
             $conditions[] = "DATE(waktu_aksi) = :tanggal";
             $params[':tanggal'] = $tanggal;
         }
 
-        $whereSql = implode(' AND ', $conditions);
+        $whereSql = !empty($conditions) ? implode(' AND ', $conditions) : "1=1";
 
         // Hitung total baris yang cocok
         $countStmt = $db->prepare("SELECT COUNT(*) FROM app_absensi_log_absensi WHERE {$whereSql}");

@@ -3720,6 +3720,10 @@ if (typeof globalThis !== 'undefined') {
     globalThis.checkSuperAdminUI = checkSuperAdminUI;
     globalThis.bukaHalamanPengaturanAplikasi = bukaHalamanPengaturanAplikasi;
     globalThis.hapusPengaturan = hapusPengaturan;
+    globalThis.bukaHalamanLogAbsensi = bukaHalamanLogAbsensi;
+    globalThis.terapkanFilterLogAbsensi = terapkanFilterLogAbsensi;
+    globalThis.renderLogAbsensiTable = renderLogAbsensiTable;
+    globalThis.exportLogAbsensiToExcel = exportLogAbsensiToExcel;
 }
 
 
@@ -4455,13 +4459,15 @@ async function bukaHalamanLogAbsensi() {
     document.getElementById('logFilterPegawai').value = '';
     document.getElementById('logFilterAksi').value = '';
     document.getElementById('logFilterPelaku').value = '';
-    document.getElementById('logFilterTanggal').value = '';
+    if (document.getElementById('logFilterStartDate')) document.getElementById('logFilterStartDate').value = '';
+    if (document.getElementById('logFilterEndDate')) document.getElementById('logFilterEndDate').value = '';
+    if (document.getElementById('logFilterTanggal')) document.getElementById('logFilterTanggal').value = '';
 
     // Sembunyikan detail box kegiatan
     document.getElementById('logKegiatanDetailBox').classList.add('d-none');
 
     // Reset tampilan tabel
-    document.getElementById('logAbsensiTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-funnel h3"></i><br>Silakan masukkan kode akses kegiatan pada filter di atas dan klik "Cari".</td></tr>';
+    document.getElementById('logAbsensiTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-funnel h3"></i><br>Silakan gunakan filter di atas dan klik "Cari" untuk melihat log absensi.</td></tr>';
     const pt = document.getElementById("logAbsensiPaginationTop"); if (pt) pt.classList.add("d-none");
     const pb = document.getElementById("logAbsensiPagination"); if (pb) pb.classList.add("d-none");
 }
@@ -4469,70 +4475,66 @@ async function bukaHalamanLogAbsensi() {
 async function terapkanFilterLogAbsensi(isFromPagination = false) {
     if (isFromPagination !== true) paginasiState.page = 1;
     const kodeAkses = document.getElementById('logFilterKegiatan').value.trim();
-    if (!kodeAkses) {
-        Swal.fire('Filter Wajib', 'Silakan masukkan kode akses kegiatan terlebih dahulu.', 'warning');
-        return;
-    }
-
     const searchPegawai = document.getElementById('logFilterPegawai').value.trim();
     const jenisAksi = document.getElementById('logFilterAksi').value;
     const searchPelaku = document.getElementById('logFilterPelaku').value.trim();
-    const tanggal = document.getElementById('logFilterTanggal').value;
+    const startDate = document.getElementById('logFilterStartDate') ? document.getElementById('logFilterStartDate').value : '';
+    const endDate = document.getElementById('logFilterEndDate') ? document.getElementById('logFilterEndDate').value : '';
+    const singleTanggal = document.getElementById('logFilterTanggal') ? document.getElementById('logFilterTanggal').value : '';
 
     const tbody = document.getElementById('logAbsensiTableBody');
     const detailBox = document.getElementById('logKegiatanDetailBox');
 
     // Tampilkan loading di tabel
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm text-danger"></div> Memuat data kegiatan dan log absensi...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm text-danger"></div> Memuat data log absensi...</td></tr>';
     const pt = document.getElementById("logAbsensiPaginationTop"); if (pt) pt.classList.add("d-none");
     const pb = document.getElementById("logAbsensiPagination"); if (pb) pb.classList.add("d-none");
 
-    // 1. Ambil detail kegiatan dari database untuk validasi & display
-    try {
-        const resJadwal = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal/${kodeAkses}`);
-        if (!resJadwal.status || !resJadwal.data) {
+    // 1. Jika kodeAkses diisi, ambil detail kegiatan dari database untuk display info kegiatan
+    if (kodeAkses) {
+        try {
+            const resJadwal = await fetchWithAuth(`${API_BASE_URL}/admin/jadwal/${kodeAkses}`);
+            if (resJadwal && resJadwal.status && resJadwal.data) {
+                const j = resJadwal.data;
+                document.getElementById('logDetailKodeAkses').textContent = j.kode_akses;
+                document.getElementById('logDetailJudul').textContent = j.judul;
+                document.getElementById('logDetailKategori').textContent = j.kategori;
+                document.getElementById('logDetailTanggal').textContent = j.tanggal ? formatIndonesianDateTime(j.tanggal).split(',')[0] : '-';
+                document.getElementById('logDetailJam').textContent = `${j.jam_mulai} - ${j.jam_selesai} WIB`;
+                document.getElementById('logDetailRadius').textContent = `${j.radius_meter} meter`;
+                detailBox.classList.remove('d-none');
+            } else {
+                detailBox.classList.add('d-none');
+            }
+        } catch (e) {
+            console.error('Error fetching jadwal detail:', e);
             detailBox.classList.add('d-none');
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Kode akses kegiatan "${kodeAkses}" tidak ditemukan.</td></tr>`;
-            Swal.fire('Gagal', `Jadwal kegiatan dengan kode akses "${kodeAkses}" tidak ditemukan.`, 'error');
-            return;
         }
-
-        // Tampilkan detail kegiatan
-        const j = resJadwal.data;
-        document.getElementById('logDetailKodeAkses').textContent = j.kode_akses;
-        document.getElementById('logDetailJudul').textContent = j.judul;
-        document.getElementById('logDetailKategori').textContent = j.kategori;
-        document.getElementById('logDetailTanggal').textContent = j.tanggal ? formatIndonesianDateTime(j.tanggal).split(',')[0] : '-';
-        document.getElementById('logDetailJam').textContent = `${j.jam_mulai} - ${j.jam_selesai} WIB`;
-        document.getElementById('logDetailRadius').textContent = `${j.radius_meter} meter`;
-        detailBox.classList.remove('d-none');
-
-    } catch (e) {
-        console.error('Error fetching jadwal detail:', e);
+    } else {
         detailBox.classList.add('d-none');
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">Gagal memverifikasi kode akses kegiatan.</td></tr>';
-        return;
     }
 
-    // 2. Jika jadwal ditemukan, ambil log absensi dari server
+    // 2. Ambil log absensi dari server
     const query = new URLSearchParams({
-        kode_akses: kodeAkses,
         search_pegawai: searchPegawai,
         jenis_aksi: jenisAksi,
         search_pelaku: searchPelaku,
-        tanggal: tanggal,
         page: paginasiState.page,
         limit: paginasiState.limit
     });
+    if (kodeAkses) query.set('kode_akses', kodeAkses);
+    if (startDate) query.set('tanggal_mulai', startDate);
+    if (endDate) query.set('tanggal_selesai', endDate);
+    if (!startDate && !endDate && singleTanggal) query.set('tanggal', singleTanggal);
 
     try {
         const result = await fetchWithAuth(`${API_BASE_URL}/admin/log-absensi?${query.toString()}`);
-        if (result.status) {
+        if (result && result.status && result.data) {
             currentLogAbsensiData = result.data.data;
             renderLogAbsensiTable(currentLogAbsensiData);
             renderPaginationControls('logAbsensiPagination', result.data.pagination, 'logAbsensi');
         } else {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Gagal memuat log: ${result.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Gagal memuat log: ${(result && result.message) ? result.message : 'Respon tidak valid'}</td></tr>`;
         }
     } catch (error) {
         console.error('Error fetching log absensi:', error);
@@ -4542,7 +4544,7 @@ async function terapkanFilterLogAbsensi(isFromPagination = false) {
 
 function renderLogAbsensiTable(rows) {
     const tbody = document.getElementById('logAbsensiTableBody');
-    if (rows.length === 0) {
+    if (!rows || rows.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Tidak ada data log absensi untuk filter ini.</td></tr>';
         return;
     }
@@ -4562,22 +4564,25 @@ function renderLogAbsensiTable(rows) {
         return `
             <tr>
                 <td class="text-center fw-bold">${pageStartNo + index + 1}</td>
-                <td><small class="fw-semibold">${formatIndonesianDateTime(r.waktu_aksi)}</small></td>
-                <td class="text-center"><span class="badge bg-${badgeColor}">${r.jenis_aksi.toUpperCase()}</span></td>
                 <td>
-                    <div class="fw-bold">${r.nama && r.nama !== '-' ? r.nama : '-'}</div>
-                    <small class="text-muted">NIP: ${r.nip}</small>
+                    <small class="fw-semibold">${formatIndonesianDateTime(r.waktu_aksi)}</small>
+                    <div class="mt-1"><span class="badge bg-secondary font-monospace" style="font-size:0.7rem;" title="Kode Akses Kegiatan">${escapeHtml(r.kode_akses)}</span></div>
+                </td>
+                <td class="text-center"><span class="badge bg-${badgeColor}">${escapeHtml(r.jenis_aksi).toUpperCase()}</span></td>
+                <td>
+                    <div class="fw-bold">${r.nama && r.nama !== '-' ? escapeHtml(r.nama) : '-'}</div>
+                    <small class="text-muted">NIP: ${escapeHtml(r.nip)}</small>
                 </td>
                 <td>
-                    <div class="fw-bold">${r.nama_pelaku || '-'}</div>
-                    <small class="text-muted">NIP: ${r.nip_pelaku}</small>
+                    <div class="fw-bold">${escapeHtml(r.nama_pelaku) || '-'}</div>
+                    <small class="text-muted">NIP: ${escapeHtml(r.nip_pelaku)}</small>
                 </td>
                 <td>
-                    <div class="font-monospace small text-primary">${r.ip_address || '-'}</div>
-                    <small class="text-muted text-break d-block" style="font-size: 0.7rem; max-width: 140px; line-height: 1.1;" title="${(r.user_agent || '').replace(/"/g, '&quot;')}">${r.user_agent || '-'}</small>
+                    <div class="font-monospace small text-primary">${escapeHtml(r.ip_address) || '-'}</div>
+                    <small class="text-muted text-break d-block" style="font-size: 0.7rem; max-width: 140px; line-height: 1.1;" title="${(r.user_agent || '').replace(/"/g, '&quot;')}">${escapeHtml(r.user_agent) || '-'}</small>
                 </td>
                 <td>
-                    <textarea class="form-control form-control-sm text-start font-monospace bg-light" rows="3" readonly style="font-size: 0.75rem; resize: vertical;">${formattedData}</textarea>
+                    <textarea class="form-control form-control-sm text-start font-monospace bg-light" rows="3" readonly style="font-size: 0.75rem; resize: vertical;">${escapeHtml(formattedData)}</textarea>
                 </td>
             </tr>
         `;
@@ -4608,8 +4613,11 @@ function exportLogAbsensiToExcel() {
     XLSX.utils.book_append_sheet(wb, ws, "Log Absensi");
 
     const tgl = new Date().toISOString().slice(0, 10);
-    const kode = document.getElementById('logFilterKegiatan').value.trim() || 'Semua';
-    XLSX.writeFile(wb, `Log_Absensi_${kode}_${tgl}.xlsx`);
+    const kode = document.getElementById('logFilterKegiatan').value.trim() || 'Semua_Kegiatan';
+    const startDate = document.getElementById('logFilterStartDate') ? document.getElementById('logFilterStartDate').value : '';
+    const endDate = document.getElementById('logFilterEndDate') ? document.getElementById('logFilterEndDate').value : '';
+    const dateRangeStr = (startDate && endDate) ? `_${startDate}_sd_${endDate}` : (startDate ? `_${startDate}` : `_${tgl}`);
+    XLSX.writeFile(wb, `Log_Absensi_${kode}${dateRangeStr}.xlsx`);
 }
 
 // =========================================================================

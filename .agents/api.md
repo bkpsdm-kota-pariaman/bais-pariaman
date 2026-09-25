@@ -3322,3 +3322,78 @@ Semua endpoint di Bagian 2 diproses oleh Backend PHP Native (`src/Controllers/*`
   "data": null
 }
 ```
+
+---
+
+## 13. Log Absensi Audit Endpoint
+
+### 13.1 List Log Absensi
+- **Tipe:** `[CONTROLLER]` (`AbsenController::listLog`)
+- **Method:** `GET`
+- **Path:** `/api/admin/log-absensi`
+- **Akses:** Bearer Token (Eksklusif Super Admin)
+- **Status Test:** ✅ SUKSES TERUJI
+- **File Test:** `ROOT_PROJECT/tests/js/admin-log-absensi.test.js`
+
+**Deskripsi:**
+Mengambil riwayat log audit perubahan/manipulasi absensi (tambah/edit/hapus) yang dilakukan oleh verifikator/admin. Parameter `kode_akses` bersifat opsional sehingga Super Admin dapat merekap seluruh aktivitas verifikator dalam rentang waktu tertentu lintas kegiatan.
+
+**Query Parameters:**
+- `kode_akses` (string, opsional): Kode akses jadwal kegiatan. Jika kosong, mengambil log seluruh kegiatan.
+- `search_pegawai` (string, opsional): Pencarian NIP atau Nama pegawai target.
+- `jenis_aksi` (string, opsional): Filter jenis aksi (`tambah`, `edit`, `hapus`).
+- `search_pelaku` (string, opsional): Pencarian NIP atau Nama admin/verifikator pelaku aksi.
+- `tanggal` (string YYYY-MM-DD, opsional): Filter tanggal aksi spesifik (single date).
+- `tanggal_mulai` (string YYYY-MM-DD, opsional): Batas awal rentang tanggal aksi.
+- `tanggal_selesai` (string YYYY-MM-DD, opsional): Batas akhir rentang tanggal aksi.
+- `page` (integer, opsional, default `1`): Nomor halaman pagination.
+- `limit` (integer, opsional, default `10`): Batas jumlah data per halaman.
+
+**Contoh Request:**
+```http
+GET /api/admin/log-absensi?search_pelaku=Admin&tanggal_mulai=2026-09-01&tanggal_selesai=2026-09-30&page=1&limit=10 HTTP/1.1
+Host: api-origin.domain.go.id
+Authorization: Bearer <TOKEN_SUPER_ADMIN>
+```
+
+**Output Berhasil (`status: true`):**
+```json
+{
+  "status": true,
+  "code": 200,
+  "message": "Berhasil mengambil log absensi.",
+  "data": {
+    "data": [
+      {
+        "id_log_absensi": 101,
+        "kode_akses": "KODE123",
+        "nip": "198501012010011001",
+        "nama": "Ahmad Dani",
+        "jenis_aksi": "edit",
+        "nip_pelaku": "199002022015021002",
+        "nama_pelaku": "Budi Verifikator",
+        "ip_address": "127.0.0.1",
+        "user_agent": "Mozilla/5.0 ...",
+        "waktu_aksi": "2026-09-25 10:15:00",
+        "data": "{\"status_kehadiran\":\"Hadir\",\"keterangan_verifikasi\":\"Verifikasi Disetujui\"}"
+      }
+    ],
+    "pagination": {
+      "total_rows": 1,
+      "total_pages": 1,
+      "current_page": 1,
+      "limit": 10
+    }
+  }
+}
+```
+
+**Output Error (`status: false`):**
+```json
+{
+  "status": false,
+  "code": 403,
+  "message": "Hak akses ditolak.",
+  "data": null
+}
+```

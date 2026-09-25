@@ -780,10 +780,10 @@
 
         <!-- FILTERS -->
         <div class="row g-2 mb-4 bg-light p-3 border rounded shadow-sm align-items-end">
-          <div class="col-md-3">
-            <label class="form-label fw-bold small text-danger">Kode Akses Kegiatan (Wajib) *</label>
+          <div class="col-md-2">
+            <label class="form-label fw-bold small">Kode Akses (Opsional)</label>
             <input type="text" id="logFilterKegiatan" class="form-control form-control-sm font-monospace fw-bold"
-              placeholder="Masukkan Kode Akses" required
+              placeholder="Semua Kegiatan"
               onkeypress="if(event.key==='Enter') terapkanFilterLogAbsensi()">
           </div>
           <div class="col-md-2">
@@ -805,9 +805,13 @@
             <input type="text" id="logFilterPelaku" class="form-control form-control-sm" placeholder="Cari Pelaku"
               onkeypress="if(event.key==='Enter') terapkanFilterLogAbsensi()">
           </div>
-          <div class="col-md-2">
-            <label class="form-label fw-bold small">Waktu Aksi</label>
-            <input type="date" id="logFilterTanggal" class="form-control form-control-sm">
+          <div class="col-md-3">
+            <label class="form-label fw-bold small">Rentang Tanggal Aksi</label>
+            <div class="input-group input-group-sm">
+              <input type="date" id="logFilterStartDate" class="form-control" title="Tanggal Mulai">
+              <span class="input-group-text">s/d</span>
+              <input type="date" id="logFilterEndDate" class="form-control" title="Tanggal Selesai">
+            </div>
           </div>
           <div class="col-md-1">
             <button class="btn btn-danger btn-sm w-100 fw-bold" onclick="terapkanFilterLogAbsensi()"><i
@@ -1928,7 +1932,7 @@
 
   <!-- Panggil File Eksternal Javascript Admin -->
   <script src="js/admin-utils.min.js?v=1.0.0"></script>
-  <script src="js/admin.min.js?v=1.0.7"></script>
+  <script src="js/admin.min.js?v=1.0.8"></script>
 </body>
 
 </html>
