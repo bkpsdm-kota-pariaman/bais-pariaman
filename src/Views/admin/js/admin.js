@@ -1723,12 +1723,14 @@ function renderRekapTable(filteredPegawai, pagination = null) {
                     verifikasiBadge = `<span class="badge bg-danger">Disahkan Admin</span>`;
                     break;
                 case 'Terverifikasi Sistem':
+                case 'Terverifikasi Oleh Sistem':
                     verifikasiBadge = `<span class="badge bg-danger">Terverifikasi Sistem</span>`;
                     break;
                 case 'Ditolak Oleh Admin':
                     verifikasiBadge = `<span class="badge bg-danger">Ditolak Admin</span>`;
                     break;
                 case 'Menunggu Verifikasi Admin':
+                case 'Menunggu Verifikasi':
                     verifikasiBadge = `<span class="badge bg-warning text-dark border border-warning"><i class="bi bi-hourglass-split"></i> Menunggu Verifikasi</span>`;
                     break;
                 case 'ALPA':
@@ -1817,6 +1819,14 @@ function renderFotoKehadiranGrid(filteredPegawai) {
                 break;
             case 'Ditolak Oleh Admin':
                 verifStatusBadge = `<span class="badge bg-warning text-dark">Ditolak Admin</span>`;
+                break;
+            case 'Terverifikasi Sistem':
+            case 'Terverifikasi Oleh Sistem':
+                verifStatusBadge = `<span class="badge bg-danger">Terverifikasi Sistem</span>`;
+                break;
+            case 'Menunggu Verifikasi Admin':
+            case 'Menunggu Verifikasi':
+                verifStatusBadge = `<span class="badge bg-warning text-dark border border-warning"><i class="bi bi-hourglass-split"></i> Menunggu Verifikasi</span>`;
                 break;
         }
 
@@ -2047,8 +2057,12 @@ async function submitVerifikasi(event) {
                         });
                     }
                     refreshRekapSummary();
-                    renderRekapTable(currentRekapData.filtered_pegawai, lastRekapPagination);
-                    renderFotoKehadiranGrid(currentRekapData.filtered_pegawai);
+                    const selectedView = document.getElementById('rekapFilterView') ? document.getElementById('rekapFilterView').value : 'table';
+                    if (selectedView === 'table') {
+                        renderRekapTable(currentRekapData.filtered_pegawai, lastRekapPagination);
+                    } else {
+                        renderFotoKehadiranGrid(currentRekapData.filtered_pegawai);
+                    }
                 }
             } else {
                 Swal.fire('Gagal', 'Gagal memperbarui: ' + result.message, 'error');
@@ -3364,9 +3378,11 @@ function renderRekapKeseluruhanTable(data, pagination = null) {
 
         switch (statusVerif) {
             case 'Terverifikasi Oleh Admin': verifikasiBadge = `<span class="badge bg-danger">Disahkan Admin</span>`; break;
-            case 'Terverifikasi Sistem': verifikasiBadge = `<span class="badge bg-danger">Terverifikasi Sistem</span>`; break;
+            case 'Terverifikasi Sistem':
+            case 'Terverifikasi Oleh Sistem': verifikasiBadge = `<span class="badge bg-danger">Terverifikasi Sistem</span>`; break;
             case 'Ditolak Oleh Admin': verifikasiBadge = `<span class="badge bg-danger">Ditolak Admin</span>`; break;
-            case 'Menunggu Verifikasi Admin': verifikasiBadge = `<span class="badge bg-warning text-dark border border-warning"><i class="bi bi-hourglass-split"></i> Menunggu Verifikasi</span>`; break;
+            case 'Menunggu Verifikasi Admin':
+            case 'Menunggu Verifikasi': verifikasiBadge = `<span class="badge bg-warning text-dark border border-warning"><i class="bi bi-hourglass-split"></i> Menunggu Verifikasi</span>`; break;
             case 'ALPA':
             default:
                 verifikasiBadge = `<span class="badge bg-secondary">Alpa</span>`;

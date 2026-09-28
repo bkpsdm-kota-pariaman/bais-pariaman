@@ -710,12 +710,21 @@ class AbsenController {
                 $status_kehadiran_efektif = 'alpa';
             }
 
-            // Tentukan status verifikasi efektif (menangani nilai NULL)
-            $status_verifikasi_efektif = $pegawai['status_verifikasi'] ?? 'ALPA';
+            // Tentukan status verifikasi efektif (menangani nilai NULL atau kosong)
+            $status_verifikasi_raw = trim((string)($pegawai['status_verifikasi'] ?? ''));
+            $status_verifikasi_efektif = ($status_verifikasi_raw === '') ? 'ALPA' : $status_verifikasi_raw;
 
             // Cek kecocokan dengan filter. Jika 'semua', anggap cocok.
             $kehadiranMatch = ($statusKehadiranFilter === 'semua') || (strcasecmp($status_kehadiran_efektif, $statusKehadiranFilter) === 0);
-            $verifikasiMatch = ($statusVerifikasiFilter === 'semua') || (strcasecmp($status_verifikasi_efektif, $statusVerifikasiFilter) === 0);
+            if ($statusVerifikasiFilter === 'semua') {
+                $verifikasiMatch = true;
+            } elseif (in_array(strtolower($statusVerifikasiFilter), ['terverifikasi sistem', 'terverifikasi oleh sistem'])) {
+                $verifikasiMatch = in_array(strtolower($status_verifikasi_efektif), ['terverifikasi sistem', 'terverifikasi oleh sistem']);
+            } elseif (in_array(strtolower($statusVerifikasiFilter), ['menunggu verifikasi admin', 'menunggu verifikasi'])) {
+                $verifikasiMatch = in_array(strtolower($status_verifikasi_efektif), ['menunggu verifikasi admin', 'menunggu verifikasi']);
+            } else {
+                $verifikasiMatch = (strcasecmp($status_verifikasi_efektif, $statusVerifikasiFilter) === 0);
+            }
 
             if ($kehadiranMatch && $verifikasiMatch) {
                 $detailPegawai[] = $pegawai;
@@ -825,10 +834,19 @@ class AbsenController {
                 $status_kehadiran_efektif = 'alpa';
             }
 
-            $status_verifikasi_efektif = $pegawai['status_verifikasi'] ?? 'ALPA';
+            $status_verifikasi_raw = trim((string)($pegawai['status_verifikasi'] ?? ''));
+            $status_verifikasi_efektif = ($status_verifikasi_raw === '') ? 'ALPA' : $status_verifikasi_raw;
 
             $kehadiranMatch = ($statusKehadiranFilter === 'semua') || (strcasecmp($status_kehadiran_efektif, $statusKehadiranFilter) === 0);
-            $verifikasiMatch = ($statusVerifikasiFilter === 'semua') || (strcasecmp($status_verifikasi_efektif, $statusVerifikasiFilter) === 0);
+            if ($statusVerifikasiFilter === 'semua') {
+                $verifikasiMatch = true;
+            } elseif (in_array(strtolower($statusVerifikasiFilter), ['terverifikasi sistem', 'terverifikasi oleh sistem'])) {
+                $verifikasiMatch = in_array(strtolower($status_verifikasi_efektif), ['terverifikasi sistem', 'terverifikasi oleh sistem']);
+            } elseif (in_array(strtolower($statusVerifikasiFilter), ['menunggu verifikasi admin', 'menunggu verifikasi'])) {
+                $verifikasiMatch = in_array(strtolower($status_verifikasi_efektif), ['menunggu verifikasi admin', 'menunggu verifikasi']);
+            } else {
+                $verifikasiMatch = (strcasecmp($status_verifikasi_efektif, $statusVerifikasiFilter) === 0);
+            }
 
             if ($kehadiranMatch && $verifikasiMatch) {
                 $detailPegawai[] = $pegawai;
