@@ -419,7 +419,7 @@ async function fetchAdmin(url, options = {}) {
     options.signal = controller.signal;
     if (overlay) overlay.style.display = 'flex';
     let timedOut = false;
-    abortTimeout = setTimeout(() => { timedOut = true; controller.abort(); }, 10000);
+    abortTimeout = setTimeout(() => { timedOut = true; controller.abort(); }, 30000);
     try {
         const resp = await fetch(finalUrl, options);
         clearTimeout(abortTimeout);
