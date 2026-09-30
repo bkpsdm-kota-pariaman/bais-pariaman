@@ -371,7 +371,7 @@ async function fetchWithAuth(url, options = {}) {
     const abortTimeout = setTimeout(() => {
         timedOut = true;
         controller.abort();
-    }, 10000);
+    }, 30000);
 
     try {
         const response = await fetch(finalUrl, fetchOptions);
