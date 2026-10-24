@@ -143,14 +143,14 @@ Backend E2E harus menggunakan remote backend testing.
 Frontend saat ini menentukan API melalui JavaScript aplikasi:
 
 ```javascript
-const ORIGIN_SERVER_URL = "https://api-esdm.pariamankota.go.id/beta-bais-pariaman";
+const ORIGIN_SERVER_URL = "https://lila.pariamankota.go.id/beta-bais-pariaman";
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
 ```
 
 Untuk admin:
 
 ```javascript
-const ORIGIN_SERVER_URL = 'https://api-esdm.pariamankota.go.id/beta-bais-pariaman';
+const ORIGIN_SERVER_URL = 'https://lila.pariamankota.go.id/beta-bais-pariaman';
 const API_BASE_URL = `${ORIGIN_SERVER_URL}/api`;
 ```
 

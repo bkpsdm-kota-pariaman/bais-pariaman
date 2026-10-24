@@ -3,8 +3,8 @@
 	"main": "src/index.js",
 	"compatibility_date": "2026-06-26",
 	"vars": {
-		"ORIGIN_API_URL": "https://api-esdm.pariamankota.go.id/bais-pariaman/api",
-		"ORIGIN_API_BULK_URL": "https://api-esdm.pariamankota.go.id/bais-pariaman/api/absen/bulk-submit"
+		"ORIGIN_API_URL": "https://lila.pariamankota.go.id/bais-pariaman/api",
+		"ORIGIN_API_BULK_URL": "https://lila.pariamankota.go.id/bais-pariaman/api/absen/bulk-submit"
 	},
 	"kv_namespaces": [
 		{
@@ -56,8 +56,8 @@
 		"beta": {
 			"name": "absensi-kegiatan-asn-worker-dev",
 			"vars": {
-				"ORIGIN_API_URL": "https://api-esdm.pariamankota.go.id/beta-bais-pariaman/api",
-				"ORIGIN_API_BULK_URL": "https://api-esdm.pariamankota.go.id/beta-bais-pariaman/api/absen/bulk-submit"
+				"ORIGIN_API_URL": "https://lila.pariamankota.go.id/beta-bais-pariaman/api",
+				"ORIGIN_API_BULK_URL": "https://lila.pariamankota.go.id/beta-bais-pariaman/api/absen/bulk-submit"
 			},
 			"kv_namespaces": [
 				{
