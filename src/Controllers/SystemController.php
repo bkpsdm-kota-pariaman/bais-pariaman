@@ -266,7 +266,6 @@ class SystemController {
         curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlErrorNo = curl_errno($ch);
-        curl_close($ch);
 
         return $curlErrorNo === 0 && $httpCode >= 200 && $httpCode < 300;
     }
@@ -298,7 +297,6 @@ class SystemController {
         curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlErrorNo = curl_errno($ch);
-        curl_close($ch);
 
         return $curlErrorNo === 0 && $httpCode >= 200 && $httpCode < 300;
     }

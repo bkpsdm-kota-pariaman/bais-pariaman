@@ -524,7 +524,6 @@ class JadwalController {
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlErrorNo = curl_errno($ch);
         $curlErrorMsg = curl_error($ch);
-        curl_close($ch);
 
         if ($waitForResponse) {
             if ($curlErrorNo === 0 && $httpCode >= 200 && $httpCode < 300) {
