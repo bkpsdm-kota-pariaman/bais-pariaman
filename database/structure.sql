@@ -203,3 +203,14 @@ INSERT INTO `app_absensi_pengaturan_aplikasi` (`kode_pengaturan`, `nama_pengatur
 VALUES ('link_absensi_cadangan', 'Link Absensi Cadangan', 'https://bais-pariaman.pariamankota.go.id/absensi-cadangan/cadangan.html')
 ON DUPLICATE KEY UPDATE `kode_pengaturan` = `kode_pengaturan`;
 
+--
+-- Struktur dari tabel `app_absensi_list_opd`
+-- Dipakai MasterDataController (CRUD OPD) & JadwalController (validasi target OPD).
+--
+CREATE TABLE IF NOT EXISTS `app_absensi_list_opd` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `nama_opd` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_nama_opd` (`nama_opd`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
