@@ -19,20 +19,20 @@ try {
     $db = Database::getConnection();
 
     // 1. Buat kolom 'password' jika belum ada
-    $checkCol = $db->query("SHOW COLUMNS FROM app_absensi_data_pegawai LIKE 'password'");
+    $checkCol = $db->query("SHOW COLUMNS FROM " . DB_TBL_PREFIX . "data_pegawai LIKE 'password'");
     if (!$checkCol->fetch()) {
-        $db->exec("ALTER TABLE app_absensi_data_pegawai ADD COLUMN `password` VARCHAR(255) DEFAULT NULL AFTER `nik`");
-        echo "Kolom 'password' berhasil dibuat di tabel app_absensi_data_pegawai.\n";
+        $db->exec("ALTER TABLE " . DB_TBL_PREFIX . "data_pegawai ADD COLUMN `password` VARCHAR(255) DEFAULT NULL AFTER `nik`");
+        echo "Kolom 'password' berhasil dibuat di tabel " . DB_TBL_PREFIX . "data_pegawai.\n";
     }
 
     // 2. Ambil semua pegawai beserta NIK dan password saat ini
-    $stmt = $db->query("SELECT nip, nik, password FROM app_absensi_data_pegawai");
+    $stmt = $db->query("SELECT nip, nik, password FROM " . DB_TBL_PREFIX . "data_pegawai");
     $pegawais = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $countUpdated = 0;
     $countSkipped = 0;
 
-    $updateStmt = $db->prepare("UPDATE app_absensi_data_pegawai SET password = :password WHERE nip = :nip");
+    $updateStmt = $db->prepare("UPDATE " . DB_TBL_PREFIX . "data_pegawai SET password = :password WHERE nip = :nip");
 
     foreach ($pegawais as $p) {
         $nik = trim($p['nik'] ?? '');

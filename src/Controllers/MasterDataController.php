@@ -31,7 +31,7 @@ class MasterDataController {
         $search = isset($_GET['search']) ? (string)$_GET['search'] : '';
 
         $sql = "SELECT p.nama_pegawai, p.nip, p.perangkat_daerah, p.jabatan, p.nik, p.jenis_asn, p.last_login, p.kv_sync_status, p.role
-                FROM app_absensi_data_pegawai p";
+                FROM " . DB_TBL_PREFIX . "data_pegawai p";
         
         $conditions = [];
         $params = [];
@@ -68,7 +68,7 @@ class MasterDataController {
         $sql .= " ORDER BY p.nama_pegawai ASC";
 
         // Query hitung total (sebelum LIMIT/OFFSET)
-        $countSql = "SELECT COUNT(*) FROM app_absensi_data_pegawai p";
+        $countSql = "SELECT COUNT(*) FROM " . DB_TBL_PREFIX . "data_pegawai p";
         if (count($conditions) > 0) {
             $countSql .= " WHERE " . implode(' AND ', $conditions);
         }
@@ -104,10 +104,10 @@ class MasterDataController {
         AdminAuthHelper::validate();
         $db = Database::getConnection();
 
-        $stmtTotal = $db->query("SELECT COUNT(*) FROM app_absensi_data_pegawai");
+        $stmtTotal = $db->query("SELECT COUNT(*) FROM " . DB_TBL_PREFIX . "data_pegawai");
         $totalCount = $stmtTotal->fetchColumn();
 
-        $stmtInstalled = $db->query("SELECT COUNT(*) FROM app_absensi_data_pegawai WHERE last_login IS NOT NULL AND last_login != ''");
+        $stmtInstalled = $db->query("SELECT COUNT(*) FROM " . DB_TBL_PREFIX . "data_pegawai WHERE last_login IS NOT NULL AND last_login != ''");
         $installedCount = $stmtInstalled->fetchColumn();
 
         // Yang belum install adalah total dikurangi yang sudah install
@@ -135,7 +135,7 @@ class MasterDataController {
         }
 
         // Cek duplikat NIP
-        $stmtCheck = $db->prepare("SELECT COUNT(*) FROM app_absensi_data_pegawai WHERE nip = :nip");
+        $stmtCheck = $db->prepare("SELECT COUNT(*) FROM " . DB_TBL_PREFIX . "data_pegawai WHERE nip = :nip");
         $stmtCheck->execute([':nip' => $input['nip']]);
         if ($stmtCheck->fetchColumn() > 0) {
             Response::json(false, 409, "NIP sudah terdaftar.");
@@ -159,7 +159,7 @@ class MasterDataController {
         $rawNikInput = (string)trim($input['nik']);
         $hashedNik = (strlen($rawNikInput) === 64 && ctype_xdigit($rawNikInput)) ? strtolower($rawNikInput) : hash('sha256', $rawNikInput);
 
-        $sql = "INSERT INTO app_absensi_data_pegawai (nip, nama_pegawai, nik, perangkat_daerah, jabatan, jenis_asn, role, kv_sync_status) 
+        $sql = "INSERT INTO " . DB_TBL_PREFIX . "data_pegawai (nip, nama_pegawai, nik, perangkat_daerah, jabatan, jenis_asn, role, kv_sync_status) 
                 VALUES (:nip, :nama_pegawai, :nik, :perangkat_daerah, :jabatan, :jenis_asn, :role, 0)";
         $stmt = $db->prepare($sql);
         $isSuccess = $stmt->execute([
@@ -184,7 +184,7 @@ class MasterDataController {
             ];
             $syncSuccess = $this->syncPegawaiToKv('PUT', $input['nip'], $payloadForKv, true);
             if ($syncSuccess) {
-                $db->prepare("UPDATE app_absensi_data_pegawai SET kv_sync_status = 1 WHERE nip = :nip")->execute([':nip' => $input['nip']]);
+                $db->prepare("UPDATE " . DB_TBL_PREFIX . "data_pegawai SET kv_sync_status = 1 WHERE nip = :nip")->execute([':nip' => $input['nip']]);
             }
 
             $message = "Pegawai berhasil ditambahkan.";
@@ -209,7 +209,7 @@ class MasterDataController {
         }
 
         // Ambil data lama
-        $stmtCurrent = $db->prepare("SELECT nik, role FROM app_absensi_data_pegawai WHERE nip = :nip");
+        $stmtCurrent = $db->prepare("SELECT nik, role FROM " . DB_TBL_PREFIX . "data_pegawai WHERE nip = :nip");
         $stmtCurrent->execute([':nip' => $nip]);
         $currentPegawai = $stmtCurrent->fetch();
 
@@ -251,7 +251,7 @@ class MasterDataController {
         if (!in_array('asn', $newRoles)) $newRoles[] = 'asn';
         $rolesStr = implode(',', $newRoles);
 
-        $sql = "UPDATE app_absensi_data_pegawai 
+        $sql = "UPDATE " . DB_TBL_PREFIX . "data_pegawai 
                 SET nama_pegawai = :nama_pegawai, nik = :nik, perangkat_daerah = :perangkat_daerah, jabatan = :jabatan, jenis_asn = :jenis_asn, role = :role, kv_sync_status = 0
                 WHERE nip = :nip";
         
@@ -281,7 +281,7 @@ class MasterDataController {
         ];
         $syncSuccess = $this->syncPegawaiToKv('PUT', $nip, $payloadForKv, true);
         if ($syncSuccess) {
-            $db->prepare("UPDATE app_absensi_data_pegawai SET kv_sync_status = 1 WHERE nip = :nip")->execute([':nip' => $nip]);
+            $db->prepare("UPDATE " . DB_TBL_PREFIX . "data_pegawai SET kv_sync_status = 1 WHERE nip = :nip")->execute([':nip' => $nip]);
         }
 
         $message = "Data pegawai berhasil diperbarui.";
@@ -294,7 +294,7 @@ class MasterDataController {
         $db = Database::getConnection();
         $nip = $vars['nip'];
 
-        $stmt = $db->prepare("DELETE FROM app_absensi_data_pegawai WHERE nip = :nip");
+        $stmt = $db->prepare("DELETE FROM " . DB_TBL_PREFIX . "data_pegawai WHERE nip = :nip");
         $stmt->execute([':nip' => $nip]);
 
         if ($stmt->rowCount() > 0) {
@@ -318,7 +318,7 @@ class MasterDataController {
         }
 
         // 1. Ambil data pegawai terbaru dari DB untuk memastikan data di KV adalah yang paling mutakhir.
-        $stmtPegawai = $db->prepare("SELECT nip, nik, nama_pegawai, perangkat_daerah, jabatan, jenis_asn, role FROM app_absensi_data_pegawai WHERE nip = :nip");
+        $stmtPegawai = $db->prepare("SELECT nip, nik, nama_pegawai, perangkat_daerah, jabatan, jenis_asn, role FROM " . DB_TBL_PREFIX . "data_pegawai WHERE nip = :nip");
         $stmtPegawai->execute([':nip' => $nip]);
         $pegawai = $stmtPegawai->fetch(PDO::FETCH_ASSOC);
 
@@ -345,7 +345,7 @@ class MasterDataController {
 
         if ($syncSuccess) {
             try {
-                $stmt = $db->prepare("UPDATE app_absensi_data_pegawai SET kv_sync_status = 1 WHERE nip = :nip");
+                $stmt = $db->prepare("UPDATE " . DB_TBL_PREFIX . "data_pegawai SET kv_sync_status = 1 WHERE nip = :nip");
                 $stmt->execute([':nip' => $nip]);
                 Response::json(true, 200, "Cache berhasil disinkronkan dengan Cloudflare KV.");
             } catch (\Exception $e) {
@@ -424,7 +424,7 @@ class MasterDataController {
         AdminAuthHelper::validate();
         $db = Database::getConnection();
         // Mengambil nama_opd dan mengaliaskannya sebagai 'id' agar sesuai dengan ekspektasi frontend
-        $stmt = $db->query("SELECT nama_opd, nama_opd as id FROM app_absensi_list_opd ORDER BY nama_opd ASC");
+        $stmt = $db->query("SELECT nama_opd, nama_opd as id FROM " . DB_TBL_PREFIX . "list_opd ORDER BY nama_opd ASC");
         $opdList = $stmt->fetchAll(PDO::FETCH_ASSOC);
         Response::json(true, 200, "OK", $opdList);
     }
@@ -442,14 +442,14 @@ class MasterDataController {
         $db = Database::getConnection();
         
         // Cek duplikat
-        $stmtCheck = $db->prepare("SELECT COUNT(*) FROM app_absensi_list_opd WHERE nama_opd = ?");
+        $stmtCheck = $db->prepare("SELECT COUNT(*) FROM " . DB_TBL_PREFIX . "list_opd WHERE nama_opd = ?");
         $stmtCheck->execute([$namaOpd]);
         if ($stmtCheck->fetchColumn() > 0) {
             Response::json(false, 409, "Nama OPD sudah ada.");
             return;
         }
 
-        $stmt = $db->prepare("INSERT INTO app_absensi_list_opd (nama_opd) VALUES (?)");
+        $stmt = $db->prepare("INSERT INTO " . DB_TBL_PREFIX . "list_opd (nama_opd) VALUES (?)");
         if ($stmt->execute([$namaOpd])) {
             Response::json(true, 200, "OPD berhasil ditambahkan.");
         } else {
@@ -469,7 +469,7 @@ class MasterDataController {
         }
 
         $db = Database::getConnection();
-        $stmt = $db->prepare("UPDATE app_absensi_list_opd SET nama_opd = ? WHERE nama_opd = ?");
+        $stmt = $db->prepare("UPDATE " . DB_TBL_PREFIX . "list_opd SET nama_opd = ? WHERE nama_opd = ?");
         if ($stmt->execute([$newNamaOpd, $oldNamaOpd])) {
             Response::json(true, 200, "OPD berhasil diperbarui.");
         } else {
@@ -486,7 +486,7 @@ class MasterDataController {
         }
 
         $db = Database::getConnection();
-        $stmt = $db->prepare("DELETE FROM app_absensi_list_opd WHERE nama_opd = ?");
+        $stmt = $db->prepare("DELETE FROM " . DB_TBL_PREFIX . "list_opd WHERE nama_opd = ?");
         if ($stmt->execute([$namaOpd])) {
             Response::json(true, 200, "OPD berhasil dihapus.");
         } else {
@@ -498,7 +498,7 @@ class MasterDataController {
         AdminAuthHelper::validate();
         $db = Database::getConnection();
 
-        $stmt = $db->query("SELECT nama_opd FROM app_absensi_list_opd ORDER BY nama_opd ASC");
+        $stmt = $db->query("SELECT nama_opd FROM " . DB_TBL_PREFIX . "list_opd ORDER BY nama_opd ASC");
         $opdList = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
 
         if ($opdList === false) {
@@ -563,7 +563,7 @@ class MasterDataController {
         $db = Database::getConnection();
         
         // Query untuk mengambil semua nama_opd dari tabel master, diurutkan berdasarkan abjad
-        $stmt = $db->prepare("SELECT nama_opd FROM app_absensi_list_opd ORDER BY nama_opd ASC");
+        $stmt = $db->prepare("SELECT nama_opd FROM " . DB_TBL_PREFIX . "list_opd ORDER BY nama_opd ASC");
         $stmt->execute();
         
         $listOpd = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
@@ -586,7 +586,7 @@ class MasterDataController {
         $sql = "SELECT 
                     p.nama_pegawai, p.nip, p.nik, p.perangkat_daerah, p.jabatan, p.jenis_asn, p.role
                 FROM 
-                    app_absensi_data_pegawai p
+                    " . DB_TBL_PREFIX . "data_pegawai p
                 WHERE p.nip = :nip LIMIT 1";
         $stmt = $db->prepare($sql);
         $stmt->bindParam(':nip', $nip);
@@ -649,7 +649,7 @@ class MasterDataController {
             $sql = "SELECT 
                         p.nama_pegawai, p.nip, p.perangkat_daerah, p.jabatan, p.jenis_asn, p.role
                     FROM 
-                        app_absensi_data_pegawai p
+                        " . DB_TBL_PREFIX . "data_pegawai p
                     WHERE p.nip = :nip LIMIT 1";
             $stmt = $db->prepare($sql);
             $stmt->bindParam(':nip', $nip);
@@ -708,7 +708,7 @@ class MasterDataController {
         $db = Database::getConnection();
 
         // --- LOGIKA BARU: Batasi update profil sekali sebulan (kecuali role admin / super admin) ---
-        $stmtCheck = $db->prepare("SELECT updated_at, nik, nama_pegawai, jenis_asn FROM app_absensi_data_pegawai WHERE nip = :nip");
+        $stmtCheck = $db->prepare("SELECT updated_at, nik, nama_pegawai, jenis_asn FROM " . DB_TBL_PREFIX . "data_pegawai WHERE nip = :nip");
         $stmtCheck->execute([':nip' => $nip]);
         $pegawaiDbData = $stmtCheck->fetch(PDO::FETCH_ASSOC);
         $lastUpdateString = $pegawaiDbData['updated_at'] ?? null;
@@ -748,7 +748,7 @@ class MasterDataController {
         
         // --- BLOK VALIDASI MASTER OPD ---
         if ($opdBaru) {
-            $stmtOpd = $db->prepare("SELECT nama_opd FROM app_absensi_list_opd WHERE nama_opd = :opd LIMIT 1");
+            $stmtOpd = $db->prepare("SELECT nama_opd FROM " . DB_TBL_PREFIX . "list_opd WHERE nama_opd = :opd LIMIT 1");
             $stmtOpd->bindParam(':opd', $opdBaru);
             $stmtOpd->execute();
             
@@ -779,7 +779,7 @@ class MasterDataController {
 
         $params[':nip'] = $nip;
         
-        $sql = "UPDATE app_absensi_data_pegawai SET " . implode(', ', $updates) . " WHERE nip = :nip";
+        $sql = "UPDATE " . DB_TBL_PREFIX . "data_pegawai SET " . implode(', ', $updates) . " WHERE nip = :nip";
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
 
@@ -796,7 +796,7 @@ class MasterDataController {
         $syncSuccess = $this->syncPegawaiToKv('PUT', $nip, $payloadForKv, true);
         
         if ($syncSuccess) {
-            $db->prepare("UPDATE app_absensi_data_pegawai SET kv_sync_status = 1 WHERE nip = :nip")->execute([':nip' => $nip]);
+            $db->prepare("UPDATE " . DB_TBL_PREFIX . "data_pegawai SET kv_sync_status = 1 WHERE nip = :nip")->execute([':nip' => $nip]);
         }
 
         $config = require APP_PATH . '/config/config.php';

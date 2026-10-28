@@ -7,9 +7,9 @@ use App\Helpers\Database;
 try {
     $db = Database::getConnection();
     // check if column already exists
-    $stmt = $db->query("SHOW COLUMNS FROM `app_absensi_log_absensi` LIKE 'nama'");
+    $stmt = $db->query("SHOW COLUMNS FROM `" . DB_TBL_PREFIX . "log_absensi` LIKE 'nama'");
     if (!$stmt->fetch()) {
-        $db->exec("ALTER TABLE `app_absensi_log_absensi` ADD COLUMN `nama` VARCHAR(255) NOT NULL DEFAULT '-' AFTER `nip`");
+        $db->exec("ALTER TABLE `" . DB_TBL_PREFIX . "log_absensi` ADD COLUMN `nama` VARCHAR(255) NOT NULL DEFAULT '-' AFTER `nip`");
         echo "Column 'nama' added successfully.\n";
     } else {
         echo "Column 'nama' already exists.\n";

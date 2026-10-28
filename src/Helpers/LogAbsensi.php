@@ -24,7 +24,7 @@ class LogAbsensi {
         }
 
         try {
-            $stmt = $pdo->prepare("INSERT INTO app_absensi_log_absensi 
+            $stmt = $pdo->prepare("INSERT INTO " . DB_TBL_PREFIX . "log_absensi 
                 (kode_akses, nip, nama, jenis_aksi, nip_pelaku, nama_pelaku, ip_address, user_agent, data) 
              VALUES (?,?,?,?,?,?,?,?,?)");
             return $stmt->execute([

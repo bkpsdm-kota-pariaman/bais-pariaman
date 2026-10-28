@@ -7,6 +7,13 @@ use PDO;
 use PDOException;
 use App\Helpers\Response;
 
+// Prefix nama tabel runtime dibaca dari config (kunci 'db_prefix').
+// Semua query memakai konstanta DB_TBL_PREFIX, contoh:
+//   "SELECT ... FROM " . DB_TBL_PREFIX . "data_pegawai"
+$config = require __DIR__ . '/../../config/config.php';
+define('DB_TBL_PREFIX', isset($config['db_prefix']) ? (string)$config['db_prefix'] : 'app_absensi_');
+unset($config);
+
 class Database {
     private static $connection = null;
 

@@ -35,7 +35,7 @@ class JadwalController {
 
         $sqlJadwal = "
             SELECT *
-            FROM app_absensi_jadwal_kegiatan
+            FROM " . DB_TBL_PREFIX . "jadwal_kegiatan
             WHERE
                 kode_akses = :kode_akses AND
                 tanggal = :current_date
@@ -59,7 +59,7 @@ class JadwalController {
             return;
         }
 
-        $sqlTargetOpd = "SELECT nama_opd FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :kode_akses ORDER BY nama_opd ASC";
+        $sqlTargetOpd = "SELECT nama_opd FROM " . DB_TBL_PREFIX . "kegiatan_target_opd WHERE kode_akses = :kode_akses ORDER BY nama_opd ASC";
         $stmtTargetOpd = $db->prepare($sqlTargetOpd);
         $stmtTargetOpd->bindParam(':kode_akses', $kodeAkses);
         $stmtTargetOpd->execute();
@@ -83,7 +83,7 @@ class JadwalController {
     public function getOpdList() {
         AdminAuthHelper::validate();
         $db = Database::getConnection();
-        $stmt = $db->query("SELECT nama_opd FROM app_absensi_list_opd ORDER BY nama_opd ASC");
+        $stmt = $db->query("SELECT nama_opd FROM " . DB_TBL_PREFIX . "list_opd ORDER BY nama_opd ASC");
         $opdList = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
         Response::json(true, 200, "OK", $opdList);
     }
@@ -113,14 +113,14 @@ class JadwalController {
 
         $whereSql = !empty($where) ? ' WHERE ' . implode(' AND ', $where) : '';
 
-        $countStmt = $db->prepare("SELECT COUNT(*) FROM app_absensi_jadwal_kegiatan" . $whereSql);
+        $countStmt = $db->prepare("SELECT COUNT(*) FROM " . DB_TBL_PREFIX . "jadwal_kegiatan" . $whereSql);
         foreach ($params as $key => $val) {
             $countStmt->bindValue($key, $val);
         }
         $countStmt->execute();
         $totalRows = $countStmt->fetchColumn();
 
-        $stmt = $db->prepare("SELECT *, kv_sync_status FROM app_absensi_jadwal_kegiatan" . $whereSql . " ORDER BY tanggal DESC, jam_mulai DESC LIMIT :limit OFFSET :offset");
+        $stmt = $db->prepare("SELECT *, kv_sync_status FROM " . DB_TBL_PREFIX . "jadwal_kegiatan" . $whereSql . " ORDER BY tanggal DESC, jam_mulai DESC LIMIT :limit OFFSET :offset");
         foreach ($params as $key => $val) {
             $stmt->bindValue($key, $val);
         }
@@ -147,7 +147,7 @@ class JadwalController {
         $kodeAkses = $vars['kode_akses'] ?? null;
         $db = Database::getConnection();
 
-        $stmtJadwal = $db->prepare("SELECT * FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses");
+        $stmtJadwal = $db->prepare("SELECT * FROM " . DB_TBL_PREFIX . "jadwal_kegiatan WHERE kode_akses = :kode_akses");
         $stmtJadwal->execute([':kode_akses' => $kodeAkses]); 
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
 
@@ -155,7 +155,7 @@ class JadwalController {
             Response::json(false, 404, "Jadwal tidak ditemukan.");
         }
 
-        $stmtOpd = $db->prepare("SELECT nama_opd FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :kode_akses ORDER BY nama_opd ASC");
+        $stmtOpd = $db->prepare("SELECT nama_opd FROM " . DB_TBL_PREFIX . "kegiatan_target_opd WHERE kode_akses = :kode_akses ORDER BY nama_opd ASC");
         $stmtOpd->execute([':kode_akses' => $kodeAkses]);
         $jadwal['target_opd'] = $stmtOpd->fetchAll(PDO::FETCH_COLUMN, 0);
 
@@ -172,7 +172,7 @@ class JadwalController {
         $db = Database::getConnection();
     
         // Get schedule details
-        $stmtJadwal = $db->prepare("SELECT * FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses");
+        $stmtJadwal = $db->prepare("SELECT * FROM " . DB_TBL_PREFIX . "jadwal_kegiatan WHERE kode_akses = :kode_akses");
         $stmtJadwal->execute([':kode_akses' => $kodeAkses]);
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
     
@@ -211,7 +211,7 @@ class JadwalController {
         try {
             $db->beginTransaction();
 
-            $sqlJadwal = "INSERT INTO app_absensi_jadwal_kegiatan (kode_akses, judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, aktifkan_antrian, kv_sync_status, is_strict_time, is_strict_location, is_strict_opd) VALUES (:ka, :jd, :kat, :tgl, :jm, :js, :koord, :rad, :aa, 0, :ist, :isl, :iso)";
+            $sqlJadwal = "INSERT INTO " . DB_TBL_PREFIX . "jadwal_kegiatan (kode_akses, judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, aktifkan_antrian, kv_sync_status, is_strict_time, is_strict_location, is_strict_opd) VALUES (:ka, :jd, :kat, :tgl, :jm, :js, :koord, :rad, :aa, 0, :ist, :isl, :iso)";
             $stmtJadwal = $db->prepare($sqlJadwal);
             $stmtJadwal->execute([
                 ':ka' => $kodeAkses,
@@ -230,15 +230,15 @@ class JadwalController {
 
             // --- Simpan Target OPD dan Pre-seed data absensi dengan status ALPA ---
             if (!empty($targetOpd) && is_array($targetOpd)) {
-                $stmtTarget = $db->prepare("INSERT INTO app_absensi_kegiatan_target_opd (kode_akses, nama_opd) VALUES (:ka, :opd)");
+                $stmtTarget = $db->prepare("INSERT INTO " . DB_TBL_PREFIX . "kegiatan_target_opd (kode_akses, nama_opd) VALUES (:ka, :opd)");
                 foreach ($targetOpd as $opd) {
                     $stmtTarget->execute([':ka' => $kodeAkses, ':opd' => $opd]);
                 }
 
                 $placeholders = implode(',', array_fill(0, count($targetOpd), '?'));
-                $sqlSeed = "INSERT INTO app_absensi_data_absensi (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran)
+                $sqlSeed = "INSERT INTO " . DB_TBL_PREFIX . "data_absensi (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran)
                             SELECT ?, nip, nama_pegawai, perangkat_daerah, jabatan, ?, 'ALPA', 'Alpa'
-                            FROM app_absensi_data_pegawai
+                            FROM " . DB_TBL_PREFIX . "data_pegawai
                             WHERE perangkat_daerah IN ($placeholders)";
                 $paramsSeed = array_merge([$kodeAkses, $input['kategori'] ?? ''], $targetOpd);
                 $stmtSeed = $db->prepare($sqlSeed);
@@ -265,7 +265,7 @@ class JadwalController {
             ];
             $syncSuccess = $this->syncJadwalToKv('POST', $payloadForKv, null, true);
             if ($syncSuccess) {
-                $updateKvStmt = $db->prepare("UPDATE app_absensi_jadwal_kegiatan SET kv_sync_status = 1 WHERE kode_akses = :ka");
+                $updateKvStmt = $db->prepare("UPDATE " . DB_TBL_PREFIX . "jadwal_kegiatan SET kv_sync_status = 1 WHERE kode_akses = :ka");
                 $updateKvStmt->execute([':ka' => $kodeAkses]);
             }
 
@@ -291,7 +291,7 @@ class JadwalController {
             $db->beginTransaction();
 
             // 1. Update tabel jadwal utama (kv_sync_status set to 0 first until sync succeeds)
-            $sqlJadwal = "UPDATE app_absensi_jadwal_kegiatan SET judul=:jd, kategori=:kat, tanggal=:tgl, jam_mulai=:jm, jam_selesai=:js, koordinat=:koord, radius_meter=:rad, aktifkan_antrian=:aa, is_strict_time=:ist, is_strict_location=:isl, is_strict_opd=:iso, kv_sync_status = 0 WHERE kode_akses = :ka";
+            $sqlJadwal = "UPDATE " . DB_TBL_PREFIX . "jadwal_kegiatan SET judul=:jd, kategori=:kat, tanggal=:tgl, jam_mulai=:jm, jam_selesai=:js, koordinat=:koord, radius_meter=:rad, aktifkan_antrian=:aa, is_strict_time=:ist, is_strict_location=:isl, is_strict_opd=:iso, kv_sync_status = 0 WHERE kode_akses = :ka";
             $stmtJadwal = $db->prepare($sqlJadwal);
             $stmtJadwal->execute([
                 ':jd' => $input['judul'] ?? '',
@@ -309,7 +309,7 @@ class JadwalController {
             ]);
 
             // 2. Sinkronkan target OPD & kelola peserta ter-seed
-            $stmtExisting = $db->prepare("SELECT nama_opd FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :ka");
+            $stmtExisting = $db->prepare("SELECT nama_opd FROM " . DB_TBL_PREFIX . "kegiatan_target_opd WHERE kode_akses = :ka");
             $stmtExisting->execute([':ka' => $kodeAkses]);
             $existingTargetOpds = $stmtExisting->fetchAll(PDO::FETCH_COLUMN, 0);
 
@@ -317,11 +317,11 @@ class JadwalController {
             $newOpds = array_values(array_diff($targetOpd, $existingTargetOpds));
 
             // Update tabel relasi target OPD
-            $stmtDelTarget = $db->prepare("DELETE FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :ka");
+            $stmtDelTarget = $db->prepare("DELETE FROM " . DB_TBL_PREFIX . "kegiatan_target_opd WHERE kode_akses = :ka");
             $stmtDelTarget->execute([':ka' => $kodeAkses]);
 
             if (!empty($targetOpd) && is_array($targetOpd)) {
-                $stmtInsTarget = $db->prepare("INSERT INTO app_absensi_kegiatan_target_opd (kode_akses, nama_opd) VALUES (:ka, :opd)");
+                $stmtInsTarget = $db->prepare("INSERT INTO " . DB_TBL_PREFIX . "kegiatan_target_opd (kode_akses, nama_opd) VALUES (:ka, :opd)");
                 foreach ($targetOpd as $opd) {
                     $stmtInsTarget->execute([':ka' => $kodeAkses, ':opd' => $opd]);
                 }
@@ -330,7 +330,7 @@ class JadwalController {
             // Hapus pre-seed unclocked yang OPD-nya dihapus dari target OPD (jangan hapus input manual/hadir)
             if (!empty($removedOpds)) {
                 $placeholdersRem = implode(',', array_fill(0, count($removedOpds), '?'));
-                $sqlDel = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = ? AND waktu IS NULL AND (lokasi IS NULL OR lokasi = '' OR lokasi = '-') AND opd IN ($placeholdersRem)";
+                $sqlDel = "DELETE FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = ? AND waktu IS NULL AND (lokasi IS NULL OR lokasi = '' OR lokasi = '-') AND opd IN ($placeholdersRem)";
                 $stmtDel = $db->prepare($sqlDel);
                 $stmtDel->execute(array_merge([$kodeAkses], $removedOpds));
             }
@@ -338,10 +338,10 @@ class JadwalController {
             // Pre-seed pegawai untuk target OPD yang baru ditambahkan saja
             if (!empty($newOpds)) {
                 $placeholdersNew = implode(',', array_fill(0, count($newOpds), '?'));
-                $sqlSeed = "INSERT INTO app_absensi_data_absensi (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran)
+                $sqlSeed = "INSERT INTO " . DB_TBL_PREFIX . "data_absensi (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran)
                             SELECT ?, p.nip, p.nama_pegawai, p.perangkat_daerah, p.jabatan, ?, 'ALPA', 'Alpa'
-                            FROM app_absensi_data_pegawai p
-                            LEFT JOIN app_absensi_data_absensi a ON p.nip = a.nip AND a.kode_akses = ?
+                            FROM " . DB_TBL_PREFIX . "data_pegawai p
+                            LEFT JOIN " . DB_TBL_PREFIX . "data_absensi a ON p.nip = a.nip AND a.kode_akses = ?
                             WHERE p.perangkat_daerah IN ($placeholdersNew) AND a.nip IS NULL";
                 $paramsSeed = array_merge([$kodeAkses, $input['kategori'] ?? '', $kodeAkses], $newOpds);
                 $stmtSeed = $db->prepare($sqlSeed);
@@ -368,7 +368,7 @@ class JadwalController {
             ];
             $syncSuccess = $this->syncJadwalToKv('PUT', $payloadForKv, $kodeAkses, true);
             if ($syncSuccess) {
-                $updateKvStmt = $db->prepare("UPDATE app_absensi_jadwal_kegiatan SET kv_sync_status = 1 WHERE kode_akses = :ka");
+                $updateKvStmt = $db->prepare("UPDATE " . DB_TBL_PREFIX . "jadwal_kegiatan SET kv_sync_status = 1 WHERE kode_akses = :ka");
                 $updateKvStmt->execute([':ka' => $kodeAkses]);
             }
 
@@ -391,20 +391,20 @@ class JadwalController {
             $db->beginTransaction();
 
             // Hapus daftar target OPD
-            $stmtTarget = $db->prepare("DELETE FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :ka");
+            $stmtTarget = $db->prepare("DELETE FROM " . DB_TBL_PREFIX . "kegiatan_target_opd WHERE kode_akses = :ka");
             $stmtTarget->execute([':ka' => $kodeAkses]);
 
             // Ambil semua foto absensi terkait jadwal untuk dibersihkan dari server
-            $stmtPhotos = $db->prepare("SELECT nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nama_file_foto IS NOT NULL AND nama_file_foto != '' AND nama_file_foto != '-' AND nama_file_foto != 'MANUAL_INPUT.jpg'");
+            $stmtPhotos = $db->prepare("SELECT nama_file_foto FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :ka AND nama_file_foto IS NOT NULL AND nama_file_foto != '' AND nama_file_foto != '-' AND nama_file_foto != 'MANUAL_INPUT.jpg'");
             $stmtPhotos->execute([':ka' => $kodeAkses]);
             $photos = $stmtPhotos->fetchAll(PDO::FETCH_COLUMN, 0);
 
             // Hapus dari tabel jadwal utama
-            $stmtJadwal = $db->prepare("DELETE FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :ka");
+            $stmtJadwal = $db->prepare("DELETE FROM " . DB_TBL_PREFIX . "jadwal_kegiatan WHERE kode_akses = :ka");
             $stmtJadwal->execute([':ka' => $kodeAkses]);
 
             // Hapus data absensi terkait
-            $stmtAbsen = $db->prepare("DELETE FROM app_absensi_data_absensi WHERE kode_akses = :ka");
+            $stmtAbsen = $db->prepare("DELETE FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :ka");
             $stmtAbsen->execute([':ka' => $kodeAkses]);
 
             $db->commit();
@@ -443,7 +443,7 @@ class JadwalController {
         }
 
         // 1. Ambil data jadwal terbaru dari DB untuk memastikan data di KV adalah yang paling mutakhir.
-        $stmtJadwal = $db->prepare("SELECT kode_akses, judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, aktifkan_antrian, is_strict_time, is_strict_location, is_strict_opd FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses");
+        $stmtJadwal = $db->prepare("SELECT kode_akses, judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, aktifkan_antrian, is_strict_time, is_strict_location, is_strict_opd FROM " . DB_TBL_PREFIX . "jadwal_kegiatan WHERE kode_akses = :kode_akses");
         $stmtJadwal->bindParam(':kode_akses', $kodeAkses);
         $stmtJadwal->execute();
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
@@ -454,7 +454,7 @@ class JadwalController {
         }
 
         // Ambil target OPD
-        $stmtOpd = $db->prepare("SELECT nama_opd FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :kode_akses ORDER BY nama_opd ASC");
+        $stmtOpd = $db->prepare("SELECT nama_opd FROM " . DB_TBL_PREFIX . "kegiatan_target_opd WHERE kode_akses = :kode_akses ORDER BY nama_opd ASC");
         $stmtOpd->execute([':kode_akses' => $kodeAkses]);
         $jadwal['target_opd'] = $stmtOpd->fetchAll(PDO::FETCH_COLUMN, 0);
 
@@ -466,7 +466,7 @@ class JadwalController {
 
         if ($syncSuccess) {
             try {
-                $stmt = $db->prepare("UPDATE app_absensi_jadwal_kegiatan SET kv_sync_status = 1 WHERE kode_akses = :kode_akses");
+                $stmt = $db->prepare("UPDATE " . DB_TBL_PREFIX . "jadwal_kegiatan SET kv_sync_status = 1 WHERE kode_akses = :kode_akses");
                 $stmt->execute([':kode_akses' => $kodeAkses]);
                 Response::json(true, 200, "Cache berhasil disinkronkan dengan Cloudflare KV.");
             } catch (\Exception $e) {

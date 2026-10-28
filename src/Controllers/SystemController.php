@@ -25,7 +25,7 @@ class SystemController {
     public function getLinkAbsensiCadangan() {
         $db = Database::getConnection();
 
-        $stmt = $db->prepare("SELECT nilai_pengaturan FROM app_absensi_pengaturan_aplikasi WHERE kode_pengaturan = 'link_absensi_cadangan' LIMIT 1");
+        $stmt = $db->prepare("SELECT nilai_pengaturan FROM " . DB_TBL_PREFIX . "pengaturan_aplikasi WHERE kode_pengaturan = 'link_absensi_cadangan' LIMIT 1");
         $stmt->execute();
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -47,7 +47,7 @@ class SystemController {
     public function redirectAbsensiCadangan() {
         $db = Database::getConnection();
         try {
-            $stmt = $db->prepare("SELECT nilai_pengaturan FROM app_absensi_pengaturan_aplikasi WHERE kode_pengaturan = 'link_absensi_cadangan' LIMIT 1");
+            $stmt = $db->prepare("SELECT nilai_pengaturan FROM " . DB_TBL_PREFIX . "pengaturan_aplikasi WHERE kode_pengaturan = 'link_absensi_cadangan' LIMIT 1");
             $stmt->execute();
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             $link = (!empty($row) && isset($row['nilai_pengaturan']) && trim($row['nilai_pengaturan']) !== '') ? trim($row['nilai_pengaturan']) : null;
@@ -77,7 +77,7 @@ class SystemController {
 
         $db = Database::getConnection();
 
-        $stmt = $db->query("SELECT id, kode_pengaturan, nama_pengaturan, nilai_pengaturan FROM app_absensi_pengaturan_aplikasi ORDER BY id ASC");
+        $stmt = $db->query("SELECT id, kode_pengaturan, nama_pengaturan, nilai_pengaturan FROM " . DB_TBL_PREFIX . "pengaturan_aplikasi ORDER BY id ASC");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         Response::json(true, 200, "Berhasil mengambil pengaturan aplikasi.", $rows);
@@ -128,7 +128,7 @@ class SystemController {
                 // Normalisasi format kode_pengaturan (lowercase, alphanumeric, underscore, hyphen)
                 $kode = strtolower(preg_replace('/[^a-zA-Z0-9_-]/', '_', $kode));
 
-                $stmt = $db->prepare("INSERT INTO app_absensi_pengaturan_aplikasi (kode_pengaturan, nama_pengaturan, nilai_pengaturan) 
+                $stmt = $db->prepare("INSERT INTO " . DB_TBL_PREFIX . "pengaturan_aplikasi (kode_pengaturan, nama_pengaturan, nilai_pengaturan) 
                                       VALUES (:kode, :nama, :nilai) 
                                       ON DUPLICATE KEY UPDATE nama_pengaturan = :nama2, nilai_pengaturan = :nilai2");
                 $stmt->execute([
@@ -143,7 +143,7 @@ class SystemController {
 
             } else {
                 // Jika payload berbentuk key-value map (misal batch update)
-                $stmt = $db->prepare("INSERT INTO app_absensi_pengaturan_aplikasi (kode_pengaturan, nama_pengaturan, nilai_pengaturan) 
+                $stmt = $db->prepare("INSERT INTO " . DB_TBL_PREFIX . "pengaturan_aplikasi (kode_pengaturan, nama_pengaturan, nilai_pengaturan) 
                                       VALUES (:kode, :nama, :nilai) 
                                       ON DUPLICATE KEY UPDATE nilai_pengaturan = :nilai2");
 
@@ -197,7 +197,7 @@ class SystemController {
 
         $db = Database::getConnection();
 
-        $stmt = $db->prepare("DELETE FROM app_absensi_pengaturan_aplikasi WHERE kode_pengaturan = :kode");
+        $stmt = $db->prepare("DELETE FROM " . DB_TBL_PREFIX . "pengaturan_aplikasi WHERE kode_pengaturan = :kode");
         $stmt->execute([':kode' => $kode]);
 
         if ($stmt->rowCount() > 0) {
@@ -222,7 +222,7 @@ class SystemController {
 
         $db = Database::getConnection();
 
-        $stmt = $db->query("SELECT kode_pengaturan, nilai_pengaturan FROM app_absensi_pengaturan_aplikasi");
+        $stmt = $db->query("SELECT kode_pengaturan, nilai_pengaturan FROM " . DB_TBL_PREFIX . "pengaturan_aplikasi");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $settings = [];

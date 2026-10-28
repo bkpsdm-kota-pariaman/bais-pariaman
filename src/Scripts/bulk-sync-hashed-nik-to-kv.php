@@ -59,7 +59,7 @@ try {
     // 1. Ambil data pegawai yang belum sinkron (kv_sync_status = 0 atau NULL)
     log_message("1. Mengambil data pegawai yang belum sinkron dari database...");
     $sql = "SELECT p.nip, p.nik, p.nama_pegawai, p.perangkat_daerah, p.jabatan, p.jenis_asn, p.role 
-            FROM app_absensi_data_pegawai p
+            FROM " . DB_TBL_PREFIX . "data_pegawai p
             WHERE p.kv_sync_status = 0 AND p.last_login IS NULL 
             ORDER BY p.last_login DESC
             LIMIT 850";
@@ -132,7 +132,7 @@ try {
 
         // 4. Perbarui status di database jika berhasil
         if ($httpCode === 200) {
-            $updateStmt = $db->prepare("UPDATE app_absensi_data_pegawai SET kv_sync_status = 1 WHERE nip = ?");
+            $updateStmt = $db->prepare("UPDATE " . DB_TBL_PREFIX . "data_pegawai SET kv_sync_status = 1 WHERE nip = ?");
             $updateStmt->execute([$nip]);
             echo "OK (HTTP 200)\n";
             log_message("   -> SUKSES: NIP $nip berhasil disinkronkan ke KV.");

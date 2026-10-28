@@ -113,7 +113,7 @@ class AbsenController {
         }
 
         // Ambil detail jadwal dari DB
-        $stmtJadwal = $db->prepare("SELECT judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, is_strict_time, is_strict_location, is_strict_opd FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :kode_akses LIMIT 1");
+        $stmtJadwal = $db->prepare("SELECT judul, kategori, tanggal, jam_mulai, jam_selesai, koordinat, radius_meter, is_strict_time, is_strict_location, is_strict_opd FROM " . DB_TBL_PREFIX . "jadwal_kegiatan WHERE kode_akses = :kode_akses LIMIT 1");
         $stmtJadwal->execute([':kode_akses' => $kodeAkses]);
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
 
@@ -123,11 +123,11 @@ class AbsenController {
 
         // Validasi Strict OPD khusus Mandiri (Absen Cepat Admin Dikecualikan)
         if (!$isAdminOrSuperAdmin && !empty($jadwal['is_strict_opd']) && $jadwal['is_strict_opd'] == 1) {
-            $stmtOpdCheck = $db->prepare("SELECT 1 FROM app_absensi_kegiatan_target_opd WHERE kode_akses = :kode_akses AND nama_opd = :opd LIMIT 1");
+            $stmtOpdCheck = $db->prepare("SELECT 1 FROM " . DB_TBL_PREFIX . "kegiatan_target_opd WHERE kode_akses = :kode_akses AND nama_opd = :opd LIMIT 1");
             $stmtOpdCheck->execute([':kode_akses' => $kodeAkses, ':opd' => $opd]);
             if (!$stmtOpdCheck->fetchColumn()) {
                 // Periksa apakah peserta didaftarkan manual secara perorangan
-                $stmtManualCheck = $db->prepare("SELECT 1 FROM app_absensi_data_absensi WHERE kode_akses = :kode_akses AND nip = :nip LIMIT 1");
+                $stmtManualCheck = $db->prepare("SELECT 1 FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :kode_akses AND nip = :nip LIMIT 1");
                 $stmtManualCheck->execute([':kode_akses' => $kodeAkses, ':nip' => $nip]);
                 if (!$stmtManualCheck->fetchColumn()) {
                     throw new \Exception("Gagal: Perangkat Daerah Dibatasi. Perangkat Daerah Anda tidak terdaftar dalam target OPD kegiatan ini.", 403);
@@ -290,7 +290,7 @@ class AbsenController {
         }
 
         // UPSERT Database
-        $sql = "INSERT INTO app_absensi_data_absensi 
+        $sql = "INSERT INTO " . DB_TBL_PREFIX . "data_absensi 
                     (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, waktu, lokasi, lat, lng, nama_file_foto, keterangan, keterangan_verifikasi, status_verifikasi, status_kehadiran) 
                 VALUES 
                     (:kode_akses, :nip, :nama_pegawai, :opd, :jabatan, :kategori, :waktu, :lokasi, :lat, :lng, :nama_file_foto, :keterangan, :keterangan_verifikasi, :status_verifikasi, :status_kehadiran)
@@ -529,7 +529,7 @@ class AbsenController {
         $db = Database::getConnection();
 
         // 1. Dapatkan Detail Jadwal
-        $stmtJadwal = $db->prepare("SELECT * FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :ka");
+        $stmtJadwal = $db->prepare("SELECT * FROM " . DB_TBL_PREFIX . "jadwal_kegiatan WHERE kode_akses = :ka");
         $stmtJadwal->execute([':ka' => $kodeAkses]);
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
         if (!$jadwal) {
@@ -537,7 +537,7 @@ class AbsenController {
         }
 
         // 2. Dapatkan Daftar OPD Target (sekarang langsung dari data absensi)
-        $stmtOpdFilter = $db->prepare("SELECT DISTINCT opd FROM app_absensi_data_absensi WHERE kode_akses = :ka AND opd IS NOT NULL ORDER BY opd");
+        $stmtOpdFilter = $db->prepare("SELECT DISTINCT opd FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :ka AND opd IS NOT NULL ORDER BY opd");
         $stmtOpdFilter->execute([':ka' => $kodeAkses]);
         $opdForFilter = $stmtOpdFilter->fetchAll(PDO::FETCH_COLUMN, 0);
         $jadwal['target_opd'] = $opdForFilter;
@@ -562,7 +562,7 @@ class AbsenController {
                 COALESCE(status_kehadiran, 'Belum Absen') as status,
                 status_verifikasi,
                 COUNT(*) as count
-            FROM app_absensi_data_absensi 
+            FROM " . DB_TBL_PREFIX . "data_absensi 
             WHERE kode_akses = ? AND opd IS NOT NULL AND opd != ''
             GROUP BY opd, status_kehadiran, status_verifikasi
         ";
@@ -660,7 +660,7 @@ class AbsenController {
                 waktu AS waktu_absen, status_verifikasi, keterangan, keterangan_verifikasi,
                 nama_file_foto, lokasi AS lokasi_absen, status_kehadiran
             FROM
-                app_absensi_data_absensi
+                " . DB_TBL_PREFIX . "data_absensi
             WHERE
                 kode_akses = ?
         ";
@@ -785,9 +785,9 @@ class AbsenController {
                 a.nama_file_foto, a.lokasi AS lokasi_absen, a.status_kehadiran,
                 j.kode_akses, j.judul AS judul_kegiatan, j.tanggal, j.jam_mulai, j.jam_selesai
             FROM
-                app_absensi_data_absensi a
+                " . DB_TBL_PREFIX . "data_absensi a
             INNER JOIN
-                app_absensi_jadwal_kegiatan j ON a.kode_akses = j.kode_akses
+                " . DB_TBL_PREFIX . "jadwal_kegiatan j ON a.kode_akses = j.kode_akses
             WHERE
                 j.tanggal BETWEEN ? AND ?
         ";
@@ -913,8 +913,8 @@ class AbsenController {
                             CASE WHEN a.status_verifikasi != 'Ditolak Oleh Admin' AND a.status_kehadiran = ? THEN 1 ELSE 0 END
                     END
                 ) as jumlah
-            FROM app_absensi_data_absensi a
-            INNER JOIN app_absensi_jadwal_kegiatan j ON a.kode_akses = j.kode_akses
+            FROM " . DB_TBL_PREFIX . "data_absensi a
+            INNER JOIN " . DB_TBL_PREFIX . "jadwal_kegiatan j ON a.kode_akses = j.kode_akses
             WHERE j.tanggal BETWEEN ? AND ?
         ";
         
@@ -995,8 +995,8 @@ class AbsenController {
                 a.waktu AS waktu_absen,
                 a.lokasi AS lokasi_absen,
                 a.status_verifikasi
-            FROM app_absensi_data_absensi a
-            INNER JOIN app_absensi_jadwal_kegiatan j ON a.kode_akses = j.kode_akses
+            FROM " . DB_TBL_PREFIX . "data_absensi a
+            INNER JOIN " . DB_TBL_PREFIX . "jadwal_kegiatan j ON a.kode_akses = j.kode_akses
             WHERE j.tanggal BETWEEN ? AND ? AND a.nip = ?
         ";
         
@@ -1029,7 +1029,7 @@ class AbsenController {
         }
         $db = Database::getConnection();
 
-        $stmtOpdFilter = $db->prepare("SELECT DISTINCT opd FROM app_absensi_data_absensi WHERE kode_akses = :ka AND opd IS NOT NULL ORDER BY opd");
+        $stmtOpdFilter = $db->prepare("SELECT DISTINCT opd FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :ka AND opd IS NOT NULL ORDER BY opd");
         $stmtOpdFilter->execute([':ka' => $kodeAkses]);
         $opdForFilter = $stmtOpdFilter->fetchAll(PDO::FETCH_COLUMN, 0);
 
@@ -1061,7 +1061,7 @@ class AbsenController {
         $db->beginTransaction();
         try {
             // Ambil data absensi saat ini terlebih dahulu
-            $stmtCurrent = $db->prepare("SELECT waktu, status_kehadiran, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
+            $stmtCurrent = $db->prepare("SELECT waktu, status_kehadiran, nama_file_foto FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :ka AND nip = :nip");
             $stmtCurrent->execute([':ka' => $kodeAkses, ':nip' => $nip]);
             $currentAbsenData = $stmtCurrent->fetch(PDO::FETCH_ASSOC);
 
@@ -1107,7 +1107,7 @@ class AbsenController {
 
             if (!$currentAbsenData) {
                 // Jika data tidak ada, buat baru (mirip seperti set masal)
-                $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_data_pegawai WHERE nip = :nip");
+                $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM " . DB_TBL_PREFIX . "data_pegawai WHERE nip = :nip");
                 $stmtPegawai->execute([':nip' => $nip]);
                 $peg = $stmtPegawai->fetch(PDO::FETCH_ASSOC);
                 if (!$peg) {
@@ -1116,7 +1116,7 @@ class AbsenController {
                     return;
                 }
 
-                $sql = "INSERT INTO app_absensi_data_absensi 
+                $sql = "INSERT INTO " . DB_TBL_PREFIX . "data_absensi 
                         (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan_verifikasi, status_verifikasi, status_kehadiran)
                         VALUES 
                         (:ka, :nip, :nama, :opd, :jabatan, :waktu, 'Diubah oleh Admin (Manual)', :foto, :ket, :sv, :sk)";
@@ -1179,7 +1179,7 @@ class AbsenController {
                 if (!$statusKehadiranBaru) $updateStatusKehadiran = 'Hadir Terlambat Diluar Lokasi';
             }
 
-            $sql = "UPDATE app_absensi_data_absensi 
+            $sql = "UPDATE " . DB_TBL_PREFIX . "data_absensi 
                     SET 
                         status_verifikasi = :sv, 
                         keterangan_verifikasi = :ket,
@@ -1204,7 +1204,7 @@ class AbsenController {
             ]);
 
             // Ambil nama target untuk log
-            $stmtTarget = $db->prepare("SELECT nama_pegawai FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
+            $stmtTarget = $db->prepare("SELECT nama_pegawai FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :ka AND nip = :nip");
             $stmtTarget->execute([':ka' => $kodeAkses, ':nip' => $nip]);
             $namaTarget = $stmtTarget->fetchColumn() ?: '-';
 
@@ -1298,12 +1298,12 @@ class AbsenController {
 
         $successCount = 0;
         foreach ($nips as $nip) {
-            $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_data_pegawai WHERE nip = :nip");
+            $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM " . DB_TBL_PREFIX . "data_pegawai WHERE nip = :nip");
             $stmtPegawai->execute([':nip' => $nip]);
             $peg = $stmtPegawai->fetch(PDO::FETCH_ASSOC);
             if (!$peg) continue;
 
-            $sql = "INSERT INTO app_absensi_data_absensi 
+            $sql = "INSERT INTO " . DB_TBL_PREFIX . "data_absensi 
                     (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, nama_file_foto, keterangan_verifikasi, status_verifikasi, status_kehadiran)
                     VALUES 
                     (:ka, :nip, :nama, :opd, :jabatan, :waktu, 'Diubah oleh Admin (Masal)', :foto, :ket, :sv, :sk)
@@ -1365,13 +1365,13 @@ class AbsenController {
         $db->beginTransaction();
         try {
             // Ambil nama pegawai dan nama file foto sebelum delete untuk log & cleanup file
-            $stmtTarget = $db->prepare("SELECT nama_pegawai, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
+            $stmtTarget = $db->prepare("SELECT nama_pegawai, nama_file_foto FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :ka AND nip = :nip");
             $stmtTarget->execute([':ka' => $kodeAkses, ':nip' => $nip]);
             $targetData = $stmtTarget->fetch(PDO::FETCH_ASSOC);
             $namaTarget = $targetData['nama_pegawai'] ?? '-';
             $fotoTarget = $targetData['nama_file_foto'] ?? null;
 
-            $sql = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip";
+            $sql = "DELETE FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :ka AND nip = :nip";
             $stmt = $db->prepare($sql);
             $stmt->execute([
                 ':ka' => $kodeAkses,
@@ -1424,13 +1424,13 @@ class AbsenController {
         }
 
         // Check strict OPD configuration from event schedule
-        $stmtJadwal = $db->prepare("SELECT is_strict_opd FROM app_absensi_jadwal_kegiatan WHERE kode_akses = ? LIMIT 1");
+        $stmtJadwal = $db->prepare("SELECT is_strict_opd FROM " . DB_TBL_PREFIX . "jadwal_kegiatan WHERE kode_akses = ? LIMIT 1");
         $stmtJadwal->execute([$kodeAkses]);
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
 
         $allowedOpds = null;
         if ($jadwal && !empty($jadwal['is_strict_opd']) && $jadwal['is_strict_opd'] == 1) {
-            $stmtOpd = $db->prepare("SELECT nama_opd FROM app_absensi_kegiatan_target_opd WHERE kode_akses = ? ORDER BY nama_opd ASC");
+            $stmtOpd = $db->prepare("SELECT nama_opd FROM " . DB_TBL_PREFIX . "kegiatan_target_opd WHERE kode_akses = ? ORDER BY nama_opd ASC");
             $stmtOpd->execute([$kodeAkses]);
             $allowedOpds = $stmtOpd->fetchAll(PDO::FETCH_COLUMN, 0);
 
@@ -1450,12 +1450,12 @@ class AbsenController {
         $params = [];
         
         if ($includeAll) {
-            $sql = "SELECT p.nip, p.nama_pegawai, p.jabatan, p.perangkat_daerah FROM app_absensi_data_pegawai p WHERE 1=1";
+            $sql = "SELECT p.nip, p.nama_pegawai, p.jabatan, p.perangkat_daerah FROM " . DB_TBL_PREFIX . "data_pegawai p WHERE 1=1";
         } else {
             // Optimasi dengan LEFT JOIN: dapatkan pegawai yang belum ada di rekap kegiatan ini
             $sql = "SELECT p.nip, p.nama_pegawai, p.jabatan, p.perangkat_daerah 
-                    FROM app_absensi_data_pegawai p 
-                    LEFT JOIN app_absensi_data_absensi a ON p.nip = a.nip AND a.kode_akses = ? 
+                    FROM " . DB_TBL_PREFIX . "data_pegawai p 
+                    LEFT JOIN " . DB_TBL_PREFIX . "data_absensi a ON p.nip = a.nip AND a.kode_akses = ? 
                     WHERE a.nip IS NULL";
             $params[] = $kodeAkses;
         }
@@ -1520,7 +1520,7 @@ class AbsenController {
         $db->beginTransaction();
         try {
             // 1. Cek apakah pegawai sudah ada di rekap ini
-            $stmtCheck = $db->prepare("SELECT COUNT(*) FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
+            $stmtCheck = $db->prepare("SELECT COUNT(*) FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :ka AND nip = :nip");
             $stmtCheck->execute([':ka' => $kodeAkses, ':nip' => $nip]);
             if ($stmtCheck->fetchColumn() > 0) {
                 $db->rollBack();
@@ -1529,7 +1529,7 @@ class AbsenController {
             }
 
             // 2. Ambil detail pegawai dari tabel master
-            $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_data_pegawai WHERE nip = :nip");
+            $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM " . DB_TBL_PREFIX . "data_pegawai WHERE nip = :nip");
             $stmtPegawai->execute([':nip' => $nip]);
             $pegawai = $stmtPegawai->fetch(PDO::FETCH_ASSOC);
             if (!$pegawai) {
@@ -1539,7 +1539,7 @@ class AbsenController {
             }
 
             // 3. Ambil kategori dari jadwal
-            $stmtJadwal = $db->prepare("SELECT kategori FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :ka");
+            $stmtJadwal = $db->prepare("SELECT kategori FROM " . DB_TBL_PREFIX . "jadwal_kegiatan WHERE kode_akses = :ka");
             $stmtJadwal->execute([':ka' => $kodeAkses]);
             $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
             if (!$jadwal) {
@@ -1556,7 +1556,7 @@ class AbsenController {
             }
 
             // 5. Insert data baru ke tabel absensi
-            $sql = "INSERT INTO app_absensi_data_absensi 
+            $sql = "INSERT INTO " . DB_TBL_PREFIX . "data_absensi 
                         (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran, keterangan_verifikasi, waktu, nama_file_foto, lokasi) 
                     VALUES 
                         (:ka, :nip, :nama, :opd, :jabatan, :kategori, :sv, :sk, :ket, :waktu, 'MANUAL_INPUT.jpg', 'MANUAL_INPUT_ADMIN')";
@@ -1642,7 +1642,7 @@ class AbsenController {
         }
 
         // Ambil detail jadwal sekali saja
-        $stmtJadwal = $db->prepare("SELECT kategori FROM app_absensi_jadwal_kegiatan WHERE kode_akses = :ka");
+        $stmtJadwal = $db->prepare("SELECT kategori FROM " . DB_TBL_PREFIX . "jadwal_kegiatan WHERE kode_akses = :ka");
         $stmtJadwal->execute([':ka' => $kodeAkses]);
         $jadwal = $stmtJadwal->fetch(PDO::FETCH_ASSOC);
         if (!$jadwal) {
@@ -1684,11 +1684,11 @@ class AbsenController {
 
         $db->beginTransaction();
         try {
-            $stmtCheck = $db->prepare("SELECT COUNT(*) FROM app_absensi_data_absensi WHERE kode_akses = :ka AND nip = :nip");
-            $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM app_absensi_data_pegawai WHERE nip = :nip");
+            $stmtCheck = $db->prepare("SELECT COUNT(*) FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = :ka AND nip = :nip");
+            $stmtPegawai = $db->prepare("SELECT nama_pegawai, perangkat_daerah, jabatan FROM " . DB_TBL_PREFIX . "data_pegawai WHERE nip = :nip");
             
             // Query Upsert
-            $sql = "INSERT INTO app_absensi_data_absensi 
+            $sql = "INSERT INTO " . DB_TBL_PREFIX . "data_absensi 
                     (kode_akses, nip, nama_pegawai, opd, jabatan, kategori, status_verifikasi, status_kehadiran, keterangan_verifikasi, waktu, nama_file_foto, lokasi) 
                     VALUES 
                     (:ka, :nip, :nama, :opd, :jabatan, :kategori, :sv, :sk, :ket, :waktu, :foto, 'Diubah oleh Admin (Masal)')
@@ -1811,7 +1811,7 @@ class AbsenController {
         $db->beginTransaction();
         try {
             // Ambil nama pegawai dan foto yang akan dihapus untuk audit log & cleanup file
-            $stmtTargets = $db->prepare("SELECT nip, nama_pegawai, nama_file_foto FROM app_absensi_data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)");
+            $stmtTargets = $db->prepare("SELECT nip, nama_pegawai, nama_file_foto FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)");
             $stmtTargets->execute($params);
             $targetsData = $stmtTargets->fetchAll(PDO::FETCH_ASSOC);
 
@@ -1826,7 +1826,7 @@ class AbsenController {
                 }
             }
 
-            $sql = "DELETE FROM app_absensi_data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)";
+            $sql = "DELETE FROM " . DB_TBL_PREFIX . "data_absensi WHERE kode_akses = ? AND nip IN ($placeholders)";
             $stmt = $db->prepare($sql);
             $stmt->execute($params);
 
@@ -1905,7 +1905,7 @@ class AbsenController {
                 if (empty($nip)) continue;
                 if (empty($waktu)) $waktu = null;
 
-                $sql = "INSERT INTO app_absensi_data_absensi 
+                $sql = "INSERT INTO " . DB_TBL_PREFIX . "data_absensi 
                         (kode_akses, nip, nama_pegawai, opd, jabatan, waktu, lokasi, lat, lng, nama_file_foto, keterangan, keterangan_verifikasi, status_verifikasi, status_kehadiran)
                         VALUES 
                         (:ka, :nip, :nama, :opd, :jabatan, :waktu, :lokasi, :lat, :lng, :foto, :ket_csv, :ket_admin, :sv, :sk)
@@ -2042,13 +2042,13 @@ class AbsenController {
         $whereSql = !empty($conditions) ? implode(' AND ', $conditions) : "1=1";
 
         // Hitung total baris yang cocok
-        $countStmt = $db->prepare("SELECT COUNT(*) FROM app_absensi_log_absensi WHERE {$whereSql}");
+        $countStmt = $db->prepare("SELECT COUNT(*) FROM " . DB_TBL_PREFIX . "log_absensi WHERE {$whereSql}");
         $countStmt->execute($params);
         $totalRows = (int)$countStmt->fetchColumn();
 
         // Ambil data log sesuai pagination
         $sql = "SELECT id_log_absensi, kode_akses, nip, nama, jenis_aksi, nip_pelaku, nama_pelaku, ip_address, user_agent, waktu_aksi, data 
-                FROM app_absensi_log_absensi 
+                FROM " . DB_TBL_PREFIX . "log_absensi 
                 WHERE {$whereSql} 
                 ORDER BY waktu_aksi DESC, id_log_absensi DESC 
                 LIMIT :limit OFFSET :offset";

@@ -203,6 +203,12 @@ INSERT INTO `app_absensi_pengaturan_aplikasi` (`kode_pengaturan`, `nama_pengatur
 VALUES ('link_absensi_cadangan', 'Link Absensi Cadangan', 'https://bais-pariaman.pariamankota.go.id/absensi-cadangan/cadangan.html')
 ON DUPLICATE KEY UPDATE `kode_pengaturan` = `kode_pengaturan`;
 
+-- CATATAN PREFIX TABEL:
+-- Nama tabel di atas adalah nama dengan prefix default ('app_absensi_').
+-- Runtime memakai kunci 'db_prefix' di config/config.php; seluruh query
+-- memakai konstanta DB_TBL_PREFIX. Di hosting LILA, prefix tabel = 'bais_'
+-- (mis. bais_data_pegawai), sesuaikan nilai 'db_prefix' di config server.
+
 --
 -- Struktur dari tabel `app_absensi_list_opd`
 -- Dipakai MasterDataController (CRUD OPD) & JadwalController (validasi target OPD).

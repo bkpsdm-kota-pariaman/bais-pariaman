@@ -30,7 +30,7 @@ class AuthController {
         $sql = "SELECT 
                     p.nama_pegawai, p.nip, p.nik, p.perangkat_daerah, p.jabatan, p.jenis_asn, p.role
                 FROM 
-                    app_absensi_data_pegawai p
+                    " . DB_TBL_PREFIX . "data_pegawai p
                 WHERE p.nip = :nip LIMIT 1";
         $stmt = $db->prepare($sql);
         $stmt->bindParam(':nip', $nip);
@@ -61,7 +61,7 @@ class AuthController {
             $now = new \DateTime('now', new \DateTimeZone('Asia/Jakarta'));
             $waktuSekarang = $now->format('Y-m-d H:i:s');
             
-            $updateStmt = $db->prepare("UPDATE app_absensi_data_pegawai SET last_login = :last_login WHERE nip = :nip");
+            $updateStmt = $db->prepare("UPDATE " . DB_TBL_PREFIX . "data_pegawai SET last_login = :last_login WHERE nip = :nip");
             $updateStmt->execute([
                 ':last_login' => $waktuSekarang,
                 ':nip' => $pegawai['nip']
@@ -167,7 +167,7 @@ class AuthController {
         try {
             $db = Database::getConnection();
             $now = new \DateTime('now', new \DateTimeZone('Asia/Jakarta'));
-            $updateStmt = $db->prepare("UPDATE app_absensi_data_pegawai SET last_login = :last_login, kv_sync_status = 1 WHERE nip = :nip");
+            $updateStmt = $db->prepare("UPDATE " . DB_TBL_PREFIX . "data_pegawai SET last_login = :last_login, kv_sync_status = 1 WHERE nip = :nip");
             $updateStmt->execute([':last_login' => $now->format('Y-m-d H:i:s'), ':nip' => $nip]);
             Response::json(true, 200, "Last login berhasil diperbarui.");
         } catch (\Exception $e) {
@@ -194,7 +194,7 @@ class AuthController {
         // 2. Hubungkan ke Database dan Cari Pegawai
         $db = Database::getConnection();
         
-        $stmt = $db->prepare("SELECT nip, nama_pegawai, nik, role FROM app_absensi_data_pegawai WHERE nip = :username LIMIT 1");
+        $stmt = $db->prepare("SELECT nip, nama_pegawai, nik, role FROM " . DB_TBL_PREFIX . "data_pegawai WHERE nip = :username LIMIT 1");
         $stmt->bindParam(':username', $username);
         $stmt->execute();
         
