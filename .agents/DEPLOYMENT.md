@@ -82,7 +82,7 @@ Jangan memasukkan secret backend ke frontend.
 Production/deployment membutuhkan:
 
 ```text
-PHP >= 7.2
+PHP >= 8.2
 Composer
 Node.js >= 22
 NPM >= 10

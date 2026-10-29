@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # CLAUDE.md — BAIS Pariaman
 
 > Instruksi operasional singkat untuk Claude/AI coding agent.

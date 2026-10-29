@@ -76,7 +76,7 @@ DEPLOYMENT.md
 
 ```text
 Backend:
-PHP Native >= 7.2
+PHP Native >= 8.2
 FastRoute
 firebase/php-jwt
 PDO
@@ -779,3 +779,31 @@ TEST:
 
 DO NOT CHANGE:
 [hal penting yang tidak boleh berubah]
+
+<!-- gortex:communities:start -->
+## Community Skills
+
+| Area | Description | Explore |
+|------|-------------|---------|
+| Playwright Report | 438 symbols | `analyze(operation:"communities", id:"community-10")` |
+| Admin Js 2 Dirs | 171 symbols | `analyze(operation:"communities", id:"community-15")` |
+| Js 6 Dirs | 92 symbols | `analyze(operation:"communities", id:"community-19")` |
+| Js 8 Dirs | 88 symbols | `analyze(operation:"communities", id:"community-25")` |
+| Helpers 1 Dirs Json | 79 symbols | `analyze(operation:"communities", id:"community-11")` |
+| 4 Dirs | 76 symbols | `analyze(operation:"communities", id:"community-17")` |
+| Helpers 1 Dirs Assertcondition | 24 symbols | `analyze(operation:"communities", id:"community-24")` |
+| Js 2 Dirs | 18 symbols | `analyze(operation:"communities", id:"community-22")` |
+| Database App Absensi Data Absensi | 17 symbols | `analyze(operation:"communities", id:"community-0")` |
+| E2e 4 Dirs | 16 symbols | `analyze(operation:"communities", id:"community-18")` |
+| Js 1 Dirs | 15 symbols | `analyze(operation:"communities", id:"community-23")` |
+| Admin Js | 12 symbols | `analyze(operation:"communities", id:"community-16")` |
+| Database App Absensi Log Absensi | 12 symbols | `analyze(operation:"communities", id:"community-6")` |
+| Database App Absensi Data Pegawai | 12 symbols | `analyze(operation:"communities", id:"community-2")` |
+| Js 3 Dirs | 9 symbols | `analyze(operation:"communities", id:"community-21")` |
+| Absensi Cadangan Callgasapi | 8 symbols | `analyze(operation:"communities", id:"community-8")` |
+| Views Absensi Cadangan Showloading | 7 symbols | `analyze(operation:"communities", id:"community-13")` |
+| Database App Absensi Pengaturan Aplikasi | 5 symbols | `analyze(operation:"communities", id:"community-7")` |
+| Database App Absensi Data Admin | 3 symbols | `analyze(operation:"communities", id:"community-1")` |
+| Database App Absensi Kegiatan Target Opd | 3 symbols | `analyze(operation:"communities", id:"community-4")` |
+
+<!-- gortex:communities:end -->
