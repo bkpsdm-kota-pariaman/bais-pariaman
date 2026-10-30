@@ -799,6 +799,10 @@ Sebelum coding untuk task yang mengubah source code:
 5. Tampilkan penjelasan dan plan di chat, lalu minta persetujuan user.
 6. Tunggu user menyetujui atau memerintahkan implementasi.
 7. Plan harus bisa langsung diberikan ke model AI lain.
+8. **Wajib menunggu ACC — berlaku juga untuk subagent.** Agen, termasuk subagent yang dipanggil lewat `delegate_task`, DILARANG mengerjakan apa pun sebelum user memberi ACC/persetujuan eksplisit. Yang dilarang sebelum ACC: mengedit/membuat/menghapus berkas, menjalankan perintah pengubah keadaan (migration, build, deploy, hapus berkas), membuat issue/branch/commit/push, dan menugaskan subagent untuk hal yang mengubah apa pun.
+9. **Subagent mewarisi larangan ini.** Brief `delegate_task` wajib memuat larangan tersebut, larangan commit/push, larangan keluar dari lingkup, dan daftar berkas kotor lama yang tidak boleh disentuh. Laporan subagent adalah klaim, bukan bukti — sesi utama yang memverifikasi setelah ACC. **Subagent dilarang menerima atau memberi ACC.**
+10. **Yang wajib dilakukan sebelum ACC**: sajikan rencana ringkas (berkas yang akan disentuh + alasan + kriteria selesai), lalu berhenti dan tunggu. Audit, review, analisa, pencarian bug, dan permintaan "buat rencana" BUKAN izin mengerjakan.
+11. **ACC hanya sah dari user**, lewat kalimat tegas ("kerjakan", "eksekusi sekarang", "setuju, lanjut").
 
 ### Format Implementation Plan
 
