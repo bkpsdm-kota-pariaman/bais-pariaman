@@ -245,6 +245,22 @@ Setiap perubahan kode wajib mengikuti alur berikut:
    ```
 8. **DILARANG KERAS merge di lokal**: `git merge` maupun `git rebase` ke `main` yang lalu di-push dari mesin lokal tidak diizinkan dalam kondisi apa pun. Satu-satunya jalur masuk ke `main` adalah Pull Request yang di-merge di GitHub.
 
+### Rangkaian Otomatis & Hapus Branch Setelah Merge (MANDATORY)
+
+Perintah atau permintaan user untuk mengubah kode/berkas sudah menjadi izin menjalankan seluruh langkah 1–11 sekaligus. Agen DILARANG menunggu perintah terpisah untuk tiap langkah ("perlu dibuatkan branch?", "lanjut merge?", "hapus branch-nya?") — pertanyaan seperti itu adalah pelanggaran, bukan kehati-hatian.
+
+9. **Hapus branch lokal setelah merge** — wajib, bukan opsional:
+   ```bash
+   git branch -D issue-<nomor>-<deskripsi-singkat>   # -D, bukan -d: squash memutus garis keturunan
+   ```
+10. **Hapus branch remote setelah merge**:
+    ```bash
+    git push origin --delete issue-<nomor>-<deskripsi-singkat>
+    git fetch --prune
+    ```
+    Bila `gh pr merge --delete-branch` gagal karena working tree kotor: merge dulu tanpa flag itu, lalu `git checkout main`, `git pull --ff-only origin main`, baru hapus branch lokal kemudian remote.
+11. **Pengecualian tunggal**: user menyatakan secara eksplisit bahwa branch tidak perlu dibuat (mis. "langsung di `main` saja", "tidak perlu branch"). Tanpa pernyataan eksplisit itu, seluruh langkah 1–10 WAJIB dijalankan — termasuk tanpa diminta.
+
 ## 7. Security Rules
 
 - Jangan bypass authentication.
