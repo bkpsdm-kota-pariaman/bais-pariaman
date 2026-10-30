@@ -218,6 +218,33 @@ fetch()
 
 ---
 
+### Git Workflow — Branch, Pull Request, dan Merge
+
+Setiap perubahan kode wajib mengikuti alur berikut:
+
+1. **Cabang wajib dari `main`**: buat branch baru dari `main` sebelum menyentuh kode. Dilarang bekerja langsung di `main`.
+   ```bash
+   git checkout -b issue-<nomor>-<deskripsi-singkat> origin/main
+   ```
+2. **Nama branch wajib memuat nomor issue**: `issue-<nomor>-<deskripsi-singkat>`.
+3. **Pekerjaan dilakukan di branch tersebut**, bukan di `main`.
+4. **Push branch ke `origin`** setelah pekerjaan selesai dan verifikasi lolos:
+   ```bash
+   git push -u origin issue-<nomor>-<deskripsi-singkat>
+   ```
+5. **Pull Request wajib dibuat di GitHub** ke `main`, body memuat `Closes #<nomor>`:
+   ```bash
+   gh pr create --base main --head issue-<nomor>-<deskripsi-singkat> \
+     --title "<judul ringkas>" --body "Closes #<nomor>"
+   ```
+6. **Merge dilakukan di GitHub** (web UI atau `gh pr merge`), bukan di mesin lokal.
+7. **Setelah merge, sinkronkan `main` dari GitHub**:
+   ```bash
+   git checkout main
+   git pull --ff-only origin main
+   ```
+8. **DILARANG KERAS merge di lokal**: `git merge` maupun `git rebase` ke `main` yang lalu di-push dari mesin lokal tidak diizinkan dalam kondisi apa pun. Satu-satunya jalur masuk ke `main` adalah Pull Request yang di-merge di GitHub.
+
 ## 7. Security Rules
 
 - Jangan bypass authentication.
